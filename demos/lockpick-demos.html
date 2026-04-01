@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>🔒 Lockpick Demos</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Georgia, serif;
+  background: #060504;
+  color: #ccc;
+  padding: 10px 0 28px;
+  user-select: none;
+}
+h1 { text-align:center; color:#c8a050; font-size:19px; letter-spacing:.08em; padding:6px 0 10px; }
+
+.roll-bar {
+  display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;
+  background:#100e0b; border-top:1px solid #2a2010; border-bottom:1px solid #2a2010;
+  padding:9px 20px; margin-bottom:12px;
+}
+.roll-bar label { color:#c8a050; font-size:13px; }
+.roll-bar input[type=range] { width:170px; cursor:pointer; accent-color:#c8a050; }
+#margin-val  { color:#fff; font-weight:bold; font-size:15px; min-width:32px; text-align:center; }
+#margin-desc { color:#777; font-size:11px; font-style:italic; min-width:220px; }
+
+.tabs { display:flex; justify-content:center; gap:6px; margin-bottom:12px; }
+.tab {
+  padding:7px 18px; background:#120f0c; border:1px solid #3a2e18;
+  border-radius:4px; cursor:pointer; color:#777; font-size:13px; font-family:Georgia,serif;
+  transition:all .15s;
+}
+.tab:hover  { color:#c8a050; border-color:#c8a050; }
+.tab.active { color:#c8a050; background:#1e1810; border-color:#c8a050; }
+
+.demo { display:none; flex-direction:column; align-items:center; gap:8px; }
+.demo.active { display:flex; }
+.demo-desc { font-size:11px; color:#666; font-style:italic; text-align:center; max-width:580px; padding:0 12px; }
+
+canvas { border-radius:6px; display:block; cursor:crosshair; background:#0a0806; }
+
+.reset-btn {
+  padding:7px 22px; background:#1a1510; border:1px solid #3a2e18;
+  border-radius:4px; color:#c8a050; cursor:pointer; font-family:Georgia,serif; font-size:13px;
+  transition:background .15s;
+}
+.reset-btn:hover { background:#2a2010; }
+</style>
+</head>
+<body>
+<h1>🔒 Lockpick — тест механік</h1>
+
+<div class="roll-bar">
+  <label>Кидок (margin від DC):</label>
+  <input type="range" id="margin-slider" min="-8" max="8" value="0" step="1">
+  <span id="margin-val">+0</span>
+  <span id="margin-desc">Рівно по DC</span>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="vibro">〰 Вібро + Піни</button>
+  <button class="tab" data-tab="skyrim">🔒 Скайрім</button>
+</div>
+
+<div id="tab-vibro" class="demo active">
+  <p class="demo-desc">Тримай ліву кнопку — крапка рухається по кільцю. Відпусти коли вона у зеленій дузі (12 годин). 5 пінів по черзі. 3 спроби.</p>
+  <canvas id="c-vibro" width="580" height="470"></canvas>
+  <button class="reset-btn" id="r-vibro">↺ Знову</button>
+</div>
+
+<div id="tab-skyrim" class="demo">
+  <p class="demo-desc">Рухай мишу щоб крутити відмичку. Клікни щоб застосувати натяг. Якщо у sweet spot — замок відкриється. Кидок = розмір зони.</p>
+  <canvas id="c-skyrim" width="580" height="500"></canvas>
+  <button class="reset-btn" id="r-skyrim">↺ Знову</button>
+</div>
+
+<script>
+'use strict';
+const TAU = Math.PI * 2;
+
+// ── Margin ─────────────────────────────────────────────────────────────────────
+const sliderEl = document.getElementById('margin-slider');
+function getMargin() { return parseInt(sliderEl.value); }
+function updateUI() {
+  const m = getMargin();
+  document.getElementById('margin-val').textContent = (m>=0?'+':'')+m;
+  const d = m<=-5?'Провалений кидок — дуже вузька зона'
+           :m<=-1?'Не дотягнув — вузько'
+           :m===0?'Рівно по DC'
+           :m<=4 ?'Перевищив DC — зручніше'
+                 :'Відмінний кидок — широка зона';
+  document.getElementById('margin-desc').textContent = d;
+}
+sliderEl.addEventListener('input', updateUI);
+updateUI();
+
+// ── Tabs ───────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.demo').forEach(d => d.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function rr(ctx, x, y, w, h, r) {
+  r = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);
+  ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r);
+  ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+
+function drawSpring(ctx, x, topY, btmY, coils, color) {
+  const h = btmY - topY;
+  const step = h / (coils * 2 + 2);
+  const amp = 5;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x, topY);
+  ctx.lineTo(x, topY + step);
+  for (let i = 0; i < coils * 2; i++) {
+    const yy = topY + step * (i + 1);
+    ctx.lineTo(x + (i % 2 === 0 ? amp : -amp), yy + step / 2);
+    ctx.lineTo(x, yy + step);
+  }
+  ctx.lineTo(x, btmY);
+  ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PinVibroDemo
+// ═══════════════════════════════════════════════════════════════════════════════
+class PinVibroDemo {
+  constructor(canvas) {
+    this.cv = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.W = canvas.width;
+    this.H = canvas.height;
+    // Lock cross-section geometry
+    this.HX = 25; this.HY = 35; this.HW = 530; this.HH = 225;
+    this.shearFrac = 0.65;
+    this.N = 5;
+    this.held = false;
+    this._reset();
+    this._bindEvents();
+    this._raf = null;
+    this._tick = this._tick.bind(this);
+    requestAnimationFrame(this._tick);
+  }
+
+  _reset() {
+    this.pins = Array.from({length: this.N}, () => ({ h: 1.0, set: false }));
+    this.active = 0;
+    this.lives = 3;
+    this.phase = 0;
+    this.speed = 0.007;
+    this.held = false;
+    this.done = false;
+    this.failed = false;
+    this.vibroOffset = 0;
+    this.vibroDir = 1;
+  }
+
+  _bindEvents() {
+    this.cv.addEventListener('mousedown', e => { if (!this.done && !this.failed) this.held = true; });
+    this.cv.addEventListener('mouseup', e => { if (this.held) { this._release(); this.held = false; } });
+    this.cv.addEventListener('mouseleave', e => { if (this.held) { this._release(); this.held = false; } });
+  }
+
+  _zoneHalf() {
+    return Math.max(0.04, Math.min(0.20, 0.085 + getMargin() * 0.012));
+  }
+
+  _phaseDist(p) {
+    // distance from 0.25 (12-o'clock) with wrap
+    let d = Math.abs(p - 0.25);
+    if (d > 0.5) d = 1.0 - d;
+    return d;
+  }
+
+  _release() {
+    if (this.done || this.failed) return;
+    const d = this._phaseDist(this.phase);
+    const half = this._zoneHalf();
+    if (d <= half) {
+      // success: set this pin
+      this.pins[this.active].set = true;
+      this.pins[this.active].h = 1.0;
+      this.active++;
+      if (this.active >= this.N) { this.done = true; }
+    } else {
+      // miss
+      this.lives--;
+      if (this.lives <= 0) { this.failed = true; }
+    }
+    this.phase = 0;
+  }
+
+  _tick() {
+    this._raf = requestAnimationFrame(this._tick);
+    if (this.done || this.failed) { this._draw(); return; }
+
+    if (this.held) {
+      this.phase += this.speed;
+      if (this.phase >= 1.0) this.phase -= 1.0;
+      // vibro pick offset
+      this.vibroOffset += this.vibroDir * 0.8;
+      if (Math.abs(this.vibroOffset) > 5) this.vibroDir *= -1;
+    } else {
+      this.vibroOffset *= 0.7;
+    }
+    this._draw();
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    const W = this.W, H = this.H;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0806';
+    ctx.fillRect(0, 0, W, H);
+
+    this._drawLockSection();
+    this._drawVibro();
+    this._drawLives();
+
+    if (this.done) this._drawMessage('🔓 Замок відкрито!', '#22dd66');
+    if (this.failed) this._drawMessage('💥 Відмичка зламана!', '#dd3322');
+  }
+
+  _drawLockSection() {
+    const ctx = this.ctx;
+    const HX = this.HX, HY = this.HY, HW = this.HW, HH = this.HH;
+    const shearY = HY + HH * this.shearFrac;
+
+    // Housing outer
+    ctx.save();
+    rr(ctx, HX, HY, HW, HH, 8);
+    ctx.fillStyle = '#1a1a2a';
+    ctx.fill();
+    ctx.strokeStyle = '#4a4a6a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Shear line
+    ctx.beginPath();
+    ctx.moveTo(HX + 4, shearY);
+    ctx.lineTo(HX + HW - 4, shearY);
+    ctx.strokeStyle = '#c8a050';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Shear label
+    ctx.fillStyle = '#c8a05088';
+    ctx.font = '10px Georgia';
+    ctx.fillText('лінія зсуву', HX + HW - 72, shearY - 4);
+
+    // Pin channels
+    const pinXs = [];
+    for (let i = 0; i < this.N; i++) {
+      const cx = HX + 50 + i * (HW - 100) / (this.N - 1);
+      pinXs.push(cx);
+      const chW = 22, chX = cx - chW / 2;
+      const chTop = HY + 8;
+      const chBot = shearY + 2;
+
+      // Channel background
+      ctx.fillStyle = '#0d0d14';
+      ctx.fillRect(chX, chTop, chW, chBot - chTop);
+      ctx.strokeStyle = '#2a2a3a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(chX, chTop, chW, chBot - chTop);
+
+      const pin = this.pins[i];
+      const totalH = chBot - chTop;
+      const shearRelY = shearY; // absolute
+      const driverH = 18, keyH = 20;
+      const gap = 2;
+
+      // Key pin height (varies with pin.h): 1 = resting, can push up
+      const keyPinH = keyH * pin.h;
+      const keyPinTop = shearRelY - keyPinH;
+      const keyPinBot = shearRelY;
+
+      // Driver pin sits above key pin
+      const driverPinBot = keyPinTop - gap;
+      const driverPinTop = driverPinBot - driverH;
+
+      // Spring from top of channel to top of driver pin
+      const springTop = chTop + 4;
+      const springBot = Math.max(springTop + 10, driverPinTop - 2);
+
+      // Spring
+      drawSpring(ctx, cx, springTop, springBot, 4, '#556');
+
+      // Driver pin (above shear)
+      const dpColor = pin.set ? '#445588' : '#5566aa';
+      ctx.fillStyle = dpColor;
+      rr(ctx, chX + 2, driverPinTop, chW - 4, driverH, 3);
+      ctx.fill();
+      ctx.strokeStyle = '#778';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Key pin (below shear, or crossing if set)
+      const kpColor = pin.set ? '#22aa55' : '#aa8833';
+      ctx.fillStyle = kpColor;
+      rr(ctx, chX + 2, keyPinTop, chW - 4, keyPinH, 3);
+      ctx.fill();
+      ctx.strokeStyle = pin.set ? '#22dd66' : '#ddaa44';
+      ctx.lineWidth = pin.set ? 1.5 : 0.8;
+      ctx.stroke();
+
+      // Active pin highlight
+      if (i === this.active && !pin.set && !this.done && !this.failed) {
+        ctx.save();
+        ctx.strokeStyle = '#c8a050';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        rr(ctx, chX - 2, chTop - 2, chW + 4, chBot - chTop + 4, 5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
+    // Lockpick entering from left under active pin
+    if (this.active < this.N && !this.done && !this.failed) {
+      const targetX = pinXs[this.active];
+      const pickY = shearY + 10 + this.vibroOffset;
+      const pickStartX = -20;
+
+      // Shaft
+      const grad = ctx.createLinearGradient(pickStartX, pickY - 3, pickStartX, pickY + 3);
+      grad.addColorStop(0, '#c8a050');
+      grad.addColorStop(0.5, '#f0d080');
+      grad.addColorStop(1, '#8a6030');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.rect(pickStartX, pickY - 3, targetX - pickStartX + 2, 6);
+      ctx.fill();
+      ctx.strokeStyle = '#8a6030';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Hook tip (upward)
+      ctx.beginPath();
+      ctx.moveTo(targetX, pickY - 3);
+      ctx.lineTo(targetX + 10, pickY - 3);
+      ctx.lineTo(targetX + 10, pickY - 14);
+      ctx.strokeStyle = '#f0d080';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Vibro indicator
+      if (this.held) {
+        ctx.save();
+        ctx.strokeStyle = '#c8a05055';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.rect(pickStartX, pickY - 8, targetX - pickStartX + 14, 16);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawVibro() {
+    const ctx = this.ctx;
+    const cx = this.W / 2, cy = 350;
+    const R = 65;
+
+    // Ring background
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R + 12, 0, TAU);
+    ctx.fillStyle = '#0f0e0c';
+    ctx.fill();
+    ctx.strokeStyle = '#2a2810';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Ring track
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TAU);
+    ctx.strokeStyle = '#333322';
+    ctx.lineWidth = 10;
+    ctx.stroke();
+
+    // Zone arc at 12-o'clock (phase 0.25)
+    const half = this._zoneHalf();
+    const zoneStart = -Math.PI / 2 - half * TAU;
+    const zoneEnd   = -Math.PI / 2 + half * TAU;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, zoneStart, zoneEnd);
+    ctx.strokeStyle = '#22cc55';
+    ctx.lineWidth = 10;
+    ctx.stroke();
+
+    // Zone border
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, zoneStart, zoneEnd);
+    ctx.strokeStyle = '#44ff88';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Moving dot
+    if (!this.done && !this.failed) {
+      const angle = -Math.PI / 2 + this.phase * TAU;
+      const dx = cx + Math.cos(angle) * R;
+      const dy = cy + Math.sin(angle) * R;
+
+      ctx.beginPath();
+      ctx.arc(dx, dy, 7, 0, TAU);
+      ctx.fillStyle = this.held ? '#ffee44' : '#c8a050';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Center label
+    ctx.fillStyle = '#666';
+    ctx.font = '11px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (!this.done && !this.failed) {
+      const pinsDone = this.pins.filter(p => p.set).length;
+      ctx.fillText(`Пін ${pinsDone + 1} / ${this.N}`, cx, cy - 10);
+      ctx.fillStyle = this.held ? '#ffee44' : '#555';
+      ctx.fillText(this.held ? 'відпусти в зоні!' : 'затисни і тримай', cx, cy + 10);
+    }
+
+    ctx.restore();
+
+    // Instruction arrow at 12-o'clock
+    ctx.save();
+    ctx.fillStyle = '#22cc5588';
+    ctx.font = '13px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲', cx, cy - R - 18);
+    ctx.restore();
+  }
+
+  _drawLives() {
+    const ctx = this.ctx;
+    const y = 448;
+    ctx.save();
+    ctx.font = '22px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const startX = this.W / 2 - 30;
+    for (let i = 0; i < 3; i++) {
+      ctx.globalAlpha = i < this.lives ? 1.0 : 0.2;
+      ctx.fillText('🗝️', startX + i * 30, y);
+    }
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+  }
+
+  _drawMessage(text, color) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = 'bold 22px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = color;
+    ctx.fillText(text, this.W / 2, 350);
+    ctx.restore();
+  }
+
+  destroy() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SkyrimDemo
+// ═══════════════════════════════════════════════════════════════════════════════
+class SkyrimDemo {
+  constructor(canvas) {
+    this.cv = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.W = canvas.width;
+    this.H = canvas.height;
+    this.cx = 290;
+    this.BORE_R = 90;
+    this.CYL_R = 72;
+    this.plX = this.cx - 110;
+    this.plY = 45;
+    this.plW = 220;
+    this.plH = 350;
+    this.N = 5;
+    this.WEIGHTS = [0.35, 0.65, 1.0, 0.65, 0.35];
+    this._reset();
+    this._bindEvents();
+    this._raf = null;
+    this._tick = this._tick.bind(this);
+    requestAnimationFrame(this._tick);
+  }
+
+  _reset() {
+    this.pickAngle = -Math.PI / 2;
+    this.cylAngle = 0;
+    this.cylTarget = 0;
+    this.cylBump = 0;
+    this.pinComp = new Array(this.N).fill(0);
+    this.pinTarget = new Array(this.N).fill(0);
+    this.lives = 3;
+    this.done = false;
+    this.failed = false;
+    this.mx = this.cx;
+    this.my = this.plY + this.plH + 100;
+  }
+
+  _bindEvents() {
+    this.cv.addEventListener('mousemove', e => {
+      const rect = this.cv.getBoundingClientRect();
+      this.mx = e.clientX - rect.left;
+      this.my = e.clientY - rect.top;
+    });
+    this.cv.addEventListener('click', e => { this._attempt(); });
+  }
+
+  _sweetSize() {
+    return getMargin() >= 0 ? Math.PI * 0.20 : Math.PI * 0.05;
+  }
+
+  _sweetCenter() {
+    // fixed sweet spot, could randomize; use -PI*0.6 (roughly 8-o'clock region)
+    return -Math.PI * 0.60;
+  }
+
+  _pickAngle() {
+    const dx = this.mx - this.cx;
+    const cy305 = 305;
+    const dy = this.my - cy305;
+    let a = Math.atan2(dy, dx);
+    // Clamp to top semicircle [-PI, 0]
+    if (a > 0) a = 0;
+    if (a < -Math.PI) a = -Math.PI;
+    return a;
+  }
+
+  _proximity() {
+    const pa = this._pickAngle();
+    const sc = this._sweetCenter();
+    const half = this._sweetSize() / 2;
+    const diff = Math.abs(pa - sc);
+    const dist = Math.min(diff, TAU - diff);
+    if (dist <= half) return 1.0;
+    const falloff = half * 2.5;
+    return Math.max(0, 1.0 - (dist - half) / falloff);
+  }
+
+  _attempt() {
+    if (this.done || this.failed) return;
+    const prox = this._proximity();
+    if (prox >= 1.0) {
+      this.done = true;
+      this.cylTarget = Math.PI / 2;
+      return;
+    }
+    // Set pin targets based on proximity + weights
+    for (let i = 0; i < this.N; i++) {
+      this.pinTarget[i] = Math.min(1.0, prox * this.WEIGHTS[i]);
+    }
+    // Cylinder bump proportional to proximity
+    this.cylBump = prox * 0.35;
+    this.cylTarget = this.cylBump;
+
+    this.lives--;
+    if (this.lives <= 0) { this.failed = true; }
+  }
+
+  _tick() {
+    this._raf = requestAnimationFrame(this._tick);
+    // Animate pin compression
+    for (let i = 0; i < this.N; i++) {
+      if (this.pinComp[i] < this.pinTarget[i]) {
+        this.pinComp[i] = Math.min(this.pinTarget[i], this.pinComp[i] + 0.06);
+      } else {
+        this.pinComp[i] = Math.max(0, this.pinComp[i] - 0.015);
+        if (this.pinComp[i] <= 0) this.pinTarget[i] = 0;
+      }
+    }
+    // Animate cylinder
+    if (this.done) {
+      this.cylAngle += (this.cylTarget - this.cylAngle) * 0.04;
+      if (this.cylAngle < Math.PI / 2 - 0.01) this.cylTarget = Math.PI / 2;
+    } else {
+      if (this.cylBump > 0) {
+        this.cylAngle += (this.cylTarget - this.cylAngle) * 0.12;
+        if (Math.abs(this.cylAngle - this.cylTarget) < 0.005) {
+          this.cylBump -= 0.005;
+          if (this.cylBump <= 0) { this.cylBump = 0; this.cylTarget = 0; }
+          this.cylTarget = this.cylBump;
+        }
+      } else {
+        this.cylAngle += (0 - this.cylAngle) * 0.08;
+      }
+    }
+
+    if (!this.done && !this.failed) {
+      this.pickAngle = this._pickAngle();
+    }
+    this._draw();
+  }
+
+  _draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.W, this.H);
+    // 1. Black background
+    ctx.fillStyle = '#0a0806';
+    ctx.fillRect(0, 0, this.W, this.H);
+
+    // 2. Dark rect behind bore area
+    const cx = this.cx, cy305 = 305, BR = this.BORE_R;
+    ctx.fillStyle = '#080706';
+    ctx.fillRect(cx - BR - 4, cy305 - BR - 4, (BR + 4) * 2, (BR + 4) * 2);
+
+    // 3. Lock plate with pin section, then bore cutout
+    this._drawLockPlate();
+
+    // 4. Cylinder inside bore
+    this._drawCylinder();
+
+    // 5. Tension wrench
+    this._drawTensionWrench();
+
+    // 6. Pick
+    this._drawPick();
+
+    // 7. Constraint arc guide
+    this._drawConstraintArc();
+
+    // 8. Lives
+    this._drawLives();
+
+    if (this.done) this._drawMessage('🔓 Замок відкрито!', '#22dd66');
+    if (this.failed) this._drawMessage('💥 Відмичка зламана!', '#dd3322');
+  }
+
+  _drawLockPlate() {
+    const ctx = this.ctx;
+    const { plX, plY, plW, plH, cx } = this;
+    const cy305 = 305;
+
+    ctx.save();
+
+    // Use offscreen canvas approach via save/restore composite
+    // Draw brass plate
+    const grad = ctx.createLinearGradient(plX, plY, plX + plW, plY + plH);
+    grad.addColorStop(0, '#7a6230');
+    grad.addColorStop(0.3, '#c8a050');
+    grad.addColorStop(0.7, '#a07838');
+    grad.addColorStop(1, '#6a5228');
+    rr(ctx, plX, plY, plW, plH, 12);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#ddc060';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Plate inner bevel
+    rr(ctx, plX + 5, plY + 5, plW - 10, plH - 10, 9);
+    ctx.strokeStyle = '#c8a05066';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Pin spring section inside plate top
+    this._drawPinSection(ctx);
+
+    // Destination-out bore hole
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    ctx.arc(cx, cy305, this.BORE_R, 0, TAU);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+
+    // Bore ring edge
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy305, this.BORE_R, 0, TAU);
+    ctx.strokeStyle = '#6a5228';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy305, this.BORE_R + 4, 0, TAU);
+    ctx.strokeStyle = '#c8a05044';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  _drawPinSection(ctx) {
+    // Pin channels: y=57 to y=185 (inside plate top, well above bore at y=215)
+    const sY = this.plY + 12;  // 57
+    const sH = 128;             // to ~185
+    const channelW = 18;
+    const shearY = sY + sH;    // absolute shear line for this section
+
+    ctx.save();
+    // Clip to plate top area
+    rr(ctx, this.plX + 6, sY, this.plW - 12, sH + 10, 4);
+    ctx.clip();
+
+    // Background for pin area
+    ctx.fillStyle = '#1a1610';
+    ctx.fillRect(this.plX + 6, sY, this.plW - 12, sH + 10);
+
+    for (let i = 0; i < this.N; i++) {
+      const cx = this.plX + 28 + i * (this.plW - 56) / (this.N - 1);
+      const chW = channelW, chX = cx - chW / 2;
+      const chTop = sY + 4;
+      const chBot = shearY;
+      const comp = this.pinComp[i];
+      const totalH = chBot - chTop;
+
+      // Channel groove
+      ctx.fillStyle = '#0d0b08';
+      ctx.fillRect(chX, chTop, chW, totalH);
+      ctx.strokeStyle = '#3a3020';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(chX, chTop, chW, totalH);
+
+      const driverH = 16, keyH = 18;
+      const maxPush = totalH - driverH - keyH - 4;
+
+      // Driver pin: moves UP when compressed
+      const driverTop = chTop + 2 + comp * maxPush;
+      const driverBot = driverTop + driverH;
+
+      // Spring from channel top to driver pin top
+      const springBot = Math.max(chTop + 2, driverTop - 2);
+      drawSpring(ctx, cx, chTop + 2, springBot, 3, comp > 0.3 ? '#aa7733' : '#556');
+
+      // Driver pin
+      ctx.fillStyle = comp > 0.1 ? `rgba(180,120,40,${0.7 + comp * 0.3})` : '#445';
+      rr(ctx, chX + 2, driverTop, chW - 4, driverH, 3);
+      ctx.fill();
+      ctx.strokeStyle = comp > 0.1 ? '#c8a050' : '#667';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // Key pin below driver
+      const keyPinTop = driverBot + 2;
+      const keyPinH = keyH;
+      ctx.fillStyle = '#886633';
+      rr(ctx, chX + 2, keyPinTop, chW - 4, keyPinH, 3);
+      ctx.fill();
+      ctx.strokeStyle = '#aa8844';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // Shear line
+    ctx.beginPath();
+    ctx.moveTo(this.plX + 8, shearY);
+    ctx.lineTo(this.plX + this.plW - 8, shearY);
+    ctx.strokeStyle = '#c8a05066';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+  }
+
+  _drawCylinder() {
+    const ctx = this.ctx;
+    const cx = this.cx, cy = 305;
+    const R = this.CYL_R;
+    const angle = this.cylAngle;
+
+    ctx.save();
+
+    // Cylinder body
+    const grad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 2, cx, cy, R);
+    grad.addColorStop(0, '#4a4a5a');
+    grad.addColorStop(0.6, '#2a2a38');
+    grad.addColorStop(1, '#181820');
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, TAU);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#5a5a7a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Warding cuts (decorative grooves in cylinder face)
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    for (let w = 0; w < 3; w++) {
+      const wa = (w / 3) * TAU;
+      ctx.save();
+      ctx.rotate(wa);
+      ctx.beginPath();
+      ctx.moveTo(14, 0);
+      ctx.lineTo(R - 8, 0);
+      ctx.strokeStyle = '#3a3a4a';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Key slot (vertical cut at top)
+    ctx.beginPath();
+    ctx.rect(-5, -R + 4, 10, R * 0.5);
+    ctx.fillStyle = '#080808';
+    ctx.fill();
+
+    // Key slot notch
+    ctx.beginPath();
+    ctx.rect(-9, -R * 0.4, 18, 8);
+    ctx.fillStyle = '#101010';
+    ctx.fill();
+
+    ctx.restore(); // un-rotate
+
+    // Cylinder center dot
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, TAU);
+    ctx.fillStyle = '#888';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  _drawTensionWrench() {
+    const ctx = this.ctx;
+    const cx = this.cx, cy = 305;
+    const R = this.BORE_R;
+
+    ctx.save();
+    // L-shaped tension wrench at bottom of bore
+    const wx = cx + R - 22;
+    const wy = cy + R - 20;
+
+    ctx.beginPath();
+    ctx.moveTo(wx, wy - 28);
+    ctx.lineTo(wx, wy);
+    ctx.lineTo(wx + 18, wy);
+    ctx.strokeStyle = '#8899bb';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(wx, wy - 28, 4, 0, TAU);
+    ctx.fillStyle = '#aabbdd';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  _drawPick() {
+    const ctx = this.ctx;
+    const cx = this.cx, cy = 305;
+    const TIP_R = 16, HANDLE_R = 175;
+    const angle = this.done || this.failed ? -Math.PI / 2 : this.pickAngle;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    // Handle (outside plate — far end)
+    const hGrad = ctx.createLinearGradient(-3, -HANDLE_R, 3, -HANDLE_R);
+    hGrad.addColorStop(0, '#c8a050');
+    hGrad.addColorStop(0.5, '#f0d080');
+    hGrad.addColorStop(1, '#8a6030');
+    ctx.strokeStyle = hGrad;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -TIP_R);
+    ctx.lineTo(0, -HANDLE_R);
+    ctx.stroke();
+
+    // Tip (inside bore, visible over cylinder)
+    ctx.beginPath();
+    ctx.moveTo(0, -TIP_R);
+    ctx.lineTo(0, TIP_R * 0.3);
+    ctx.strokeStyle = '#f0d080';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Hook at tip
+    ctx.beginPath();
+    ctx.moveTo(0, -TIP_R);
+    ctx.lineTo(8, -TIP_R - 10);
+    ctx.strokeStyle = '#f0d080';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  _drawConstraintArc() {
+    const ctx = this.ctx;
+    const cx = this.cx, cy = 305;
+    const R = this.BORE_R + 20;
+
+    // Subtle dashed semicircle guide
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, -Math.PI, 0);
+    ctx.strokeStyle = '#c8a05028';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Sweet spot arc
+    const sc = this._sweetCenter();
+    const half = this._sweetSize() / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, sc - half, sc + half);
+    ctx.strokeStyle = '#22cc5555';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    ctx.stroke();
+
+    // Current pick angle marker on arc
+    if (!this.done && !this.failed) {
+      const pa = this.pickAngle;
+      const mx2 = cx + Math.cos(pa) * R;
+      const my2 = cy + Math.sin(pa) * R;
+      ctx.beginPath();
+      ctx.arc(mx2, my2, 4, 0, TAU);
+      ctx.fillStyle = '#c8a050aa';
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  _drawLives() {
+    const ctx = this.ctx;
+    const y = 478;
+    ctx.save();
+    ctx.font = '22px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const startX = this.W / 2 - 30;
+    for (let i = 0; i < 3; i++) {
+      ctx.globalAlpha = i < this.lives ? 1.0 : 0.2;
+      ctx.fillText('🗝️', startX + i * 30, y);
+    }
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+  }
+
+  _drawMessage(text, color) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = 'bold 22px Georgia';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = color;
+    ctx.fillText(text, this.W / 2, 440);
+    ctx.restore();
+  }
+
+  destroy() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+  }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+let vibroDemo = new PinVibroDemo(document.getElementById('c-vibro'));
+let skyrimDemo = new SkyrimDemo(document.getElementById('c-skyrim'));
+
+document.getElementById('r-vibro').addEventListener('click', () => {
+  vibroDemo.destroy();
+  vibroDemo = new PinVibroDemo(document.getElementById('c-vibro'));
+});
+document.getElementById('r-skyrim').addEventListener('click', () => {
+  skyrimDemo.destroy();
+  skyrimDemo = new SkyrimDemo(document.getElementById('c-skyrim'));
+});
+
+// Re-init on margin change so zone sizes update live
+sliderEl.addEventListener('input', () => { /* demos read getMargin() live */ });
+
+</script>
+</body>
+</html>

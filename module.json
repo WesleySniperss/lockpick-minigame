@@ -1,0 +1,12 @@
+{
+  "id": "lockpick-minigame",
+  "title": "Lockpick Minigame",
+  "description": "Skyrim-style lockpicking mini-game + puzzle system for dnd5e.",
+  "version": "2.0.0",
+  "compatibility": {
+    "minimum": "12",
+    "verified": "13"
+  },
+  "esmodules": ["scripts/main.mjs"],
+  "styles": ["styles/lockpick.css"]
+}

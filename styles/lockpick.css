@@ -1,0 +1,291 @@
+/* lockpick-minigame — native Foundry styling via CSS variables */
+
+/* Window chrome */
+#lockpick-minigame-app .window-content,
+.lpm-puzzle .window-content { padding:0; background:var(--color-cool-5,#111); }
+
+/* Lockpick root */
+.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,inherit); }
+.lpm-canvas { display:block; width:100%; cursor:crosshair; }
+.lpm-footer {
+  display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px;
+  padding:7px 12px;
+  background:var(--color-cool-4,#0e0e18);
+  border-top:1px solid var(--color-border-dark,#333);
+}
+.lpm-picks-wrap,.lpm-attempts { display:flex; align-items:center; gap:4px; }
+.lpm-picks-label,.lpm-attempts-label {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--color-text-dark-secondary,#888);
+}
+.lpm-picks-row { display:flex; gap:2px; }
+.lpm-pick { font-size:15px; line-height:1; }
+.lpm-pick.used { opacity:.18; filter:grayscale(1); }
+.lpm-attempt-pip { font-size:12px; color:var(--color-warm-2,#c8a84e); }
+.lpm-attempt-pip.used { opacity:.15; }
+.lpm-hint { font-size:11px; color:var(--color-text-dark-inactive,#666); font-style:italic; font-family:var(--font-primary,inherit); }
+
+/* Puzzle windows */
+.lpm-puzzle .window-content { padding:10px 12px; color:var(--color-text-primary,#ccc); }
+
+.lpm-puzzle-hint {
+  font-size:11px; font-style:italic; text-align:center; margin-top:6px;
+  color:var(--color-text-dark-secondary,#888);
+}
+
+.lpm-puzzle-win {
+  display:flex; align-items:center; justify-content:center;
+  min-height:180px; font-size:28px; font-weight:700;
+  color:var(--color-level-success,#4caf50); text-align:center;
+  animation:lpm-pop .35s ease;
+}
+@keyframes lpm-pop {
+  from{transform:scale(.6);opacity:0} 70%{transform:scale(1.08)} to{transform:scale(1);opacity:1}
+}
+
+/* Sudoku */
+.lpm-sudoku-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.lpm-sudoku-grid {
+  display:grid; grid-template-columns:repeat(9,1fr);
+  width:360px; height:360px;
+  border:2px solid var(--color-border-highlight,#555);
+  background:var(--color-cool-5,#111);
+}
+.lpm-sudoku-cell {
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px; font-weight:600; cursor:pointer;
+  border:1px solid var(--color-border-dark,#333);
+  color:var(--color-text-dark-secondary,#888); transition:background .1s;
+}
+.lpm-sudoku-cell.given     { color:var(--color-text-primary,#ccc); font-weight:800; background:var(--color-cool-4,#181818); }
+.lpm-sudoku-cell.player    { color:rgba(160,160,180,.85); font-weight:600; background:var(--color-cool-5,#111); font-style:italic; }
+.lpm-sudoku-cell.selected  { background:var(--color-warm-5,#221e10) !important; color:var(--color-text-primary,#ccc); }
+.lpm-sudoku-cell.error     { color:var(--color-level-error,#e53935); background:var(--color-cool-5,#1a0a0a); }
+.lpm-sudoku-cell.correct   { color:var(--color-level-success,#4caf50); background:var(--color-cool-5,#0a1a0a); }
+.lpm-sudoku-cell:hover:not(.given) { background:var(--color-cool-4,#181818); }
+.lpm-sudoku-cell.border-top    { border-top:   2px solid var(--color-border-highlight,#555); }
+.lpm-sudoku-cell.border-left   { border-left:  2px solid var(--color-border-highlight,#555); }
+.lpm-sudoku-cell.border-bottom { border-bottom:2px solid var(--color-border-highlight,#555); }
+.lpm-sudoku-cell.border-right  { border-right: 2px solid var(--color-border-highlight,#555); }
+
+/* Sliding puzzle - stone tiles */
+.lpm-sliding-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.lpm-sliding-moves { font-size:12px; color:var(--color-text-dark-secondary,#888); }
+.lpm-sliding-grid {
+  display:grid; grid-template-columns:repeat(var(--sz),1fr);
+  gap:4px; width:380px; height:380px;
+}
+.lpm-tile {
+  position:relative; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:4px; cursor:pointer; transition:transform .1s, filter .1s;
+  background-color:#4a3f35;
+  background-image:
+    repeating-linear-gradient(73deg, transparent 0 18px, rgba(0,0,0,.07) 18px 19px),
+    repeating-linear-gradient(161deg, transparent 0 24px, rgba(255,255,255,.025) 24px 25px),
+    linear-gradient(145deg,#5c4f43 0%,#3e342b 35%,#332b23 65%,#2a221b 100%);
+  box-shadow:inset 0 2px 1px rgba(255,255,255,.12),inset 0 -2px 2px rgba(0,0,0,.45),0 3px 6px rgba(0,0,0,.55);
+  border:1px solid rgba(0,0,0,.55);
+  border-top-color:rgba(255,255,255,.09);
+}
+.lpm-tile::before {
+  content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+  background:linear-gradient(135deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,.02) 30%,rgba(0,0,0,0) 50%,rgba(0,0,0,.22) 100%);
+}
+.lpm-tile-num {
+  position:relative; z-index:1;
+  font-size:clamp(12px,3.5cqw,22px); font-weight:900;
+  color:rgba(255,240,210,.78); font-family:Georgia,serif;
+  text-shadow:0 1px 2px rgba(0,0,0,.9); user-select:none;
+}
+.lpm-tile:hover { transform:scale(1.04); filter:brightness(1.18); }
+.lpm-tile.placed {
+  background-color:#2e4228;
+  background-image:linear-gradient(145deg,#3a5632 0%,#2a4224 40%,#1e3018 100%);
+  box-shadow:inset 0 2px 1px rgba(100,255,80,.14),0 0 10px rgba(40,180,40,.18),0 3px 6px rgba(0,0,0,.55);
+}
+.lpm-tile.placed .lpm-tile-num { color:rgba(180,255,160,.85); }
+.lpm-tile.empty {
+  background:rgba(0,0,0,.35) !important; border:1px dashed rgba(80,60,40,.35) !important;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.6) !important; cursor:default;
+}
+.lpm-tile.empty::before { display:none; }
+
+/* Cipher */
+.lpm-cipher-wrap { display:flex; flex-direction:column; gap:8px; }
+.lpm-cipher-step {
+  background:var(--color-cool-4,#181818);
+  border:1px solid var(--color-border-dark,#333);
+  border-radius:4px; padding:8px 10px;
+}
+.lpm-cipher-step-label {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--color-text-dark-secondary,#888); margin-bottom:6px;
+}
+.lpm-cipher-sublabel { font-size:10px; color:var(--color-text-dark-inactive,#555); margin:4px 0 3px; }
+.lpm-cipher-encoded {
+  text-align:center; font-size:22px; font-weight:800; letter-spacing:5px;
+  color:var(--color-warm-2,#c8a84e); font-family:monospace; padding:8px;
+  background:var(--color-cool-5,#111); border-radius:4px;
+  border:1px solid var(--color-border-dark,#333);
+}
+.lpm-fantasy { font-size:26px; text-shadow:0 0 8px rgba(200,160,60,.35); }
+.lpm-cipher-table {
+  display:flex; flex-wrap:wrap; gap:2px; justify-content:center;
+  max-height:88px; overflow-y:auto;
+  background:var(--color-cool-5,#111); border-radius:3px; padding:4px;
+}
+.lpm-cipher-pair { display:flex; flex-direction:column; align-items:center; width:22px; font-size:10px; }
+.lpm-coded { color:var(--color-warm-2,#c8a84e); font-weight:700; }
+.lpm-plain { color:var(--color-text-dark-secondary,#888); }
+
+/* Simon Says */
+.lpm-simon-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.lpm-simon-status {
+  font-size:14px; font-weight:600; text-align:center; min-height:20px;
+  color:var(--color-text-primary,#ccc);
+}
+.lpm-simon-progress { display:flex; gap:5px; min-height:16px; }
+.lpm-simon-dot      { font-size:13px; color:var(--color-border-dark,#444); transition:color .2s; }
+.lpm-simon-dot.done { color:var(--color-level-success,#4caf50); text-shadow:0 0 6px currentColor; }
+
+/* 2×2 grid of arcane tablets */
+.lpm-simon-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:320px; height:330px; }
+
+.lpm-simon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+  /* border-color comes from inline style (SIMON_COLORS.border) */
+  border: 2px solid;
+  transition: transform .1s ease, box-shadow .15s ease, border-color .15s ease;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,.7), 0 4px 14px rgba(0,0,0,.55);
+}
+/* subtle inner top highlight — keeps the stone feel without busyiness */
+.lpm-simon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; width: 80%; height: 1px;
+  background: rgba(255,255,255,.10);
+  pointer-events: none;
+}
+.lpm-simon-btn::after { display: none; }
+
+.lpm-simon-btn:hover  { transform: scale(1.05); filter: brightness(1.22); }
+.lpm-simon-btn:active { transform: scale(0.96); }
+
+/* Rune canvas — drawn by JS */
+.lpm-rune-canvas { display: block; flex-shrink: 0; }
+
+/* Rune name label below the canvas */
+.lpm-rune-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.45);
+  font-family: var(--font-primary, inherit);
+  user-select: none;
+  line-height: 1;
+}
+
+/* Config section injected into WallConfig */
+.lpm-config-section {
+  border:1px solid var(--color-border-highlight,#555);
+  border-radius:4px; padding:8px 10px 10px;
+  margin:8px 0 4px;
+  background:var(--color-cool-5,#111);
+}
+.lpm-config-section legend {
+  font-weight:700; font-size:12px;
+  color:var(--color-text-dark-secondary,#888); padding:0 4px;
+}
+
+/* ── Ready button ─────────────────────────────────────────── */
+.lpm-simon-ready-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--color-cool-4, #1a1a28);
+  color: var(--color-text-primary, #ccc);
+  border: 1px solid var(--color-border-highlight, #555);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  transition: background .15s, border-color .15s;
+}
+.lpm-simon-ready-btn:hover {
+  background: var(--color-cool-3, #222238);
+  border-color: var(--color-warm-2, #c8a84e);
+  color: var(--color-warm-2, #c8a84e);
+}
+
+/* ── GM results panel ─────────────────────────────────────── */
+.lpm-simon-results {
+  background: var(--color-cool-4, #181818);
+  border: 1px solid var(--color-border-dark, #333);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  max-height: 80px;
+  overflow-y: auto;
+}
+.lpm-simon-result-row {
+  padding: 2px 0;
+  color: var(--color-text-primary, #ccc);
+  border-bottom: 1px solid var(--color-border-dark, #222);
+}
+.lpm-simon-result-row:last-child { border-bottom: none; }
+
+/* Roll result in lockpick footer */
+.lpm-roll-result {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  width: 100%;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-dark, #222);
+  margin-bottom: 2px;
+}
+.lpm-roll-label   { color: var(--color-text-dark-secondary, #888); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.lpm-roll-d20     { font-size: 16px; font-weight: 900; font-family: Georgia, serif; }
+.lpm-roll-vs      { color: var(--color-text-dark-secondary, #888); font-size: 11px; }
+.lpm-roll-margin  { font-size: 12px; font-weight: 700; }
+
+/* Leave button + footer row */
+.lpm-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+.lpm-leave-btn {
+  flex-shrink: 0;
+  padding: 3px 12px;
+  background: transparent;
+  color: var(--color-text-dark-secondary, #888);
+  border: 1px solid var(--color-border-dark, #444);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-primary, inherit);
+  transition: color .15s, border-color .15s;
+}
+.lpm-leave-btn:hover {
+  color: var(--color-text-primary, #ccc);
+  border-color: var(--color-border-highlight, #666);
+}
