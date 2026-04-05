@@ -1,12 +1,18 @@
 {
   "id": "lockpick-minigame",
   "title": "Lockpick Minigame",
-  "description": "Skyrim-style lockpicking mini-game + puzzle system for dnd5e.",
+  "description": "Skyrim-style lockpicking mini-game + arcane puzzle system (Sudoku, Sliding, Cipher, Simon Says) for Foundry VTT.",
   "version": "2.0.0",
   "compatibility": {
     "minimum": "12",
     "verified": "13"
   },
+  "authors": [
+    { "name": "WesleySniperss" }
+  ],
+  "url": "https://github.com/WesleySniperss/lockpick-minigame",
+  "manifest": "https://raw.githubusercontent.com/WesleySniperss/lockpick-minigame/main/module.json",
+  "download": "https://github.com/WesleySniperss/lockpick-minigame/releases/latest/download/module.zip",
   "esmodules": ["scripts/main.mjs"],
   "styles": ["styles/lockpick.css"]
 }
