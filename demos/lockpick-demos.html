@@ -1,1015 +1,1179 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>🔒 Lockpick Demos</title>
+<title>Lockpick Demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: Georgia, serif;
-  background: #060504;
-  color: #ccc;
-  padding: 10px 0 28px;
-  user-select: none;
-}
-h1 { text-align:center; color:#c8a050; font-size:19px; letter-spacing:.08em; padding:6px 0 10px; }
-
+body { font-family: 'Cinzel', 'Palatino Linotype', Palatino, serif; background: #060504; color: #a89880; padding: 10px 0 28px; user-select: none; font-weight: 400; }
+h1 { text-align:center; color:#c8a050; font-size:19px; letter-spacing:.10em; padding:6px 0 10px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.7); }
 .roll-bar {
   display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;
   background:#100e0b; border-top:1px solid #2a2010; border-bottom:1px solid #2a2010;
   padding:9px 20px; margin-bottom:12px;
 }
-.roll-bar label { color:#c8a050; font-size:13px; }
+.roll-bar label { color:#c8a050; font-size:12px; letter-spacing:.06em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.90); }
 .roll-bar input[type=range] { width:170px; cursor:pointer; accent-color:#c8a050; }
-#margin-val  { color:#fff; font-weight:bold; font-size:15px; min-width:32px; text-align:center; }
-#margin-desc { color:#777; font-size:11px; font-style:italic; min-width:220px; }
-
+#margin-val  { color:#d4b468; font-weight:700; font-size:15px; min-width:32px; text-align:center;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.95); }
+#margin-desc { color:#6a6050; font-size:11px; font-style:italic; min-width:220px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.80); }
 .tabs { display:flex; justify-content:center; gap:6px; margin-bottom:12px; }
 .tab {
   padding:7px 18px; background:#120f0c; border:1px solid #3a2e18;
-  border-radius:4px; cursor:pointer; color:#777; font-size:13px; font-family:Georgia,serif;
-  transition:all .15s;
+  border-radius:4px; cursor:pointer; color:#6a6050; font-size:12px; letter-spacing:.07em;
+  font-family:'Cinzel','Palatino Linotype',Palatino,serif; transition:all .15s;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
 .tab:hover  { color:#c8a050; border-color:#c8a050; }
 .tab.active { color:#c8a050; background:#1e1810; border-color:#c8a050; }
-
 .demo { display:none; flex-direction:column; align-items:center; gap:8px; }
 .demo.active { display:flex; }
-.demo-desc { font-size:11px; color:#666; font-style:italic; text-align:center; max-width:580px; padding:0 12px; }
-
+.demo-desc { font-size:11px; color:#5a5448; font-style:italic; text-align:center; max-width:580px; padding:0 12px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.80); }
 canvas { border-radius:6px; display:block; cursor:crosshair; background:#0a0806; }
-
 .reset-btn {
   padding:7px 22px; background:#1a1510; border:1px solid #3a2e18;
-  border-radius:4px; color:#c8a050; cursor:pointer; font-family:Georgia,serif; font-size:13px;
-  transition:background .15s;
+  border-radius:4px; color:#c8a050; cursor:pointer;
+  font-family:'Cinzel','Palatino Linotype',Palatino,serif; font-size:12px; letter-spacing:.06em;
+  transition:background .15s; text-shadow: 0 1px 3px rgba(0,0,0,0.90);
 }
 .reset-btn:hover { background:#2a2010; }
 </style>
 </head>
 <body>
-<h1>🔒 Lockpick — тест механік</h1>
-
+<h1>Lockpick — Mechanic Test</h1>
 <div class="roll-bar">
-  <label>Кидок (margin від DC):</label>
+  <label>Roll margin from DC:</label>
   <input type="range" id="margin-slider" min="-8" max="8" value="0" step="1">
   <span id="margin-val">+0</span>
-  <span id="margin-desc">Рівно по DC</span>
+  <span id="margin-desc">Exactly at DC</span>
 </div>
-
 <div class="tabs">
-  <button class="tab active" data-tab="vibro">〰 Вібро + Піни</button>
-  <button class="tab" data-tab="skyrim">🔒 Скайрім</button>
+  <button class="tab active" data-tab="vibro">Pin Vibro</button>
+  <button class="tab" data-tab="skyrim">Skyrim Lock</button>
 </div>
-
 <div id="tab-vibro" class="demo active">
-  <p class="demo-desc">Тримай ліву кнопку — крапка рухається по кільцю. Відпусти коли вона у зеленій дузі (12 годин). 5 пінів по черзі. 3 спроби.</p>
-  <canvas id="c-vibro" width="580" height="470"></canvas>
-  <button class="reset-btn" id="r-vibro">↺ Знову</button>
+  <p class="demo-desc">Hold left mouse button — the pick slides along the keyway and lifts the active pin. Release when the tiny spark appears at the shear line. Overshoot and you lose a life. Roll margin controls zone width and speed.</p>
+  <canvas id="c-vibro" width="580" height="452"></canvas>
+  <button class="reset-btn" id="r-vibro">Reset</button>
 </div>
-
 <div id="tab-skyrim" class="demo">
-  <p class="demo-desc">Рухай мишу щоб крутити відмичку. Клікни щоб застосувати натяг. Якщо у sweet spot — замок відкриється. Кидок = розмір зони.</p>
-  <canvas id="c-skyrim" width="580" height="500"></canvas>
-  <button class="reset-btn" id="r-skyrim">↺ Знову</button>
+  <p class="demo-desc">Move the mouse to rotate the pick around the lock. The pins above react individually — find the position where all compress. Click to try turning the lock.</p>
+  <canvas id="c-skyrim" width="580" height="480"></canvas>
+  <button class="reset-btn" id="r-skyrim">Reset</button>
 </div>
 
 <script>
 'use strict';
 const TAU = Math.PI * 2;
 
-// ── Margin ─────────────────────────────────────────────────────────────────────
 const sliderEl = document.getElementById('margin-slider');
 function getMargin() { return parseInt(sliderEl.value); }
 function updateUI() {
   const m = getMargin();
-  document.getElementById('margin-val').textContent = (m>=0?'+':'')+m;
-  const d = m<=-5?'Провалений кидок — дуже вузька зона'
-           :m<=-1?'Не дотягнув — вузько'
-           :m===0?'Рівно по DC'
-           :m<=4 ?'Перевищив DC — зручніше'
-                 :'Відмінний кидок — широка зона';
-  document.getElementById('margin-desc').textContent = d;
+  document.getElementById('margin-val').textContent = (m >= 0 ? '+' : '') + m;
+  document.getElementById('margin-desc').textContent =
+    m <= -5 ? 'Failed roll — very narrow zone'
+    : m <= -1 ? 'Below DC — narrow'
+    : m === 0 ? 'Exactly at DC'
+    : m <=  4 ? 'Above DC — more room'
+    : 'Excellent roll — wide zone';
 }
-sliderEl.addEventListener('input', updateUI);
-updateUI();
+sliderEl.addEventListener('input', updateUI); updateUI();
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === b));
+  document.querySelectorAll('.demo').forEach(d => d.classList.remove('active'));
+  document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+}));
 
-// ── Tabs ───────────────────────────────────────────────────────────────────────
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.demo').forEach(d => d.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-  });
-});
+// ══════════════════════════════════════════════════════════════════════════════
+//  PIN VIBRO  —  side cross-section, pick inside keyway, gears, latch bolt
+// ══════════════════════════════════════════════════════════════════════════════
+//
+//  Canvas 580×452
+//  Housing (brass)        y=16..184   — springs + driver pins
+//  Shear line             y=184       — the unlock boundary
+//  Plug (dark steel)      y=184..308  — key pins
+//  Keyway slot            y=252..290  — pick rides here
+//  Bolt latch             y=320..344  — 5 mechanical gates, one per pin
+//
+//  5 pin columns:  x = 140, 215, 290, 365, 440
+//  pin bore width CW = 16  (narrow)
+//
+//  Key pin geometry:
+//    At rest (pos=0, sp=0.35):  boundY = 184+70*0.35=208.5
+//      kTop=208, kBot=208+55=263  → extends INTO keyway (252) ✓
+//    At set  (pos=sp):          boundY = 184
+//      kTop=184, kBot=184+55=239  → in plug, above keyway ✓
+//    hookTipY at rest:  184+55+70*sp  = 239+24.5=263 ✓  inside keyway
+//    hookTipY at set:   184+55=239   just above keyway (hook curves through cover)
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function rr(ctx, x, y, w, h, r) {
-  r = Math.min(r, w/2, h/2);
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y);
-  ctx.arcTo(x+w, y, x+w, y+r, r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
-  ctx.lineTo(x+r, y+h);
-  ctx.arcTo(x, y+h, x, y+h-r, r);
-  ctx.lineTo(x, y+r);
-  ctx.arcTo(x, y, x+r, y, r);
-  ctx.closePath();
-}
+const V = {
+  LX:58, LW:462, LR:520,          // lock body
+  HT:16, HH:168, SHR:184,         // housing
+  PT:184, PH:124, PB:308,         // plug
+  KT:252, KH:38, KB:290, KCY:271, // keyway
+  PXS:[140,215,290,365,440],       // pin x positions
+  CW:16,                           // pin bore width (narrow)
+  DPH:28, KPH:55, TRAV:70,        // driver height, key height, travel
+  SP_LO:0.28, SP_HI:0.56          // shear-pos range
+};
 
-function drawSpring(ctx, x, topY, btmY, coils, color) {
-  const h = btmY - topY;
-  const step = h / (coils * 2 + 2);
-  const amp = 5;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(x, topY);
-  ctx.lineTo(x, topY + step);
-  for (let i = 0; i < coils * 2; i++) {
-    const yy = topY + step * (i + 1);
-    ctx.lineTo(x + (i % 2 === 0 ? amp : -amp), yy + step / 2);
-    ctx.lineTo(x, yy + step);
-  }
-  ctx.lineTo(x, btmY);
-  ctx.stroke();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PinVibroDemo
-// ═══════════════════════════════════════════════════════════════════════════════
 class PinVibroDemo {
-  constructor(canvas) {
-    this.cv = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.W = canvas.width;
-    this.H = canvas.height;
-    // Lock cross-section geometry
-    this.HX = 25; this.HY = 35; this.HW = 530; this.HH = 225;
-    this.shearFrac = 0.65;
-    this.N = 5;
-    this.held = false;
-    this._reset();
-    this._bindEvents();
-    this._raf = null;
-    this._tick = this._tick.bind(this);
-    requestAnimationFrame(this._tick);
+  constructor(c) {
+    this.c = c; this.ctx = c.getContext('2d');
+    this.raf = null; this.last = 0;
+    this.reset();
+    c.addEventListener('mousedown', e => {
+      if (e.button === 0 && !this.done && this.flash === 0 && !this.springing) this.hold = true;
+    });
+    c.addEventListener('mouseup',    () => this._release());
+    c.addEventListener('mouseleave', () => this._release());
   }
 
-  _reset() {
-    this.pins = Array.from({length: this.N}, () => ({ h: 1.0, set: false }));
-    this.active = 0;
-    this.lives = 3;
-    this.phase = 0;
-    this.speed = 0.007;
-    this.held = false;
-    this.done = false;
-    this.failed = false;
-    this.vibroOffset = 0;
-    this.vibroDir = 1;
+  _zw()    { return Math.max(0.0253, Math.min(0.1035, 0.0518 + getMargin() * 0.00575)); }
+  _speed() { return Math.max(0.80, Math.min(5.60, 2.70 - getMargin() * 0.36)); }
+  _noise(ts) {
+    const t = ts * 0.001;
+    return Math.max(0.14, 0.54 + 0.28*Math.sin(t*2.1) + 0.20*Math.sin(t*7.4+1.1) + 0.12*Math.sin(t*16.2+2.6));
   }
 
-  _bindEvents() {
-    this.cv.addEventListener('mousedown', e => { if (!this.done && !this.failed) this.held = true; });
-    this.cv.addEventListener('mouseup', e => { if (this.held) { this._release(); this.held = false; } });
-    this.cv.addEventListener('mouseleave', e => { if (this.held) { this._release(); this.held = false; } });
+  reset() {
+    this.pinShear  = Array.from({length:5}, () => V.SP_LO + Math.random()*(V.SP_HI-V.SP_LO));
+    this.pinDone   = Array(5).fill(false);
+    this.current   = 0; this.lives = 3;
+    this.hold = false; this.flash = 0; this.fOk = false;
+    this.done = null; this.springing = false; this.snapBack = false;
+    this.pinPos = 0; this.sparks = []; this.boltSlide = 0;
+    this.gateAnim = Array(5).fill(0);
+    this.gearRot = 0; this.gearBurst = 0;
   }
 
-  _zoneHalf() {
-    return Math.max(0.04, Math.min(0.20, 0.085 + getMargin() * 0.012));
-  }
-
-  _phaseDist(p) {
-    // distance from 0.25 (12-o'clock) with wrap
-    let d = Math.abs(p - 0.25);
-    if (d > 0.5) d = 1.0 - d;
-    return d;
+  _emitSparks(cx, cy, ok) {
+    for (let i = 0; i < 9; i++) {
+      const a = Math.random() * TAU, s = 1.2 + Math.random() * 2.8;
+      this.sparks.push({ x:cx, y:cy, vx:Math.cos(a)*s, vy:Math.sin(a)*s-1.8, life:1.0, r:2+Math.random()*1.5, ok });
+    }
   }
 
   _release() {
-    if (this.done || this.failed) return;
-    const d = this._phaseDist(this.phase);
-    const half = this._zoneHalf();
-    if (d <= half) {
-      // success: set this pin
-      this.pins[this.active].set = true;
-      this.pins[this.active].h = 1.0;
-      this.active++;
-      if (this.active >= this.N) { this.done = true; }
-    } else {
-      // miss
-      this.lives--;
-      if (this.lives <= 0) { this.failed = true; }
+    if (!this.hold) return;
+    this.hold = false;
+    if (this.done || this.flash > 0 || this.springing) return;
+    const sp = this.pinShear[this.current], zw = this._zw();
+    if (Math.abs(this.pinPos - sp) <= zw) {
+      this.flash = 55; this.fOk = true;
+      this.pinDone[this.current] = true;
+      this.gearBurst = 6.0;
+      this._emitSparks(V.PXS[this.current], V.SHR, true);
+      const nxt = this.current + 1;
+      if (nxt >= 5) setTimeout(() => { this.done = 'success'; }, 720);
+      else          setTimeout(() => { this.current = nxt; this.pinPos = 0; this.flash = 0; this.fOk = false; }, 540);
+    } else if (this.pinPos < sp - zw) {
+      this.springing = true; this.snapBack = false;
     }
-    this.phase = 0;
   }
 
-  _tick() {
-    this._raf = requestAnimationFrame(this._tick);
-    if (this.done || this.failed) { this._draw(); return; }
-
-    if (this.held) {
-      this.phase += this.speed;
-      if (this.phase >= 1.0) this.phase -= 1.0;
-      // vibro pick offset
-      this.vibroOffset += this.vibroDir * 0.8;
-      if (Math.abs(this.vibroOffset) > 5) this.vibroDir *= -1;
-    } else {
-      this.vibroOffset *= 0.7;
-    }
-    this._draw();
+  _springBack(dt) {
+    this.pinPos = Math.max(0, this.pinPos - dt * (this.snapBack ? 5.0 : 1.4));
+    if (this.pinPos <= 0) { this.springing = false; this.snapBack = false; }
   }
 
-  _draw() {
-    const ctx = this.ctx;
-    const W = this.W, H = this.H;
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0a0806';
-    ctx.fillRect(0, 0, W, H);
+  tick(ts = 0) {
+    const dt = Math.min((ts - this.last)/1000, 0.05); this.last = ts;
+    const ctx = this.ctx, W = this.c.width, H = this.c.height;
 
-    this._drawLockSection();
-    this._drawVibro();
-    this._drawLives();
-
-    if (this.done) this._drawMessage('🔓 Замок відкрито!', '#22dd66');
-    if (this.failed) this._drawMessage('💥 Відмичка зламана!', '#dd3322');
-  }
-
-  _drawLockSection() {
-    const ctx = this.ctx;
-    const HX = this.HX, HY = this.HY, HW = this.HW, HH = this.HH;
-    const shearY = HY + HH * this.shearFrac;
-
-    // Housing outer
-    ctx.save();
-    rr(ctx, HX, HY, HW, HH, 8);
-    ctx.fillStyle = '#1a1a2a';
-    ctx.fill();
-    ctx.strokeStyle = '#4a4a6a';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Shear line
-    ctx.beginPath();
-    ctx.moveTo(HX + 4, shearY);
-    ctx.lineTo(HX + HW - 4, shearY);
-    ctx.strokeStyle = '#c8a050';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Shear label
-    ctx.fillStyle = '#c8a05088';
-    ctx.font = '10px Georgia';
-    ctx.fillText('лінія зсуву', HX + HW - 72, shearY - 4);
-
-    // Pin channels
-    const pinXs = [];
-    for (let i = 0; i < this.N; i++) {
-      const cx = HX + 50 + i * (HW - 100) / (this.N - 1);
-      pinXs.push(cx);
-      const chW = 22, chX = cx - chW / 2;
-      const chTop = HY + 8;
-      const chBot = shearY + 2;
-
-      // Channel background
-      ctx.fillStyle = '#0d0d14';
-      ctx.fillRect(chX, chTop, chW, chBot - chTop);
-      ctx.strokeStyle = '#2a2a3a';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(chX, chTop, chW, chBot - chTop);
-
-      const pin = this.pins[i];
-      const totalH = chBot - chTop;
-      const shearRelY = shearY; // absolute
-      const driverH = 18, keyH = 20;
-      const gap = 2;
-
-      // Key pin height (varies with pin.h): 1 = resting, can push up
-      const keyPinH = keyH * pin.h;
-      const keyPinTop = shearRelY - keyPinH;
-      const keyPinBot = shearRelY;
-
-      // Driver pin sits above key pin
-      const driverPinBot = keyPinTop - gap;
-      const driverPinTop = driverPinBot - driverH;
-
-      // Spring from top of channel to top of driver pin
-      const springTop = chTop + 4;
-      const springBot = Math.max(springTop + 10, driverPinTop - 2);
-
-      // Spring
-      drawSpring(ctx, cx, springTop, springBot, 4, '#556');
-
-      // Driver pin (above shear)
-      const dpColor = pin.set ? '#445588' : '#5566aa';
-      ctx.fillStyle = dpColor;
-      rr(ctx, chX + 2, driverPinTop, chW - 4, driverH, 3);
-      ctx.fill();
-      ctx.strokeStyle = '#778';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Key pin (below shear, or crossing if set)
-      const kpColor = pin.set ? '#22aa55' : '#aa8833';
-      ctx.fillStyle = kpColor;
-      rr(ctx, chX + 2, keyPinTop, chW - 4, keyPinH, 3);
-      ctx.fill();
-      ctx.strokeStyle = pin.set ? '#22dd66' : '#ddaa44';
-      ctx.lineWidth = pin.set ? 1.5 : 0.8;
-      ctx.stroke();
-
-      // Active pin highlight
-      if (i === this.active && !pin.set && !this.done && !this.failed) {
-        ctx.save();
-        ctx.strokeStyle = '#c8a050';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 3]);
-        rr(ctx, chX - 2, chTop - 2, chW + 4, chBot - chTop + 4, 5);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-      }
-    }
-
-    // Lockpick entering from left under active pin
-    if (this.active < this.N && !this.done && !this.failed) {
-      const targetX = pinXs[this.active];
-      const pickY = shearY + 10 + this.vibroOffset;
-      const pickStartX = -20;
-
-      // Shaft
-      const grad = ctx.createLinearGradient(pickStartX, pickY - 3, pickStartX, pickY + 3);
-      grad.addColorStop(0, '#c8a050');
-      grad.addColorStop(0.5, '#f0d080');
-      grad.addColorStop(1, '#8a6030');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.rect(pickStartX, pickY - 3, targetX - pickStartX + 2, 6);
-      ctx.fill();
-      ctx.strokeStyle = '#8a6030';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Hook tip (upward)
-      ctx.beginPath();
-      ctx.moveTo(targetX, pickY - 3);
-      ctx.lineTo(targetX + 10, pickY - 3);
-      ctx.lineTo(targetX + 10, pickY - 14);
-      ctx.strokeStyle = '#f0d080';
-      ctx.lineWidth = 3;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-
-      // Vibro indicator
-      if (this.held) {
-        ctx.save();
-        ctx.strokeStyle = '#c8a05055';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 3]);
-        ctx.beginPath();
-        ctx.rect(pickStartX, pickY - 8, targetX - pickStartX + 14, 16);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-      }
-    }
-
-    ctx.restore();
-  }
-
-  _drawVibro() {
-    const ctx = this.ctx;
-    const cx = this.W / 2, cy = 350;
-    const R = 65;
-
-    // Ring background
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, R + 12, 0, TAU);
-    ctx.fillStyle = '#0f0e0c';
-    ctx.fill();
-    ctx.strokeStyle = '#2a2810';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Ring track
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, TAU);
-    ctx.strokeStyle = '#333322';
-    ctx.lineWidth = 10;
-    ctx.stroke();
-
-    // Zone arc at 12-o'clock (phase 0.25)
-    const half = this._zoneHalf();
-    const zoneStart = -Math.PI / 2 - half * TAU;
-    const zoneEnd   = -Math.PI / 2 + half * TAU;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, zoneStart, zoneEnd);
-    ctx.strokeStyle = '#22cc55';
-    ctx.lineWidth = 10;
-    ctx.stroke();
-
-    // Zone border
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, zoneStart, zoneEnd);
-    ctx.strokeStyle = '#44ff88';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Moving dot
-    if (!this.done && !this.failed) {
-      const angle = -Math.PI / 2 + this.phase * TAU;
-      const dx = cx + Math.cos(angle) * R;
-      const dy = cy + Math.sin(angle) * R;
-
-      ctx.beginPath();
-      ctx.arc(dx, dy, 7, 0, TAU);
-      ctx.fillStyle = this.held ? '#ffee44' : '#c8a050';
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    // Center label
-    ctx.fillStyle = '#666';
-    ctx.font = '11px Georgia';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (!this.done && !this.failed) {
-      const pinsDone = this.pins.filter(p => p.set).length;
-      ctx.fillText(`Пін ${pinsDone + 1} / ${this.N}`, cx, cy - 10);
-      ctx.fillStyle = this.held ? '#ffee44' : '#555';
-      ctx.fillText(this.held ? 'відпусти в зоні!' : 'затисни і тримай', cx, cy + 10);
-    }
-
-    ctx.restore();
-
-    // Instruction arrow at 12-o'clock
-    ctx.save();
-    ctx.fillStyle = '#22cc5588';
-    ctx.font = '13px Georgia';
-    ctx.textAlign = 'center';
-    ctx.fillText('▲', cx, cy - R - 18);
-    ctx.restore();
-  }
-
-  _drawLives() {
-    const ctx = this.ctx;
-    const y = 448;
-    ctx.save();
-    ctx.font = '22px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const startX = this.W / 2 - 30;
-    for (let i = 0; i < 3; i++) {
-      ctx.globalAlpha = i < this.lives ? 1.0 : 0.2;
-      ctx.fillText('🗝️', startX + i * 30, y);
-    }
-    ctx.globalAlpha = 1.0;
-    ctx.restore();
-  }
-
-  _drawMessage(text, color) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.font = 'bold 22px Georgia';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    // Glow
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = color;
-    ctx.fillText(text, this.W / 2, 350);
-    ctx.restore();
-  }
-
-  destroy() {
-    if (this._raf) cancelAnimationFrame(this._raf);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SkyrimDemo
-// ═══════════════════════════════════════════════════════════════════════════════
-class SkyrimDemo {
-  constructor(canvas) {
-    this.cv = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.W = canvas.width;
-    this.H = canvas.height;
-    this.cx = 290;
-    this.BORE_R = 90;
-    this.CYL_R = 72;
-    this.plX = this.cx - 110;
-    this.plY = 45;
-    this.plW = 220;
-    this.plH = 350;
-    this.N = 5;
-    this.WEIGHTS = [0.35, 0.65, 1.0, 0.65, 0.35];
-    this._reset();
-    this._bindEvents();
-    this._raf = null;
-    this._tick = this._tick.bind(this);
-    requestAnimationFrame(this._tick);
-  }
-
-  _reset() {
-    this.pickAngle = -Math.PI / 2;
-    this.cylAngle = 0;
-    this.cylTarget = 0;
-    this.cylBump = 0;
-    this.pinComp = new Array(this.N).fill(0);
-    this.pinTarget = new Array(this.N).fill(0);
-    this.lives = 3;
-    this.done = false;
-    this.failed = false;
-    this.mx = this.cx;
-    this.my = this.plY + this.plH + 100;
-  }
-
-  _bindEvents() {
-    this.cv.addEventListener('mousemove', e => {
-      const rect = this.cv.getBoundingClientRect();
-      this.mx = e.clientX - rect.left;
-      this.my = e.clientY - rect.top;
-    });
-    this.cv.addEventListener('click', e => { this._attempt(); });
-  }
-
-  _sweetSize() {
-    return getMargin() >= 0 ? Math.PI * 0.20 : Math.PI * 0.05;
-  }
-
-  _sweetCenter() {
-    // fixed sweet spot, could randomize; use -PI*0.6 (roughly 8-o'clock region)
-    return -Math.PI * 0.60;
-  }
-
-  _pickAngle() {
-    const dx = this.mx - this.cx;
-    const cy305 = 305;
-    const dy = this.my - cy305;
-    let a = Math.atan2(dy, dx);
-    // Clamp to top semicircle [-PI, 0]
-    if (a > 0) a = 0;
-    if (a < -Math.PI) a = -Math.PI;
-    return a;
-  }
-
-  _proximity() {
-    const pa = this._pickAngle();
-    const sc = this._sweetCenter();
-    const half = this._sweetSize() / 2;
-    const diff = Math.abs(pa - sc);
-    const dist = Math.min(diff, TAU - diff);
-    if (dist <= half) return 1.0;
-    const falloff = half * 2.5;
-    return Math.max(0, 1.0 - (dist - half) / falloff);
-  }
-
-  _attempt() {
-    if (this.done || this.failed) return;
-    const prox = this._proximity();
-    if (prox >= 1.0) {
-      this.done = true;
-      this.cylTarget = Math.PI / 2;
-      return;
-    }
-    // Set pin targets based on proximity + weights
-    for (let i = 0; i < this.N; i++) {
-      this.pinTarget[i] = Math.min(1.0, prox * this.WEIGHTS[i]);
-    }
-    // Cylinder bump proportional to proximity
-    this.cylBump = prox * 0.35;
-    this.cylTarget = this.cylBump;
-
-    this.lives--;
-    if (this.lives <= 0) { this.failed = true; }
-  }
-
-  _tick() {
-    this._raf = requestAnimationFrame(this._tick);
-    // Animate pin compression
-    for (let i = 0; i < this.N; i++) {
-      if (this.pinComp[i] < this.pinTarget[i]) {
-        this.pinComp[i] = Math.min(this.pinTarget[i], this.pinComp[i] + 0.06);
-      } else {
-        this.pinComp[i] = Math.max(0, this.pinComp[i] - 0.015);
-        if (this.pinComp[i] <= 0) this.pinTarget[i] = 0;
-      }
-    }
-    // Animate cylinder
-    if (this.done) {
-      this.cylAngle += (this.cylTarget - this.cylAngle) * 0.04;
-      if (this.cylAngle < Math.PI / 2 - 0.01) this.cylTarget = Math.PI / 2;
-    } else {
-      if (this.cylBump > 0) {
-        this.cylAngle += (this.cylTarget - this.cylAngle) * 0.12;
-        if (Math.abs(this.cylAngle - this.cylTarget) < 0.005) {
-          this.cylBump -= 0.005;
-          if (this.cylBump <= 0) { this.cylBump = 0; this.cylTarget = 0; }
-          this.cylTarget = this.cylBump;
+    if (!this.done) {
+      if (this.springing) {
+        this._springBack(dt);
+      } else if (this.hold && this.flash === 0) {
+        this.pinPos = Math.min(1, this.pinPos + dt * this._speed() * this._noise(ts));
+        const sp = this.pinShear[this.current], zw = this._zw();
+        if (this.pinPos > sp + zw + 0.06) {
+          this.hold = false; this.flash = 34; this.fOk = false; this.lives--;
+          this._emitSparks(V.PXS[this.current], V.SHR, false);
+          this.springing = true; this.snapBack = true;
+          if (this.lives <= 0) setTimeout(() => { this.done = 'fail'; }, 620);
         }
-      } else {
-        this.cylAngle += (0 - this.cylAngle) * 0.08;
       }
     }
-
-    if (!this.done && !this.failed) {
-      this.pickAngle = this._pickAngle();
+    if (this.flash > 0) this.flash--;
+    for (const s of this.sparks) { s.x+=s.vx; s.y+=s.vy; s.vy+=0.14; s.life-=0.065; }
+    this.sparks = this.sparks.filter(s => s.life > 0);
+    if (this.done === 'success' && this.boltSlide < 1) this.boltSlide = Math.min(1, this.boltSlide + dt * 1.1);
+    for (let i = 0; i < 5; i++) {
+      const target = this.pinDone[i] ? 1 : 0;
+      if (this.gateAnim[i] < target) this.gateAnim[i] = Math.min(target, this.gateAnim[i] + dt * 3.2);
+      else if (this.gateAnim[i] > target) this.gateAnim[i] = Math.max(target, this.gateAnim[i] - dt * 3.2);
     }
-    this._draw();
+    // Gear rotation: spins when picking, bursts on pin set, slow idle otherwise
+    if (this.hold && !this.done) {
+      this.gearRot += dt * 1.5;
+    } else if (this.gearBurst > 0.01) {
+      this.gearRot += dt * this.gearBurst;
+      this.gearBurst = Math.max(0, this.gearBurst - dt * 5.0);
+    } else {
+      this.gearRot += dt * 0.05;
+    }
+
+    // Background
+    const bg = ctx.createRadialGradient(W*0.38, H*0.30, 50, W/2, H/2, W*0.78);
+    bg.addColorStop(0, '#1c1814'); bg.addColorStop(1, '#080608');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    if (this.flash > 0) {
+      ctx.fillStyle = this.fOk
+        ? `rgba(76,143,98,${(this.flash/55)*0.08})`
+        : `rgba(185,22,8,${(this.flash/34)*0.16})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (this.done) {
+      this._drawAll(ctx, W, ts);
+      ctx.fillStyle = 'rgba(0,0,0,0.52)'; ctx.fillRect(0, 0, W, H);
+      const ok = this.done === 'success';
+      ctx.save();
+      ctx.fillStyle = ok ? '#54a375' : '#e74c3c';
+      ctx.shadowBlur = 28; ctx.shadowColor = ctx.fillStyle;
+      ctx.font = "700 26px 'Cinzel','Palatino Linotype',Palatino,serif"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+      ctx.strokeText(ok ? 'Lock Opened' : 'Pick Broken', W/2, H/2 - 20);
+      ctx.fillText(ok ? 'Lock Opened' : 'Pick Broken', W/2, H/2 - 20);
+      ctx.restore();
+      this.raf = requestAnimationFrame(ts => this.tick(ts)); return;
+    }
+
+    this._drawAll(ctx, W, ts);
+    this._drawSparks(ctx);
+    this._drawHUD(ctx, W, H);
+    this.raf = requestAnimationFrame(ts => this.tick(ts));
   }
 
-  _draw() {
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.W, this.H);
-    // 1. Black background
-    ctx.fillStyle = '#0a0806';
-    ctx.fillRect(0, 0, this.W, this.H);
-
-    // 2. Dark rect behind bore area
-    const cx = this.cx, cy305 = 305, BR = this.BORE_R;
-    ctx.fillStyle = '#080706';
-    ctx.fillRect(cx - BR - 4, cy305 - BR - 4, (BR + 4) * 2, (BR + 4) * 2);
-
-    // 3. Lock plate with pin section, then bore cutout
-    this._drawLockPlate();
-
-    // 4. Cylinder inside bore
-    this._drawCylinder();
-
-    // 5. Tension wrench
-    this._drawTensionWrench();
-
-    // 6. Pick
-    this._drawPick();
-
-    // 7. Constraint arc guide
-    this._drawConstraintArc();
-
-    // 8. Lives
-    this._drawLives();
-
-    if (this.done) this._drawMessage('🔓 Замок відкрито!', '#22dd66');
-    if (this.failed) this._drawMessage('💥 Відмичка зламана!', '#dd3322');
+  _drawAll(ctx, W, ts) {
+    this._drawHousing(ctx);
+    this._drawGears(ctx, ts);
+    this._drawPlug(ctx);
+    this._drawKeyway(ctx);
+    for (let i = 0; i < 5; i++) this._drawPinBore(ctx, i);
+    for (let i = 0; i < 5; i++) this._drawPinContents(ctx, i, ts);
+    this._drawShearLine(ctx);
+    this._drawPick(ctx, ts);
+    this._drawKeywayCover(ctx);
+    this._drawBoltMechanism(ctx, W, ts);
   }
 
-  _drawLockPlate() {
-    const ctx = this.ctx;
-    const { plX, plY, plW, plH, cx } = this;
-    const cy305 = 305;
+  // ── Gears (3 meshing gears inside the housing body) ──────────────────────
+  _drawGears(ctx, ts) {
+    const {LX, LW, HT, SHR} = V;
+    // A(18t, R=45) — B(14t, R=35) — C(18t, R=45)
+    // Center distance A-B = 45+35=80, B-C = 35+45=80
+    // All at y=100 (middle of housing), x at 210, 290, 370
+    // Rotation ratios: B opposite to A at 18/14, C same dir as A
+    const gearY = HT + 84;   // ≈ 100
+    const rotA =  this.gearRot;
+    const rotB = -this.gearRot * (18 / 14);   // opposite, faster
+    const rotC =  this.gearRot;               // same as A
 
     ctx.save();
-
-    // Use offscreen canvas approach via save/restore composite
-    // Draw brass plate
-    const grad = ctx.createLinearGradient(plX, plY, plX + plW, plY + plH);
-    grad.addColorStop(0, '#7a6230');
-    grad.addColorStop(0.3, '#c8a050');
-    grad.addColorStop(0.7, '#a07838');
-    grad.addColorStop(1, '#6a5228');
-    rr(ctx, plX, plY, plW, plH, 12);
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.strokeStyle = '#ddc060';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Plate inner bevel
-    rr(ctx, plX + 5, plY + 5, plW - 10, plH - 10, 9);
-    ctx.strokeStyle = '#c8a05066';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Pin spring section inside plate top
-    this._drawPinSection(ctx);
-
-    // Destination-out bore hole
-    ctx.globalCompositeOperation = 'destination-out';
+    // Clip to housing interior so gears stay inside the brass body
     ctx.beginPath();
-    ctx.arc(cx, cy305, this.BORE_R, 0, TAU);
-    ctx.fill();
-
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.restore();
-
-    // Bore ring edge
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy305, this.BORE_R, 0, TAU);
-    ctx.strokeStyle = '#6a5228';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy305, this.BORE_R + 4, 0, TAU);
-    ctx.strokeStyle = '#c8a05044';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  _drawPinSection(ctx) {
-    // Pin channels: y=57 to y=185 (inside plate top, well above bore at y=215)
-    const sY = this.plY + 12;  // 57
-    const sH = 128;             // to ~185
-    const channelW = 18;
-    const shearY = sY + sH;    // absolute shear line for this section
-
-    ctx.save();
-    // Clip to plate top area
-    rr(ctx, this.plX + 6, sY, this.plW - 12, sH + 10, 4);
+    ctx.rect(LX + 3, HT + 4, LW - 6, SHR - HT - 4);
     ctx.clip();
 
-    // Background for pin area
-    ctx.fillStyle = '#1a1610';
-    ctx.fillRect(this.plX + 6, sY, this.plW - 12, sH + 10);
-
-    for (let i = 0; i < this.N; i++) {
-      const cx = this.plX + 28 + i * (this.plW - 56) / (this.N - 1);
-      const chW = channelW, chX = cx - chW / 2;
-      const chTop = sY + 4;
-      const chBot = shearY;
-      const comp = this.pinComp[i];
-      const totalH = chBot - chTop;
-
-      // Channel groove
-      ctx.fillStyle = '#0d0b08';
-      ctx.fillRect(chX, chTop, chW, totalH);
-      ctx.strokeStyle = '#3a3020';
-      ctx.lineWidth = 0.8;
-      ctx.strokeRect(chX, chTop, chW, totalH);
-
-      const driverH = 16, keyH = 18;
-      const maxPush = totalH - driverH - keyH - 4;
-
-      // Driver pin: moves UP when compressed
-      const driverTop = chTop + 2 + comp * maxPush;
-      const driverBot = driverTop + driverH;
-
-      // Spring from channel top to driver pin top
-      const springBot = Math.max(chTop + 2, driverTop - 2);
-      drawSpring(ctx, cx, chTop + 2, springBot, 3, comp > 0.3 ? '#aa7733' : '#556');
-
-      // Driver pin
-      ctx.fillStyle = comp > 0.1 ? `rgba(180,120,40,${0.7 + comp * 0.3})` : '#445';
-      rr(ctx, chX + 2, driverTop, chW - 4, driverH, 3);
-      ctx.fill();
-      ctx.strokeStyle = comp > 0.1 ? '#c8a050' : '#667';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-
-      // Key pin below driver
-      const keyPinTop = driverBot + 2;
-      const keyPinH = keyH;
-      ctx.fillStyle = '#886633';
-      rr(ctx, chX + 2, keyPinTop, chW - 4, keyPinH, 3);
-      ctx.fill();
-      ctx.strokeStyle = '#aa8844';
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
-    }
-
-    // Shear line
-    ctx.beginPath();
-    ctx.moveTo(this.plX + 8, shearY);
-    ctx.lineTo(this.plX + this.plW - 8, shearY);
-    ctx.strokeStyle = '#c8a05066';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.restore();
-  }
-
-  _drawCylinder() {
-    const ctx = this.ctx;
-    const cx = this.cx, cy = 305;
-    const R = this.CYL_R;
-    const angle = this.cylAngle;
-
-    ctx.save();
-
-    // Cylinder body
-    const grad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, 2, cx, cy, R);
-    grad.addColorStop(0, '#4a4a5a');
-    grad.addColorStop(0.6, '#2a2a38');
-    grad.addColorStop(1, '#181820');
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, TAU);
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.strokeStyle = '#5a5a7a';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Warding cuts (decorative grooves in cylinder face)
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-    for (let w = 0; w < 3; w++) {
-      const wa = (w / 3) * TAU;
+    // Axle shadow rings for depth
+    for (const [gx, R] of [[210,45],[290,35],[370,45]]) {
       ctx.save();
-      ctx.rotate(wa);
-      ctx.beginPath();
-      ctx.moveTo(14, 0);
-      ctx.lineTo(R - 8, 0);
-      ctx.strokeStyle = '#3a3a4a';
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      ctx.shadowBlur = 18; ctx.shadowColor = 'rgba(0,0,0,0.70)';
+      ctx.beginPath(); ctx.arc(gx, gearY, R, 0, TAU);
+      ctx.fillStyle = 'rgba(0,0,0,0.0)'; ctx.fill();
       ctx.restore();
     }
 
-    // Key slot (vertical cut at top)
-    ctx.beginPath();
-    ctx.rect(-5, -R + 4, 10, R * 0.5);
-    ctx.fillStyle = '#080808';
-    ctx.fill();
-
-    // Key slot notch
-    ctx.beginPath();
-    ctx.rect(-9, -R * 0.4, 18, 8);
-    ctx.fillStyle = '#101010';
-    ctx.fill();
-
-    ctx.restore(); // un-rotate
-
-    // Cylinder center dot
-    ctx.beginPath();
-    ctx.arc(cx, cy, 5, 0, TAU);
-    ctx.fillStyle = '#888';
-    ctx.fill();
+    this._gear(ctx, 210, gearY, 45, 32, 18, rotA);
+    this._gear(ctx, 290, gearY, 35, 25, 14, rotB);
+    this._gear(ctx, 370, gearY, 45, 32, 18, rotC);
 
     ctx.restore();
   }
 
-  _drawTensionWrench() {
-    const ctx = this.ctx;
-    const cx = this.cx, cy = 305;
-    const R = this.BORE_R;
-
-    ctx.save();
-    // L-shaped tension wrench at bottom of bore
-    const wx = cx + R - 22;
-    const wy = cy + R - 20;
-
+  _gear(ctx, cx, cy, R, r, n, angle) {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
     ctx.beginPath();
-    ctx.moveTo(wx, wy - 28);
-    ctx.lineTo(wx, wy);
-    ctx.lineTo(wx + 18, wy);
-    ctx.strokeStyle = '#8899bb';
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(wx, wy - 28, 4, 0, TAU);
-    ctx.fillStyle = '#aabbdd';
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  _drawPick() {
-    const ctx = this.ctx;
-    const cx = this.cx, cy = 305;
-    const TIP_R = 16, HANDLE_R = 175;
-    const angle = this.done || this.failed ? -Math.PI / 2 : this.pickAngle;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-
-    // Handle (outside plate — far end)
-    const hGrad = ctx.createLinearGradient(-3, -HANDLE_R, 3, -HANDLE_R);
-    hGrad.addColorStop(0, '#c8a050');
-    hGrad.addColorStop(0.5, '#f0d080');
-    hGrad.addColorStop(1, '#8a6030');
-    ctx.strokeStyle = hGrad;
-    ctx.lineWidth = 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -TIP_R);
-    ctx.lineTo(0, -HANDLE_R);
-    ctx.stroke();
-
-    // Tip (inside bore, visible over cylinder)
-    ctx.beginPath();
-    ctx.moveTo(0, -TIP_R);
-    ctx.lineTo(0, TIP_R * 0.3);
-    ctx.strokeStyle = '#f0d080';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // Hook at tip
-    ctx.beginPath();
-    ctx.moveTo(0, -TIP_R);
-    ctx.lineTo(8, -TIP_R - 10);
-    ctx.strokeStyle = '#f0d080';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  _drawConstraintArc() {
-    const ctx = this.ctx;
-    const cx = this.cx, cy = 305;
-    const R = this.BORE_R + 20;
-
-    // Subtle dashed semicircle guide
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, -Math.PI, 0);
-    ctx.strokeStyle = '#c8a05028';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Sweet spot arc
-    const sc = this._sweetCenter();
-    const half = this._sweetSize() / 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, sc - half, sc + half);
-    ctx.strokeStyle = '#22cc5555';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([]);
-    ctx.stroke();
-
-    // Current pick angle marker on arc
-    if (!this.done && !this.failed) {
-      const pa = this.pickAngle;
-      const mx2 = cx + Math.cos(pa) * R;
-      const my2 = cy + Math.sin(pa) * R;
-      ctx.beginPath();
-      ctx.arc(mx2, my2, 4, 0, TAU);
-      ctx.fillStyle = '#c8a050aa';
-      ctx.fill();
+    for (let i = 0; i < n; i++) {
+      const a0=(i/n)*TAU, a1=((i+0.28)/n)*TAU, a2=((i+0.72)/n)*TAU, a3=((i+1)/n)*TAU;
+      ctx.lineTo(r*Math.cos(a0), r*Math.sin(a0));
+      ctx.lineTo(R*Math.cos(a1), R*Math.sin(a1));
+      ctx.lineTo(R*Math.cos(a2), R*Math.sin(a2));
+      ctx.lineTo(r*Math.cos(a3), r*Math.sin(a3));
     }
-
-    ctx.restore();
-  }
-
-  _drawLives() {
-    const ctx = this.ctx;
-    const y = 478;
-    ctx.save();
-    ctx.font = '22px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const startX = this.W / 2 - 30;
+    ctx.closePath();
+    const g = ctx.createRadialGradient(-R*.22, -R*.22, R*.04, 0, 0, R);
+    g.addColorStop(0, '#c49830'); g.addColorStop(0.55, '#836014'); g.addColorStop(1, '#352506');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#1c1004'; ctx.lineWidth = 0.9; ctx.stroke();
+    // Hub
+    ctx.beginPath(); ctx.arc(0, 0, R*.32, 0, TAU);
+    const hg = ctx.createRadialGradient(-1, -1, 1, 0, 0, R*.32);
+    hg.addColorStop(0, '#d4a028'); hg.addColorStop(1, '#3a2808');
+    ctx.fillStyle = hg; ctx.fill();
+    ctx.strokeStyle = '#140e02'; ctx.lineWidth = 0.7; ctx.stroke();
+    // Spokes
+    ctx.strokeStyle = 'rgba(0,0,0,0.38)'; ctx.lineWidth = 1.4;
     for (let i = 0; i < 3; i++) {
-      ctx.globalAlpha = i < this.lives ? 1.0 : 0.2;
-      ctx.fillText('🗝️', startX + i * 30, y);
+      const a = i * (TAU/3);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a)*R*.15, Math.sin(a)*R*.15);
+      ctx.lineTo(Math.cos(a)*r*.78, Math.sin(a)*r*.78);
+      ctx.stroke();
     }
-    ctx.globalAlpha = 1.0;
+    // Axle hole
+    ctx.beginPath(); ctx.arc(0, 0, R*.10, 0, TAU); ctx.fillStyle = '#080604'; ctx.fill();
     ctx.restore();
   }
 
-  _drawMessage(text, color) {
-    const ctx = this.ctx;
+  // ── Housing (brass) ───────────────────────────────────────────────────────
+  _drawHousing(ctx) {
+    const {LX,LW,HT,HH,SHR} = V;
+    const g = ctx.createLinearGradient(LX, 0, LX+LW, 0);
+    g.addColorStop(0,    '#361c02'); g.addColorStop(0.04, '#9c5a0c');
+    g.addColorStop(0.18, '#d09030'); g.addColorStop(0.50, '#e8aa3c');
+    g.addColorStop(0.82, '#d09030'); g.addColorStop(0.96, '#9c5a0c');
+    g.addColorStop(1,    '#361c02');
     ctx.save();
-    ctx.font = 'bold 22px Georgia';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 24;
-    ctx.fillStyle = color;
-    ctx.fillText(text, this.W / 2, 440);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(LX, HT, LW, HH, [12,12,0,0]); else ctx.rect(LX,HT,LW,HH);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#241402'; ctx.lineWidth = 2.5; ctx.stroke();
+    // Top polish highlight
+    ctx.fillStyle = 'rgba(255,236,130,0.58)'; ctx.fillRect(LX+18, HT+2, LW-36, 2.5);
+    // Clip for grain
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(LX+3, HT+5, LW-6, HH-9, [10,10,0,0]); else ctx.rect(LX+3,HT+5,LW-6,HH-9);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(0,0,0,0.055)'; ctx.lineWidth = 1;
+    for (let y = HT+7; y < SHR-2; y += 4) { ctx.beginPath(); ctx.moveTo(LX+6,y); ctx.lineTo(LX+LW-6,y); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,218,80,0.065)'; ctx.lineWidth = 1;
+    for (let y = HT+12; y < SHR-4; y += 9) { ctx.beginPath(); ctx.moveTo(LX+6,y); ctx.lineTo(LX+LW-6,y); ctx.stroke(); }
+    ctx.restore();
+    // Edge shadow
+    for (const [ex,d] of [[LX,1],[LX+LW,-1]]) {
+      const wg = ctx.createLinearGradient(ex, 0, ex+d*24, 0);
+      wg.addColorStop(0, 'rgba(0,0,0,0.62)'); wg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = wg; ctx.fillRect(ex, HT+6, d*24, HH-8);
+    }
+    // Hex bolts at corners
+    this._hexBolt(ctx, LX+22, HT+22, 9);
+    this._hexBolt(ctx, LX+LW-22, HT+22, 9);
+    // Bottom rivet seam (where housing meets plug)
+    ctx.strokeStyle = 'rgba(24,12,2,0.85)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(LX+8, HT+HH-1); ctx.lineTo(LX+LW-8, HT+HH-1); ctx.stroke();
+  }
+
+  _hexBolt(ctx, cx, cy, r) {
+    const g = ctx.createRadialGradient(cx-r*.3, cy-r*.3, r*.05, cx, cy, r);
+    g.addColorStop(0, '#e0b030'); g.addColorStop(0.6, '#8a6018'); g.addColorStop(1, '#2a1804');
+    ctx.save(); ctx.translate(cx, cy);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) { const a=i*(TAU/6)-Math.PI/6; i===0?ctx.moveTo(r*Math.cos(a),r*Math.sin(a)):ctx.lineTo(r*Math.cos(a),r*Math.sin(a)); }
+    ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#140a01'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(-r*.42, 0); ctx.lineTo(r*.42, 0); ctx.stroke();
     ctx.restore();
   }
 
-  destroy() {
-    if (this._raf) cancelAnimationFrame(this._raf);
+  // ── Plug (dark machined steel, NO BLUE) ───────────────────────────────────
+  _drawPlug(ctx) {
+    const {LX,LW,PT,PH,PB} = V;
+    const g = ctx.createLinearGradient(LX, 0, LX+LW, 0);
+    g.addColorStop(0,    '#0c0a08'); g.addColorStop(0.05, '#1a1814');
+    g.addColorStop(0.50, '#201e18'); g.addColorStop(0.95, '#1a1814');
+    g.addColorStop(1,    '#0c0a08');
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(LX, PT, LW, PH, [0,0,10,10]); else ctx.rect(LX,PT,LW,PH);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#080604'; ctx.lineWidth = 2; ctx.stroke();
+    // Clip for texture
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(LX+3, PT+2, LW-6, PH-4, [0,0,8,8]); else ctx.rect(LX+3,PT+2,LW-6,PH-4);
+    ctx.clip();
+    // Fine horizontal machining lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.024)'; ctx.lineWidth = 1;
+    for (let y = PT+5; y < PB-3; y += 4) { ctx.beginPath(); ctx.moveTo(LX+5,y); ctx.lineTo(LX+LW-5,y); ctx.stroke(); }
+    // Deeper scratch marks (darker)
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 0.9;
+    for (const sy of [PT+28, PT+64, PT+96]) { ctx.beginPath(); ctx.moveTo(LX+50,sy); ctx.lineTo(LX+LW-50,sy); ctx.stroke(); }
+    // 45deg cross-hatch (cast iron look)
+    ctx.strokeStyle = 'rgba(255,255,255,0.011)'; ctx.lineWidth = 0.8;
+    for (let d = -PH; d < LW+PH; d += 20) { ctx.beginPath(); ctx.moveTo(LX+d,PT); ctx.lineTo(LX+d+PH,PT+PH); ctx.stroke(); }
+    ctx.restore();
+    // Collar bevel at top of plug (machined inner bore collar)
+    const col = ctx.createLinearGradient(0, PT, 0, PT+9);
+    col.addColorStop(0, 'rgba(110,95,65,0.48)'); col.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = col; ctx.fillRect(LX+4, PT, LW-8, 9);
+    // Bottom warmth
+    ctx.fillStyle = 'rgba(88,74,44,0.40)'; ctx.fillRect(LX+14, PB-4, LW-28, 3);
   }
+
+  // ── Keyway slot ───────────────────────────────────────────────────────────
+  _drawKeyway(ctx) {
+    const {LX,LW,KT,KH,KB} = V;
+    const kx = LX+4, kw = LW-8;
+    // Dark void interior
+    ctx.fillStyle = '#020106'; ctx.fillRect(kx, KT, kw, KH);
+    // Top wall inner face
+    const tg = ctx.createLinearGradient(0, KT, 0, KT+8);
+    tg.addColorStop(0, 'rgba(62,54,40,0.96)'); tg.addColorStop(1, 'rgba(4,3,8,0.99)');
+    ctx.fillStyle = tg; ctx.fillRect(kx, KT, kw, 8);
+    // Bottom wall inner face
+    const bg = ctx.createLinearGradient(0, KB-8, 0, KB);
+    bg.addColorStop(0, 'rgba(4,3,8,0.99)'); bg.addColorStop(1, 'rgba(58,50,36,0.88)');
+    ctx.fillStyle = bg; ctx.fillRect(kx, KB-8, kw, 8);
+    // Entry edge (left side)
+    ctx.strokeStyle = 'rgba(95,82,56,0.72)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(kx, KT); ctx.lineTo(kx, KB); ctx.stroke();
+  }
+
+  // ── Pin bore (dark channel through housing + plug) ────────────────────────
+  _drawPinBore(ctx, i) {
+    const {HT,HH,SHR,KT,KB,PB,CW} = V;
+    const px = V.PXS[i];
+    const gd = ctx.createLinearGradient(px-CW/2, 0, px+CW/2, 0);
+    gd.addColorStop(0, 'rgba(0,0,0,0.90)'); gd.addColorStop(0.20, '#030210');
+    gd.addColorStop(0.80, '#030210'); gd.addColorStop(1, 'rgba(0,0,0,0.90)');
+    ctx.fillStyle = gd;
+    ctx.fillRect(px-CW/2, HT+10, CW, HH-10);   // housing
+    ctx.fillRect(px-CW/2, SHR,   CW, KT-SHR);  // plug above keyway
+    ctx.fillRect(px-CW/2, KB,    CW, PB-KB-2); // plug below keyway
+  }
+
+  // ── Pin contents (spring + driver + key) ──────────────────────────────────
+  _drawPinContents(ctx, i, ts) {
+    const {HT,SHR,KT,KB,CW,DPH,KPH,TRAV} = V;
+    const px    = V.PXS[i];
+    const isDone = this.pinDone[i];
+    const isAct  = (i === this.current) && !this.done;
+    const pos    = isDone ? this.pinShear[i] : (isAct ? this.pinPos : 0);
+    const sp     = this.pinShear[i];
+    const zw     = this._zw();
+    const inZone = isAct && Math.abs(pos - sp) <= zw;
+    const boundY = SHR + TRAV * (sp - pos);  // driver/key boundary
+
+    // ── Driver pin (copper/bronze) ─────────────────────────────────────────
+    const dBot = Math.min(boundY, SHR);
+    const dTop = Math.max(boundY - DPH, HT+10);
+    if (dBot > dTop + 2) {
+      const [dk,md,hi] = isDone ? ['#18311d','#407e56','#83bf97'] : ['#481806','#983a14','#d47838'];
+      this._cylPin(ctx, px, dTop, dBot, CW, dk, md, hi);
+      if (dTop > HT+13) { ctx.beginPath(); ctx.arc(px, dTop+2, (CW-6)/2, Math.PI, 0); ctx.fillStyle=isDone?'#549a6e':'#b85226'; ctx.fill(); }
+    }
+    // Spring (housing ceiling to driver top)
+    const sBot = Math.max(HT+14, dTop) - 2;
+    if (sBot > HT+18) this._spring(ctx, px, HT+14, sBot, (CW-2)*.42);
+
+    // ── Key pin (steel — extends into keyway at rest) ──────────────────────
+    const kTop = Math.max(boundY, SHR);
+    const kBot = Math.min(boundY + KPH, KB-2);  // can reach into keyway
+    if (kBot > kTop + 2) {
+      const bright = isAct && this.hold;
+      const [dk,md,hi] = isDone
+        ? ['#18311d','#407e56','#83bf97']
+        : bright ? ['#1c1c1a','#908880','#d2cec4'] : ['#141210','#504840','#8a8078'];
+      this._cylPin(ctx, px, kTop, kBot, CW, dk, md, hi);
+      if (boundY + KPH < KB-2) {
+        ctx.beginPath(); ctx.arc(px, kBot-1, (CW-6)/2, 0, Math.PI);
+        ctx.fillStyle = isDone?'#549a6e': bright?'#908478':'#3c3830'; ctx.fill();
+      }
+    }
+
+    // ── Zone indicator: thin tick marks + tiny spark (NO full column glow) ──
+    if (isAct && !isDone && !this.done) {
+      const bandPx = TRAV * zw;
+      // Tick marks at zone boundaries
+      ctx.strokeStyle = inZone ? 'rgba(80,155,107,0.82)' : 'rgba(185,152,38,0.52)';
+      ctx.lineWidth = 1.2;
+      for (const ty of [SHR-bandPx, SHR+bandPx]) {
+        ctx.beginPath(); ctx.moveTo(px-CW/2-3, ty); ctx.lineTo(px+CW/2+3, ty); ctx.stroke();
+      }
+      // Tiny spark at shear line when in zone
+      if (inZone) {
+        ctx.save();
+        ctx.shadowBlur = 4; ctx.shadowColor = 'rgba(79,147,99,0.55)';
+        ctx.fillStyle = 'rgba(160,205,175,0.72)';
+        ctx.beginPath(); ctx.arc(px, SHR, 1.8, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+      // Active column border (amber pulse)
+      const pulse = 0.28 + 0.12*Math.sin(ts*0.004);
+      ctx.strokeStyle = `rgba(175,138,30,${pulse})`;
+      ctx.lineWidth = 1.0; ctx.setLineDash([4,3]);
+      ctx.strokeRect(px-CW/2-4, V.HT+8, CW+8, V.PB-6-(V.HT+8));
+      ctx.setLineDash([]);
+    }
+    // Set pin: tiny dim dot at shear line
+    if (isDone) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(68,131,89,0.38)';
+      ctx.beginPath(); ctx.arc(px, SHR, 1.8, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  _spring(ctx, cx, y1, y2, hw) {
+    const h = y2-y1; if (h < 6) return;
+    const coils = Math.max(4, Math.min(18, Math.floor(h/6)));
+    const step  = h / (coils*2);
+    // Shadow
+    ctx.save(); ctx.strokeStyle='rgba(0,0,0,0.52)'; ctx.lineWidth=2.0;
+    ctx.beginPath(); ctx.moveTo(cx+1, y1+1);
+    for (let j=0;j<=coils*2;j++) ctx.lineTo(cx+(j%2===0?hw:-hw)+1, y1+j*step+1);
+    ctx.lineTo(cx+1, y2+1); ctx.stroke(); ctx.restore();
+    // Wire
+    ctx.strokeStyle='rgba(198,190,168,0.92)'; ctx.lineWidth=1.75;
+    ctx.beginPath(); ctx.moveTo(cx, y1);
+    for (let j=0;j<=coils*2;j++) ctx.lineTo(cx+(j%2===0?hw:-hw), y1+j*step);
+    ctx.lineTo(cx, y2); ctx.stroke();
+    // Specular (top coils)
+    ctx.strokeStyle='rgba(255,250,235,0.44)'; ctx.lineWidth=0.85;
+    const hi=Math.min(6,coils*2); ctx.beginPath(); ctx.moveTo(cx,y1);
+    for (let j=0;j<=hi;j++) ctx.lineTo(cx+(j%2===0?hw:-hw), y1+j*step);
+    ctx.stroke();
+  }
+
+  _cylPin(ctx, cx, y1, y2, w, dk, md, hi) {
+    const g = ctx.createLinearGradient(cx-w/2, 0, cx+w/2, 0);
+    g.addColorStop(0, dk); g.addColorStop(0.14, md); g.addColorStop(0.40, hi);
+    g.addColorStop(0.60, hi); g.addColorStop(0.86, md); g.addColorStop(1, dk);
+    ctx.fillStyle = g; ctx.fillRect(cx-w/2+2, y1, w-4, y2-y1);
+    ctx.strokeStyle = dk; ctx.lineWidth = 0.5; ctx.strokeRect(cx-w/2+2, y1, w-4, y2-y1);
+    ctx.strokeStyle='rgba(255,250,230,0.20)'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.moveTo(cx-w/2+5, y1+3); ctx.lineTo(cx-w/2+5, y2-3); ctx.stroke();
+  }
+
+  // ── Shear line ────────────────────────────────────────────────────────────
+  _drawShearLine(ctx) {
+    const {LX,LW,SHR} = V;
+    ctx.save();
+    ctx.shadowBlur=9; ctx.shadowColor='rgba(118,100,210,0.62)';
+    ctx.strokeStyle='rgba(102,88,200,0.80)'; ctx.lineWidth=1.2; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(LX+6,SHR); ctx.lineTo(LX+LW-6,SHR);
+    ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+
+  // ── Pick (rides inside keyway, hook lifts key pin from below) ─────────────
+  _drawPick(ctx, ts) {
+    const idx = this.current; if (idx >= 5 || this.done) return;
+    const {SHR,KPH,KCY,KB,CW,TRAV,LX} = V;
+    const px      = V.PXS[idx];
+    const sp      = this.pinShear[idx];
+    const pos     = this.pinPos;
+    const zw      = this._zw();
+    const inZone  = Math.abs(pos - sp) <= zw;
+    const hookTipY = SHR + KPH + TRAV*(sp - pos);  // = kBot at current pos
+
+    const vibAmt = this.hold ? (inZone ? 0.75 : 2.2) : 0.18;
+    const vibY   = vibAmt*(Math.sin(ts*.001*26)+.50*Math.sin(ts*.001*43+.8));
+    const shaftY     = KCY + vibY;
+    const tipY       = hookTipY + vibY*0.22;
+    const hookBaseX  = px - CW*0.90;
+    const shaftStart = LX - 24;
+
+    const col  = inZone?'#b0e8c0':this.snapBack?'#e07868':'#b8b49e';
+    const hiLt = inZone?'#d4ffec':this.snapBack?'#ffb090':'#e0dcc4';
+    const dk   = inZone?'#286044':this.snapBack?'#782818':'#44402c';
+
+    ctx.save(); ctx.lineCap='round';
+    if (inZone||this.snapBack) { ctx.shadowBlur=inZone?14:11; ctx.shadowColor=inZone?'rgba(78,147,102,0.68)':'rgba(215,48,16,0.60)'; }
+
+    // Handle (off-canvas left)
+    const handleEndX = LX-8;
+    if (handleEndX > shaftStart+4) {
+      ctx.strokeStyle=inZone?'#88b490':'#8c887a'; ctx.lineWidth=8;
+      ctx.beginPath(); ctx.moveTo(shaftStart,shaftY); ctx.lineTo(handleEndX,shaftY); ctx.stroke();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=1;
+      for (let gx=shaftStart+8;gx<handleEndX-5;gx+=6) { ctx.beginPath(); ctx.moveTo(gx,shaftY-4); ctx.lineTo(gx+3,shaftY+4); ctx.stroke(); }
+      ctx.strokeStyle='rgba(255,248,215,0.35)'; ctx.lineWidth=0.8;
+      for (let gx=shaftStart+9;gx<handleEndX-5;gx+=6) { ctx.beginPath(); ctx.moveTo(gx,shaftY-4); ctx.lineTo(gx+3,shaftY+4); ctx.stroke(); }
+    }
+
+    // Shaft (flat working blade)
+    const shaftX0 = Math.max(shaftStart, LX-18);
+    if (hookBaseX > shaftX0) {
+      ctx.strokeStyle=col; ctx.lineWidth=3.8;
+      ctx.beginPath(); ctx.moveTo(shaftX0,shaftY); ctx.lineTo(hookBaseX,shaftY); ctx.stroke();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle=hiLt; ctx.lineWidth=0.85;
+      ctx.beginPath(); ctx.moveTo(shaftX0+5,shaftY-1.8); ctx.lineTo(hookBaseX,shaftY-1.8); ctx.stroke();
+      ctx.strokeStyle=dk; ctx.lineWidth=0.7;
+      ctx.beginPath(); ctx.moveTo(shaftX0+5,shaftY+1.8); ctx.lineTo(hookBaseX,shaftY+1.8); ctx.stroke();
+      // Wear marks on steel
+      ctx.strokeStyle='rgba(0,0,0,0.10)'; ctx.lineWidth=0.6;
+      for (let wx=shaftX0+40;wx<hookBaseX-12;wx+=62+Math.sin(wx)*16) {
+        ctx.beginPath(); ctx.moveTo(wx,shaftY-1.8); ctx.lineTo(wx+5,shaftY+1.8); ctx.stroke();
+      }
+    }
+
+    // Hook (bezier from shaft to key pin bottom)
+    const c1x=hookBaseX+(px-hookBaseX)*.50, c1y=shaftY;
+    const c2x=px-2, c2y=tipY+7;
+    ctx.strokeStyle=col; ctx.lineWidth=3.2;
+    ctx.beginPath(); ctx.moveTo(hookBaseX,shaftY); ctx.bezierCurveTo(c1x,c1y,c2x,c2y,px,tipY); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle=hiLt; ctx.lineWidth=0.85;
+    ctx.beginPath(); ctx.moveTo(hookBaseX+3,shaftY-1.5); ctx.bezierCurveTo(c1x,c1y-1.5,c2x-1,c2y-1,px-1,tipY+1.5); ctx.stroke();
+
+    // Tip (working end — the feedback node)
+    ctx.shadowBlur=inZone?16:7; ctx.shadowColor=inZone?'rgba(80,155,107,0.88)':'rgba(215,180,38,0.65)';
+    const tipG=ctx.createRadialGradient(px,tipY,0,px,tipY,4.5);
+    tipG.addColorStop(0, inZone?'#98dcb4':'#eed858');
+    tipG.addColorStop(1, inZone?'#479666':'#b08820');
+    ctx.fillStyle=tipG; ctx.beginPath(); ctx.arc(px,tipY,4,0,TAU); ctx.fill();
+    ctx.shadowBlur=0; ctx.lineCap='butt'; ctx.restore();
+  }
+
+  // Redraw keyway walls ON TOP of pick so pick appears inside channel
+  _drawKeywayCover(ctx) {
+    const {LX,LW,KT,KB} = V;
+    const kx=LX+4, kw=LW-8;
+    const tg=ctx.createLinearGradient(0,KT-2,0,KT+7);
+    tg.addColorStop(0,'rgba(160,118,36,0.96)'); tg.addColorStop(1,'rgba(4,3,8,0.99)');
+    ctx.fillStyle=tg; ctx.fillRect(kx,KT-2,kw,9);
+    const bg=ctx.createLinearGradient(0,KB-7,0,KB+2);
+    bg.addColorStop(0,'rgba(4,3,8,0.99)'); bg.addColorStop(1,'rgba(145,104,30,0.90)');
+    ctx.fillStyle=bg; ctx.fillRect(kx,KB-7,kw,9);
+    ctx.strokeStyle='rgba(50,44,24,0.88)'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(kx,KT); ctx.lineTo(kx+kw,KT); ctx.stroke();
+    ctx.strokeStyle='rgba(46,40,22,0.72)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(kx,KB); ctx.lineTo(kx+kw,KB); ctx.stroke();
+  }
+
+  // ── Bolt latch mechanism (5 mechanical gates) ─────────────────────────────
+  _drawBoltMechanism(ctx, W, ts) {
+    const {LX,LW,PB} = V;
+    const BY=PB+14, BH=22;
+
+    // Inset rail track
+    ctx.fillStyle='rgba(0,0,0,0.60)'; ctx.fillRect(LX-5,BY-3,LW+10,BH+6);
+    const railG=ctx.createLinearGradient(0,BY,0,BY+BH);
+    railG.addColorStop(0,'#0e0c0a'); railG.addColorStop(0.5,'#181612'); railG.addColorStop(1,'#0e0c0a');
+    ctx.fillStyle=railG; ctx.fillRect(LX,BY,LW,BH);
+    ctx.fillStyle='rgba(108,92,55,0.52)'; ctx.fillRect(LX,BY,LW,2);
+    ctx.fillStyle='rgba(0,0,0,0.55)';    ctx.fillRect(LX,BY+BH-2,LW,2);
+
+    // 5 gate segments — each animates independently via gateAnim[i]
+    const segW=(LW-8)/5;
+    for (let i=0;i<5;i++) {
+      const sx=LX+4+i*segW;
+      const t=this.gateAnim[i]; // 0=locked, 1=open
+
+      // Gate body (interpolates dark-steel → dark-green)
+      const gg=ctx.createLinearGradient(sx,0,sx+segW-4,0);
+      const b1=`rgba(${Math.round(22-10*t)},${Math.round(18+27*t)},${Math.round(16+12*t)},1)`;
+      const b2=`rgba(${Math.round(34-18*t)},${Math.round(30+46*t)},${Math.round(22+22*t)},1)`;
+      gg.addColorStop(0,b1); gg.addColorStop(0.4,b2); gg.addColorStop(1,b1);
+      ctx.fillStyle=gg; ctx.fillRect(sx,BY+2,segW-4,BH-4);
+      const borderCol=t>0.5?'#253e2d':'#2c2418';
+      ctx.strokeStyle=borderCol; ctx.lineWidth=0.8; ctx.strokeRect(sx,BY+2,segW-4,BH-4);
+
+      // Blocking tooth: slides from top (locked) to bottom (retracted) via t
+      const tW=segW-12, tH=8;
+      const tYlocked=BY+2, tYopen=BY+BH-tH-2;
+      const tY=tYlocked+(tYopen-tYlocked)*t;
+      const tc=t>0.5?`rgba(${Math.round(45+15*t)},${Math.round(96+8*t)},${Math.round(68+2*t)},1)`:'#3a2e1c';
+      ctx.fillStyle=tc; ctx.fillRect(sx+(segW-4-tW)/2,tY,tW,tH);
+      ctx.strokeStyle=t>0.5?'#1a3324':'#221c12'; ctx.lineWidth=0.7;
+      ctx.strokeRect(sx+(segW-4-tW)/2,tY,tW,tH);
+
+      // Center slot
+      ctx.fillStyle='rgba(0,0,0,0.60)';
+      ctx.fillRect(sx+(segW-4)/2-1.5,BY+2,3,BH-4);
+
+      // Subtle set glow (dim, not flashy)
+      if (t > 0.05) {
+        ctx.fillStyle=`rgba(54,110,74,${t*0.28})`;
+        ctx.fillRect(sx+(segW-4-tW)/2+1, tY+1, tW-2, tH-2);
+      }
+    }
+
+    // Dividers
+    ctx.strokeStyle='rgba(0,0,0,0.58)'; ctx.lineWidth=0.8;
+    for (let i=1;i<5;i++) {
+      const dx=LX+4+i*segW;
+      ctx.beginPath(); ctx.moveTo(dx,BY+3); ctx.lineTo(dx,BY+BH-3); ctx.stroke();
+    }
+
+    // Actuator knob (slides right as all gates open)
+    const allOpen = this.gateAnim.reduce((a,v)=>a+v,0)/5;
+    const realKx=LX+LW-24+allOpen*82;
+    ctx.fillStyle='#2a2620';
+    ctx.fillRect(realKx, BY-5, 20, BH+10);
+    ctx.strokeStyle='rgba(100,88,54,0.60)'; ctx.lineWidth=1; ctx.strokeRect(realKx,BY-5,20,BH+10);
+    ctx.fillStyle='rgba(110,96,58,0.55)'; ctx.fillRect(realKx+2,BY-4,16,3);
+    ctx.strokeStyle='rgba(0,0,0,0.45)'; ctx.lineWidth=1;
+    for (const gy of [BY+4,BY+10,BY+16]) { ctx.beginPath(); ctx.moveTo(realKx+4,gy); ctx.lineTo(realKx+16,gy); ctx.stroke(); }
+  }
+
+  // ── Sparks ────────────────────────────────────────────────────────────────
+  _drawSparks(ctx) {
+    for (const s of this.sparks) {
+      const a = Math.max(0, s.life);
+      ctx.save();
+      ctx.shadowBlur=6*a; ctx.shadowColor=s.ok?'rgba(81,158,108,0.78)':'rgba(220,80,20,0.78)';
+      ctx.fillStyle=s.ok?`rgba(130,200,150,${a})`:`rgba(240,120,58,${a})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r*a, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── HUD ──────────────────────────────────────────────────────────────────
+  _drawHUD(ctx, W, H) {
+    const {PB} = V;
+    const ly = PB + 52;
+    for (let i=0;i<3;i++) {
+      const alive=i<this.lives;
+      ctx.save();
+      if (alive){ctx.shadowBlur=6;ctx.shadowColor='rgba(198,150,36,0.68)';}
+      ctx.beginPath(); ctx.arc(W/2-22+i*22,ly,6,0,TAU);
+      ctx.fillStyle=alive?'#c09a38':'rgba(68,52,18,0.28)'; ctx.fill();
+      ctx.restore();
+    }
+    // no text labels
+  }
+
+  start() { this.last=performance.now(); this.raf=requestAnimationFrame(ts=>this.tick(ts)); }
+  stop()  { if(this.raf) cancelAnimationFrame(this.raf); }
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────────
-let vibroDemo = new PinVibroDemo(document.getElementById('c-vibro'));
-let skyrimDemo = new SkyrimDemo(document.getElementById('c-skyrim'));
+// ══════════════════════════════════════════════════════════════════════════════
+//  SKYRIM — Padlock body, pick enters keyhole, pins show proximity on click
+// ══════════════════════════════════════════════════════════════════════════════
+class SkyrimDemo {
+  constructor(c) {
+    this.c = c; this.ctx = c.getContext('2d'); this.raf = null;
+    this._initAudio();
+    this.reset();
+    c.addEventListener('mousemove', e => this._move(e));
+    c.addEventListener('click',     () => this._click());
+  }
 
-document.getElementById('r-vibro').addEventListener('click', () => {
-  vibroDemo.destroy();
-  vibroDemo = new PinVibroDemo(document.getElementById('c-vibro'));
-});
-document.getElementById('r-skyrim').addEventListener('click', () => {
-  skyrimDemo.destroy();
-  skyrimDemo = new SkyrimDemo(document.getElementById('c-skyrim'));
-});
+  // ── Audio ─────────────────────────────────────────────────────────────────
+  _initAudio() {
+    try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e) { this.ac = null; }
+  }
+  _tone(freq, dur, vol=0.13, type='triangle', bendTo=null) {
+    if (!this.ac) return;
+    const o = this.ac.createOscillator(), g = this.ac.createGain(), t = this.ac.currentTime;
+    o.connect(g); g.connect(this.ac.destination);
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (bendTo) o.frequency.exponentialRampToValueAtTime(bendTo, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.start(t); o.stop(t + dur);
+  }
+  _noise(dur, vol=0.18) {
+    if (!this.ac) return;
+    const sr = this.ac.sampleRate, len = Math.ceil(sr * dur);
+    const buf = this.ac.createBuffer(1, len, sr), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.exp(-i/(sr*dur*0.35));
+    const src = this.ac.createBufferSource(), g = this.ac.createGain();
+    src.buffer = buf; src.connect(g); g.connect(this.ac.destination);
+    g.gain.setValueAtTime(vol, this.ac.currentTime);
+    src.start(this.ac.currentTime);
+  }
+  _sndPins(count) { for (let i=0;i<count;i++) setTimeout(()=>this._tone(780+i*45,0.06,0.11,'sine',590+i*30),i*110); }
+  _sndSnap()      { this._noise(0.20,0.24); setTimeout(()=>this._tone(180,0.16,0.10,'sawtooth',140),30); }
+  _sndUnlock()    { this._tone(520,0.13,0.20,'sine'); setTimeout(()=>this._tone(660,0.13,0.20,'sine'),130); setTimeout(()=>this._tone(880,0.32,0.24,'sine'),270); }
 
-// Re-init on margin change so zone sizes update live
-sliderEl.addEventListener('input', () => { /* demos read getMargin() live */ });
+  // ── State ─────────────────────────────────────────────────────────────────
+  sweetSize() { return Math.max(0.048, Math.min(0.22, 0.098 + getMargin() * 0.007)); }
 
+  reset() {
+    const lo = -Math.PI*0.74, hi = -Math.PI*0.26;
+    this.sweetCenter = lo + Math.random() * (hi - lo);
+    this.pickAngle   = -Math.PI / 2;
+    this.cylRot = 0; this.cylTarget = 0;
+    this.cylSpring = false; this.cylSuccess = false;
+    this.shackleOpen = 0;
+    this.shakeFrames = 0; this.lives = 3;
+    this.done = null; this.failFlash = 0;
+    this.pinAnim   = Array(5).fill(0);
+    this.pinTarget = Array(5).fill(0);
+  }
+
+  // ── Input ─────────────────────────────────────────────────────────────────
+  _cx() { return this.c.width  / 2; }
+  _cy() { return Math.floor(this.c.height / 2) + 15; }
+
+  _move(e) {
+    if (this.done) return;
+    const r  = this.c.getBoundingClientRect();
+    const mx = (e.clientX - r.left) * (this.c.width / r.width);
+    // Mouse X maps linearly to pick angle: center=straight up, left/right sweep ±70°
+    const t  = (mx / this.c.width - 0.5) * 0.88;
+    this.pickAngle = Math.max(-Math.PI*0.78, Math.min(-Math.PI*0.22, -Math.PI/2 + t * Math.PI));
+  }
+
+  _triggerPins(count) {
+    for (let i = 0; i < 5; i++) this.pinTarget[i] = 0;
+    for (let i = 0; i < count; i++) {
+      const ii = i;
+      setTimeout(() => {
+        this.pinTarget[ii] = 1;
+        setTimeout(() => { this.pinTarget[ii] = 0; }, 850);
+      }, ii * 112);
+    }
+  }
+
+  _click() {
+    if (this.done || this.cylSuccess) return;
+    if (this.cylSpring || Math.abs(this.cylRot) > 0.06) return;
+    if (this.ac && this.ac.state === 'suspended') this.ac.resume();
+    const ss   = this.sweetSize();
+    const dist = Math.abs(this.pickAngle - this.sweetCenter);
+    if (dist <= ss) {
+      this.cylSuccess = true;
+      this._triggerPins(5); this._sndUnlock();
+      setTimeout(() => { this.done = 'success'; }, 1600);
+    } else {
+      this.lives--;
+      const prox = Math.max(0, 1 - dist / (Math.PI * 0.55));
+      const setCount = Math.round(prox * 5);
+      this.cylTarget   = 0.16 - (1 - prox) * 0.10;
+      this.cylSpring   = false;
+      this.shakeFrames = Math.round(7 + (1 - prox) * 16);
+      this.failFlash   = 22;
+      if (setCount === 0) this._sndSnap(); else { this._triggerPins(setCount); this._sndPins(setCount); }
+      if (this.lives <= 0) setTimeout(() => { this.done = 'fail'; }, 600);
+    }
+  }
+
+  // ── Game loop ─────────────────────────────────────────────────────────────
+  tick() {
+    const ctx = this.ctx, W = this.c.width, H = this.c.height;
+    const cx = this._cx(), cy = this._cy();
+
+    if (this.cylSuccess) {
+      this.cylRot      = Math.min(this.cylRot + 0.044, Math.PI * 0.52);
+      this.shackleOpen = Math.min(1, this.shackleOpen + 0.030);
+    } else if (!this.cylSpring) {
+      if (this.cylRot < this.cylTarget) { this.cylRot += 0.032; if (this.cylRot >= this.cylTarget) this.cylSpring = true; }
+    } else {
+      this.cylRot = Math.max(0, this.cylRot - 0.020);
+      if (this.cylRot <= 0) { this.cylSpring = false; this.cylTarget = 0; }
+    }
+    for (let i = 0; i < 5; i++) {
+      const spd = this.pinAnim[i] < this.pinTarget[i] ? 0.20 : 0.07;
+      this.pinAnim[i] += (this.pinTarget[i] - this.pinAnim[i]) * spd;
+    }
+    if (this.shakeFrames > 0) this.shakeFrames--;
+    if (this.failFlash  > 0) this.failFlash--;
+
+    ctx.fillStyle = '#07060a'; ctx.fillRect(0, 0, W, H);
+    const vg = ctx.createRadialGradient(cx, cy, 55, cx, cy, 290);
+    vg.addColorStop(0, 'rgba(20,14,6,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.80)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+    if (this.done) {
+      this._drawAll(ctx, cx, cy, 0);
+      ctx.fillStyle = 'rgba(0,0,0,0.54)'; ctx.fillRect(0, 0, W, H);
+      const ok = this.done === 'success';
+      ctx.save();
+      ctx.fillStyle = ok ? '#54a375' : '#e74c3c'; ctx.shadowBlur = 30; ctx.shadowColor = ctx.fillStyle;
+      ctx.font = "700 28px 'Cinzel','Palatino Linotype',Palatino,serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(0,0,0,0.92)'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+      ctx.strokeText(ok ? 'Lock Opened' : 'Pick Broken', W/2, H/2);
+      ctx.fillText (ok ? 'Lock Opened' : 'Pick Broken', W/2, H/2);
+      ctx.restore();
+      this.raf = requestAnimationFrame(() => this.tick()); return;
+    }
+
+    if (this.failFlash > 0) {
+      ctx.fillStyle = `rgba(108,6,0,${(this.failFlash/22)*0.16})`; ctx.fillRect(0, 0, W, H);
+    }
+    const shk = this.shakeFrames > 0 ? [(Math.random()-.5)*4, (Math.random()-.5)*4] : [0,0];
+    this._drawAll(ctx, cx+shk[0], cy+shk[1], this.cylRot);
+    this._drawPick(ctx, cx, cy);
+    this._drawLives(ctx, W, H);
+    this.raf = requestAnimationFrame(() => this.tick());
+  }
+
+  _drawAll(ctx, cx, cy, rot) {
+    this._drawShackle(ctx, cx, cy);
+    this._drawBody(ctx, cx, cy);
+    this._drawFace(ctx, cx, cy, rot);
+    this._drawPinIndicators(ctx, cx, cy);
+  }
+
+  // ── Padlock shackle ───────────────────────────────────────────────────────
+  _drawShackle(ctx, cx, cy) {
+    const bH = 150, bTopY = cy - bH/2;
+    const lx = cx - 50, rx = cx + 50, archH = 68 + this.shackleOpen * 46;
+    const archTop = bTopY - archH, sw = 13;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const sg = ctx.createLinearGradient(lx, archTop, rx, bTopY);
+    sg.addColorStop(0, '#242018'); sg.addColorStop(0.3, '#565042');
+    sg.addColorStop(0.5, '#727060'); sg.addColorStop(0.7, '#565042'); sg.addColorStop(1, '#1c1a14');
+    ctx.beginPath();
+    ctx.moveTo(lx, bTopY); ctx.lineTo(lx, archTop+48);
+    ctx.quadraticCurveTo(lx, archTop, cx, archTop);
+    ctx.quadraticCurveTo(rx, archTop, rx, archTop+48);
+    ctx.lineTo(rx, bTopY);
+    ctx.strokeStyle = '#0e0c0a'; ctx.lineWidth = sw+6; ctx.stroke();
+    ctx.strokeStyle = sg;        ctx.lineWidth = sw;   ctx.stroke();
+    const hg = ctx.createLinearGradient(lx, archTop, rx, archTop);
+    hg.addColorStop(0,'rgba(195,180,142,0)'); hg.addColorStop(0.5,'rgba(195,180,142,0.18)'); hg.addColorStop(1,'rgba(195,180,142,0)');
+    ctx.strokeStyle = hg; ctx.lineWidth = 2.2; ctx.stroke();
+    for (const sx of [lx, rx]) {
+      ctx.beginPath(); ctx.arc(sx, bTopY, 9, 0, TAU);
+      ctx.fillStyle='#181410'; ctx.fill(); ctx.strokeStyle='#3a3226'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(sx, bTopY, 4.5, 0, TAU); ctx.fillStyle='#080606'; ctx.fill();
+    }
+    ctx.lineCap='butt'; ctx.restore();
+  }
+
+  // ── Padlock body ──────────────────────────────────────────────────────────
+  _drawBody(ctx, cx, cy) {
+    const bW=200, bH=150, x=cx-bW/2, y=cy-bH/2, Rc=20;
+    ctx.save();
+    ctx.shadowBlur=30; ctx.shadowColor='rgba(0,0,0,0.88)';
+    ctx.beginPath();
+    ctx.moveTo(x,y); ctx.lineTo(x+bW,y);
+    ctx.lineTo(x+bW,y+bH-Rc); ctx.quadraticCurveTo(x+bW,y+bH,x+bW-Rc,y+bH);
+    ctx.lineTo(x+Rc,y+bH);    ctx.quadraticCurveTo(x,y+bH,x,y+bH-Rc);
+    ctx.lineTo(x,y);
+    const bg=ctx.createLinearGradient(x,y,x+bW,y+bH);
+    bg.addColorStop(0,'#26221c'); bg.addColorStop(0.14,'#343028');
+    bg.addColorStop(0.50,'#2a2620'); bg.addColorStop(0.85,'#1e1c16'); bg.addColorStop(1,'#16140e');
+    ctx.fillStyle=bg; ctx.fill(); ctx.strokeStyle='#0c0a08'; ctx.lineWidth=2.8; ctx.stroke();
+    ctx.shadowBlur=0;
+    // top bevel
+    ctx.strokeStyle='rgba(182,158,92,0.20)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x+2,y+1.5); ctx.lineTo(x+bW-2,y+1.5); ctx.stroke();
+    // machining lines
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+bW,y); ctx.lineTo(x+bW,y+bH-Rc);
+    ctx.quadraticCurveTo(x+bW,y+bH,x+bW-Rc,y+bH); ctx.lineTo(x+Rc,y+bH);
+    ctx.quadraticCurveTo(x,y+bH,x,y+bH-Rc); ctx.closePath(); ctx.clip();
+    ctx.strokeStyle='rgba(255,248,210,0.022)'; ctx.lineWidth=1;
+    for (let ly=y+8;ly<y+bH;ly+=8){ctx.beginPath();ctx.moveTo(x+4,ly);ctx.lineTo(x+bW-4,ly);ctx.stroke();}
+    ctx.restore();
+    // side shadows
+    for (const [ex,dir] of [[x,1],[x+bW,-1]]) {
+      const eg=ctx.createLinearGradient(ex,0,ex+dir*20,0);
+      eg.addColorStop(0,'rgba(0,0,0,0.52)'); eg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=eg; ctx.fillRect(ex,y+2,dir*20,bH-4);
+    }
+    // rivets
+    for (const [rx2,ry2] of [[x+15,y+15],[x+bW-15,y+15],[x+15,y+bH-20],[x+bW-15,y+bH-20]]) {
+      const rg=ctx.createRadialGradient(rx2-1.5,ry2-1.5,0.5,rx2,ry2,5.5);
+      rg.addColorStop(0,'#be9638'); rg.addColorStop(0.5,'#7a5c1e'); rg.addColorStop(1,'#261c08');
+      ctx.beginPath(); ctx.arc(rx2,ry2,5.5,0,TAU);
+      ctx.fillStyle=rg; ctx.fill(); ctx.strokeStyle='#140e04'; ctx.lineWidth=0.8; ctx.stroke();
+      ctx.strokeStyle='rgba(0,0,0,0.60)'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(rx2-3,ry2); ctx.lineTo(rx2+3,ry2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rx2,ry2-3); ctx.lineTo(rx2,ry2+3); ctx.stroke();
+    }
+    // maker's mark
+    ctx.strokeStyle='rgba(148,124,68,0.16)'; ctx.lineWidth=1; ctx.setLineDash([7,5]);
+    ctx.beginPath(); ctx.moveTo(x+32,y+bH-36); ctx.lineTo(x+bW-32,y+bH-36); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // ── Lock face (cylinder + keyhole) ────────────────────────────────────────
+  _drawFace(ctx, cx, cy, rot) {
+    const fR=58, fCy=cy+12;
+    // Brass collar
+    const cG=ctx.createRadialGradient(cx-fR*0.28,fCy-fR*0.28,fR*0.28,cx,fCy,fR+10);
+    cG.addColorStop(0,'#cc9a22'); cG.addColorStop(0.44,'#8a6018');
+    cG.addColorStop(0.80,'#583c0c'); cG.addColorStop(1,'#38280a');
+    ctx.beginPath(); ctx.arc(cx,fCy,fR+10,0,TAU);
+    ctx.strokeStyle=cG; ctx.lineWidth=14; ctx.stroke();
+    ctx.strokeStyle='#0e0a04'; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,fCy,fR+3,0,TAU);
+    ctx.strokeStyle='rgba(212,175,65,0.26)'; ctx.lineWidth=1.2; ctx.stroke();
+    // Face plate
+    const fG=ctx.createRadialGradient(cx-fR*0.22,fCy-fR*0.22,fR*0.06,cx,fCy,fR);
+    if (this.cylSuccess) { fG.addColorStop(0,'#1c3020'); fG.addColorStop(0.6,'#0e1c12'); fG.addColorStop(1,'#060e08'); }
+    else { fG.addColorStop(0,'#2c2a22'); fG.addColorStop(0.55,'#1c1a14'); fG.addColorStop(1,'#0e0c08'); }
+    ctx.beginPath(); ctx.arc(cx,fCy,fR,0,TAU); ctx.fillStyle=fG; ctx.fill();
+    ctx.strokeStyle='#0a0806'; ctx.lineWidth=1.8; ctx.stroke();
+    // Rotating engravings
+    ctx.save(); ctx.translate(cx,fCy); ctx.rotate(rot);
+    for (let i=0;i<8;i++) {
+      const a=(i/8)*TAU;
+      ctx.strokeStyle='rgba(182,152,58,0.10)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a)*fR*0.36,Math.sin(a)*fR*0.36);
+      ctx.lineTo(Math.cos(a)*fR*0.80,Math.sin(a)*fR*0.80); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0,0,fR*0.40,0,TAU);
+    ctx.strokeStyle='rgba(152,128,52,0.14)'; ctx.lineWidth=1.2; ctx.stroke();
+    ctx.restore();
+    // Success ring
+    if (this.cylSuccess) {
+      const pr=Math.min(1,this.cylRot/(Math.PI*0.48));
+      ctx.beginPath(); ctx.arc(cx,fCy,fR,0,TAU);
+      ctx.strokeStyle=`rgba(84,163,117,${pr*0.82})`; ctx.lineWidth=5;
+      ctx.shadowBlur=20*pr; ctx.shadowColor='#54a375'; ctx.stroke(); ctx.shadowBlur=0;
+    }
+    // Keyhole (slot faces DOWN — pick enters from below)
+    this._drawKeyhole(ctx, cx, fCy);
+    // Tension wrench (right side of collar, rotates with tension)
+    this._drawWrench(ctx, cx, fCy, fR, rot);
+  }
+
+  _drawKeyhole(ctx, cx, cy) {
+    const kR=10, slotW=7, slotH=21;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy-2,kR+4,0,TAU);
+    ctx.strokeStyle='rgba(0,0,0,0.65)'; ctx.lineWidth=5; ctx.stroke();
+    ctx.fillStyle='#030205';
+    ctx.beginPath(); ctx.arc(cx,cy-2,kR,0,TAU); ctx.fill();
+    // Slot going DOWN (pick enters from bottom)
+    ctx.beginPath();
+    ctx.moveTo(cx-slotW/2,  cy-2+kR-3);
+    ctx.lineTo(cx-slotW*0.24, cy-2+kR+slotH);
+    ctx.lineTo(cx+slotW*0.24, cy-2+kR+slotH);
+    ctx.lineTo(cx+slotW/2,  cy-2+kR-3);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy-2,kR+1.8,0,TAU);
+    ctx.strokeStyle='rgba(152,118,40,0.28)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.restore();
+  }
+
+  _drawWrench(ctx, cx, cy, fR, rot) {
+    ctx.save(); ctx.translate(cx+fR+16,cy); ctx.rotate(rot*0.62);
+    const wg=ctx.createLinearGradient(-5,0,5,0);
+    wg.addColorStop(0,'#483a12'); wg.addColorStop(0.5,'#9e7626'); wg.addColorStop(1,'#483a12');
+    ctx.fillStyle=wg;
+    ctx.fillRect(-4,-20,8,18); ctx.fillRect(-4,-2,8,24); ctx.fillRect(-4,22,22,7);
+    ctx.strokeStyle='#261802'; ctx.lineWidth=0.7;
+    ctx.strokeRect(-4,-20,8,18); ctx.strokeRect(-4,-2,8,24); ctx.strokeRect(-4,22,22,7);
+    ctx.restore();
+  }
+
+  // ── Pin indicators (on lock face, show proximity on click) ────────────────
+  _drawPinIndicators(ctx, cx, cy) {
+    const fCy=cy+12, fR=58;
+    const iy=fCy-fR*0.50;   // row above keyhole, inside face
+    const xs=[cx-32,cx-16,cx,cx+16,cx+32];
+    const r=5.5;
+    for (let i=0;i<5;i++) {
+      const px=xs[i], comp=this.pinAnim[i];
+      // Bore socket
+      ctx.beginPath(); ctx.arc(px,iy,r+2,0,TAU);
+      ctx.fillStyle='#050404'; ctx.fill();
+      ctx.strokeStyle='#282018'; ctx.lineWidth=0.8; ctx.stroke();
+      // Pin face
+      const g=ctx.createRadialGradient(px-r*0.28,iy-r*0.28,r*0.1,px,iy,r);
+      if (comp>0.45) {
+        g.addColorStop(0,`rgba(225,182,48,${0.38+comp*0.62})`);
+        g.addColorStop(1,`rgba(138,100,16,${0.28+comp*0.52})`);
+      } else {
+        g.addColorStop(0,'#38342c'); g.addColorStop(1,'#181612');
+      }
+      ctx.beginPath(); ctx.arc(px,iy,r,0,TAU);
+      ctx.fillStyle=g; ctx.fill();
+      if (comp>0.28) {
+        ctx.save();
+        ctx.shadowBlur=comp*16; ctx.shadowColor=`rgba(215,165,38,${comp*0.80})`;
+        ctx.beginPath(); ctx.arc(px,iy,r*0.50,0,TAU);
+        ctx.fillStyle=`rgba(245,205,78,${comp*0.74})`; ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  // ── Pick (enters keyhole from below) ──────────────────────────────────────
+  _drawPick(ctx, cx, cy) {
+    if (this.cylSuccess) return;
+    const a      = this.pickAngle;
+    const fCy    = cy + 12;   // face center = keyhole insertion point
+    const kx     = cx, ky = fCy;
+    const ss     = this.sweetSize();
+    const inZone = Math.abs(a - this.sweetCenter) <= ss;
+
+    // The pick is a rod through the keyhole:
+    //   tip = inside the lock (direction a from keyhole)
+    //   handle = outside the lock (opposite direction, hangs below)
+    const TIP_LEN    = 40;
+    const HANDLE_LEN = 115;
+    const tipX    = kx + Math.cos(a)*TIP_LEN,    tipY    = ky + Math.sin(a)*TIP_LEN;
+    const handleX = kx - Math.cos(a)*HANDLE_LEN, handleY = ky - Math.sin(a)*HANDLE_LEN;
+    // Hook perpendicular at tip
+    const perpA = a - Math.PI/2;
+    const hookX = tipX + Math.cos(perpA)*10, hookY = tipY + Math.sin(perpA)*10;
+
+    const col   = inZone ? '#bcdec8' : '#9c9282';
+    const colHi = inZone ? '#dafaec' : '#c4bca8';
+    const colIn = inZone ? '#3a6e50' : '#44403a';
+
+    ctx.save(); ctx.lineCap='round';
+    if (inZone) { ctx.shadowBlur=10; ctx.shadowColor='rgba(76,155,108,0.44)'; }
+    // Handle (outside lock, thicker)
+    ctx.strokeStyle=col; ctx.lineWidth=3.8;
+    ctx.beginPath(); ctx.moveTo(handleX,handleY); ctx.lineTo(kx,ky); ctx.stroke();
+    ctx.shadowBlur=0;
+    // Handle specular
+    const perp=a+Math.PI/2;
+    ctx.strokeStyle=colHi; ctx.lineWidth=0.9;
+    ctx.beginPath();
+    ctx.moveTo(handleX+Math.cos(perp)*1.6,handleY+Math.sin(perp)*1.6);
+    ctx.lineTo(kx+Math.cos(perp)*1.6,     ky+Math.sin(perp)*1.6);
+    ctx.stroke();
+    // Grip wraps on handle
+    ctx.strokeStyle='rgba(0,0,0,0.20)'; ctx.lineWidth=1;
+    for (let gd=28;gd<HANDLE_LEN-16;gd+=13) {
+      const gx=kx-Math.cos(a)*gd, gy=ky-Math.sin(a)*gd;
+      ctx.beginPath();
+      ctx.moveTo(gx+Math.cos(perp)*2.2,gy+Math.sin(perp)*2.2);
+      ctx.lineTo(gx-Math.cos(perp)*2.2,gy-Math.sin(perp)*2.2);
+      ctx.stroke();
+    }
+    // Thin shaft inside lock (through keyhole)
+    ctx.strokeStyle=colIn; ctx.lineWidth=1.6;
+    ctx.beginPath(); ctx.moveTo(kx,ky); ctx.lineTo(tipX,tipY); ctx.stroke();
+    // Hook
+    ctx.strokeStyle=col; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.moveTo(tipX,tipY); ctx.lineTo(hookX,hookY); ctx.stroke();
+    // Tip glow
+    ctx.shadowBlur=inZone?18:7;
+    ctx.shadowColor=inZone?'rgba(76,185,118,0.85)':'rgba(180,144,46,0.38)';
+    ctx.beginPath(); ctx.arc(hookX,hookY,3.8,0,TAU);
+    ctx.fillStyle=inZone?'#68dca6':'#ac8e2c'; ctx.fill();
+    ctx.shadowBlur=0; ctx.lineCap='butt'; ctx.restore();
+  }
+
+  // ── HUD ───────────────────────────────────────────────────────────────────
+  _drawLives(ctx, W, H) {
+    for (let i=0;i<3;i++) {
+      const alive=i<this.lives; ctx.save();
+      if (alive){ctx.shadowBlur=7;ctx.shadowColor='rgba(198,150,36,0.65)';}
+      ctx.beginPath(); ctx.arc(W/2-26+i*26,H-22,7,0,TAU);
+      ctx.fillStyle=alive?'#c8a050':'rgba(78,58,22,0.28)'; ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  start() { this.raf = requestAnimationFrame(() => this.tick()); }
+  stop()  { if (this.raf) cancelAnimationFrame(this.raf); }
+}
+
+const demos = {
+  vibro:  new PinVibroDemo(document.getElementById('c-vibro')),
+  skyrim: new SkyrimDemo  (document.getElementById('c-skyrim')),
+};
+for (const d of Object.values(demos)) d.start();
+for (const [k,d] of Object.entries(demos))
+  document.getElementById('r-'+k).addEventListener('click', ()=>d.reset());
 </script>
 </body>
 </html>

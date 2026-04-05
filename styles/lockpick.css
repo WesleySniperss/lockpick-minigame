@@ -5,7 +5,7 @@
 .lpm-puzzle .window-content { padding:0; background:var(--color-cool-5,#111); }
 
 /* Lockpick root */
-.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,inherit); }
+.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,'Cinzel',serif); }
 .lpm-canvas { display:block; width:100%; cursor:crosshair; }
 .lpm-footer {
   display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px;
@@ -17,13 +17,15 @@
 .lpm-picks-label,.lpm-attempts-label {
   font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
   color:var(--color-text-dark-secondary,#888);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
 .lpm-picks-row { display:flex; gap:2px; }
 .lpm-pick { font-size:15px; line-height:1; }
 .lpm-pick.used { opacity:.18; filter:grayscale(1); }
 .lpm-attempt-pip { font-size:12px; color:var(--color-warm-2,#c8a84e); }
 .lpm-attempt-pip.used { opacity:.15; }
-.lpm-hint { font-size:11px; color:var(--color-text-dark-inactive,#666); font-style:italic; font-family:var(--font-primary,inherit); }
+.lpm-hint { font-size:11px; color:var(--color-text-dark-inactive,#666); font-style:italic; font-family:var(--font-primary,'Cinzel',serif);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.80); }
 
 /* Puzzle windows */
 .lpm-puzzle .window-content { padding:10px 12px; color:var(--color-text-primary,#ccc); }
@@ -38,6 +40,7 @@
   min-height:180px; font-size:28px; font-weight:700;
   color:var(--color-level-success,#4caf50); text-align:center;
   animation:lpm-pop .35s ease;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.90), 0 0 14px rgba(0,0,0,0.65);
 }
 @keyframes lpm-pop {
   from{transform:scale(.6);opacity:0} 70%{transform:scale(1.08)} to{transform:scale(1);opacity:1}
@@ -207,28 +210,54 @@
 .lpm-config-section legend {
   font-weight:700; font-size:12px;
   color:var(--color-text-dark-secondary,#888); padding:0 4px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.85);
 }
 
 /* ── Ready button ─────────────────────────────────────────── */
+@keyframes lpm-ready-pulse {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(80,220,120,.35), 0 0 0 0 rgba(80,220,120,.0), inset 0 1px 0 rgba(255,255,255,.12); }
+  50%       { box-shadow: 0 0 22px 6px rgba(80,220,120,.55), 0 0 36px 10px rgba(80,220,120,.18), inset 0 1px 0 rgba(255,255,255,.12); }
+}
+
 .lpm-simon-ready-btn {
   display: block;
   width: 100%;
-  padding: 10px;
-  margin-top: 8px;
-  background: var(--color-cool-4, #1a1a28);
-  color: var(--color-text-primary, #ccc);
-  border: 1px solid var(--color-border-highlight, #555);
-  border-radius: 6px;
+  padding: 13px 10px;
+  margin-top: 10px;
+  background: linear-gradient(160deg, #1a3326 0%, #0f2218 55%, #0a1a10 100%);
+  color: #7effa8;
+  border: 1.5px solid #3a9c60;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  transition: background .15s, border-color .15s;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-shadow: 0 0 10px rgba(100,255,140,.6), 0 1px 3px rgba(0,0,0,.9);
+  font-family: var(--font-primary, 'Cinzel', serif);
+  animation: lpm-ready-pulse 2.2s ease-in-out infinite;
+  transition: background .18s, border-color .18s, color .18s, transform .1s;
+  position: relative;
+  overflow: hidden;
+}
+.lpm-simon-ready-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.07) 0%, transparent 50%);
+  pointer-events: none;
+  border-radius: inherit;
 }
 .lpm-simon-ready-btn:hover {
-  background: var(--color-cool-3, #222238);
-  border-color: var(--color-warm-2, #c8a84e);
-  color: var(--color-warm-2, #c8a84e);
+  background: linear-gradient(160deg, #204a34 0%, #163322 55%, #0d2016 100%);
+  border-color: #5dce80;
+  color: #afffcc;
+  text-shadow: 0 0 14px rgba(130,255,170,.75), 0 1px 3px rgba(0,0,0,.9);
+  transform: translateY(-1px);
+}
+.lpm-simon-ready-btn:active {
+  transform: translateY(1px) scale(.98);
+  animation: none;
+  box-shadow: 0 0 8px 2px rgba(80,220,120,.25), inset 0 2px 6px rgba(0,0,0,.5);
 }
 
 /* ── GM results panel ─────────────────────────────────────── */

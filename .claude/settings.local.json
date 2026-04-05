@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start \"c:\\\\Users\\\\Jonkm\\\\AppData\\\\Local\\\\FoundryVTT\\\\Data\\\\modules\\\\lockpick-minigame\\\\demos\\\\lockpick-demos.html\")"
+    ]
+  }
+}

@@ -715,7 +715,7 @@ class SimonPuzzle extends Application {
 
       ${!isGM ? `
         <button id="lpm-simon-ready" class="lpm-simon-ready-btn">
-          ⚔️ Готовий — почати!
+          ᚱ&nbsp;&nbsp;Готовий — почати!&nbsp;&nbsp;ᚱ
         </button>
         <div class="lpm-puzzle-hint">Запам'ятай послідовність → повтори руни у тому ж порядку</div>
       ` : `
