@@ -18,7 +18,16 @@ const PICK_MAX = 0;
 export class LockpickApp extends Application {
 
   constructor(wall, opts = {}) {
-    super();
+    const spectator = opts.spectator ?? false;
+    super(spectator
+      ? { id: `lpm-spectate-${wall.id}`, title: `👁 ${opts.playerName ?? 'Гравець'} — Відмикає замок` }
+      : {}
+    );
+    this._spectator  = spectator;
+    this._playerName = opts.playerName ?? '';
+    this._overrideSweetCenter = opts.sweetCenter;
+    this._overrideSweetSize   = opts.sweetSize;
+
     this.wall        = wall;
     this.dc          = opts.dc          ?? 15;
     this.rollResult  = opts.rollResult  ?? { total:10, d20:10, dc:15, margin:-5 };
@@ -83,6 +92,14 @@ export class LockpickApp extends Application {
   }
 
   _buildState() {
+    if (this._spectator && this._overrideSweetCenter !== undefined) {
+      this.sweetCenter = this._overrideSweetCenter;
+      this.sweetSize   = this._overrideSweetSize ?? 0;
+      this._nat20      = false;
+      this._nat1       = false;
+      return;
+    }
+
     const { d20, margin } = this.rollResult;
     let sweetSize;
     if      (d20 === 20) sweetSize = TAU;    // instant open
@@ -99,8 +116,12 @@ export class LockpickApp extends Application {
   }
 
   async _renderInner() {
+    const spectatorBanner = this._spectator
+      ? `<div class="lpm-spectator-banner">👁 Спостереження — ${this._playerName}</div>`
+      : '';
     return $(`<div class="lpm-root">
-      <canvas class="lpm-canvas" width="540" height="500"></canvas>
+      ${spectatorBanner}
+      <canvas class="lpm-canvas" width="540" height="500" ${this._spectator ? 'style="pointer-events:none;"' : ''}></canvas>
       <div class="lpm-footer">
         <div class="lpm-roll-result" id="lpm-roll-display"></div>
         <div class="lpm-attempts"    id="lpm-attempts-display"></div>

@@ -57,12 +57,30 @@ Hooks.once('vtools.ready', () => {
 // ─── Socket ───────────────────────────────────────────────────────────────────
 
 function _registerSocket() {
-  game.socket.on(`module.${MODULE_ID}`, (data) => {
+  game.socket.on(`module.${MODULE_ID}`, async (data) => {
     const { action, type, difficulty, userId } = data;
     console.log(`${MODULE_ID} | socket received:`, action, 'userId:', userId, 'me:', game.user.id);
-    if (action !== 'openPuzzle') return;
-    if (!userId || userId === game.user.id) {
-      import('./PuzzleApp.mjs').then(m => m.openPuzzle(type, difficulty, data.opts)).catch(console.error);
+
+    if (action === 'openPuzzle') {
+      if (!userId || userId === game.user.id) {
+        import('./PuzzleApp.mjs').then(m => m.openPuzzle(type, difficulty, data.opts)).catch(console.error);
+      }
+      return;
+    }
+
+    if (action === 'lockpickSpectate' && game.user.isGM) {
+      const wall = canvas.walls?.get(data.wallId);
+      if (!wall) return;
+      const { LockpickApp } = await import('./LockpickApp.mjs');
+      new LockpickApp(wall, {
+        dc         : data.dc,
+        rollResult : data.rollResult,
+        pickQty    : data.pickQty,
+        spectator  : true,
+        playerName : data.playerName,
+        sweetCenter: data.sweetCenter,
+        sweetSize  : data.sweetSize,
+      }).render(true);
     }
   });
   console.log(`${MODULE_ID} | socket registered for user: ${game.user.name} (isGM: ${game.user.isGM})`);
@@ -133,22 +151,24 @@ async function _openPuzzleDialog() {
       open: {
         icon: '<i class="fa-solid fa-puzzle-piece"></i>', label: 'Відкрити',
         callback: async (html) => {
-          const { openPuzzle } = await import('./PuzzleApp.mjs');
+          const { openPuzzle, generatePuzzleOpts } = await import('./PuzzleApp.mjs');
           const type   = html.find('[name="ptype"]').val();
           const diff   = html.find('[name="pdiff"]').val();
           const target = html.find('[name="ptarget"]').val();
-          const opts   = {
+          const baseOpts = {
             lang      : html.find('[name="plang"]').val() || undefined,
             customWord: html.find('[name="pword"]').val() || undefined,
             shift     : parseInt(html.find('[name="pshift"]').val()) || undefined,
           };
+          // Pre-generate puzzle state so GM and players see the same puzzle
+          const opts = generatePuzzleOpts(type, diff, baseOpts);
           const emit = (uid) => game.socket.emit(`module.${MODULE_ID}`, { action:'openPuzzle', type, difficulty:diff, userId:uid, opts });
           if (target === 'all') {
             emit(null); openPuzzle(type, diff, opts);
           } else if (target === 'me') {
             openPuzzle(type, diff, opts);
           } else {
-            emit(target); if (target === game.user.id) openPuzzle(type, diff, opts);
+            emit(target); openPuzzle(type, diff, opts); // GM always sees it too
           }
         }
       },
@@ -238,7 +258,8 @@ function _patchDoorControl() {
     if (!rollResult) return;
 
     const { LockpickApp } = await import('./LockpickApp.mjs');
-    new LockpickApp(this.wall, {
+    const _wall = this.wall;
+    const app = new LockpickApp(_wall, {
       dc, rollResult,
       pickQty: pickItem.system?.quantity ?? 1,
       async consumePick() {
@@ -259,7 +280,22 @@ function _patchDoorControl() {
           speaker: ChatMessage.getSpeaker({ token })
         });
       }
-    }).render(true);
+    });
+    app.render(true);
+
+    // Notify GM so they can spectate
+    if (!game.user.isGM) {
+      game.socket.emit(`module.${MODULE_ID}`, {
+        action     : 'lockpickSpectate',
+        wallId     : _wall.id,
+        dc,
+        rollResult,
+        pickQty    : pickItem.system?.quantity ?? 1,
+        playerName : token.name,
+        sweetCenter: app.sweetCenter,
+        sweetSize  : app.sweetSize,
+      });
+    }
   };
 }
 

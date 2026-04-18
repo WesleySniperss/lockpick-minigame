@@ -22,11 +22,33 @@ export const DIFFICULTIES = [
 
 export function openPuzzle(type, difficulty, opts={}) {
   switch (type) {
-    case 'sudoku':  return new SudokuPuzzle(difficulty).render(true);
-    case 'sliding': return new SlidingPuzzle(difficulty).render(true);
+    case 'sudoku':  return new SudokuPuzzle(difficulty, opts).render(true);
+    case 'sliding': return new SlidingPuzzle(difficulty, opts).render(true);
     case 'cipher':  return new CipherPuzzle(difficulty, opts).render(true);
-    case 'simon':   return new SimonPuzzle(difficulty).render(true);
+    case 'simon':   return new SimonPuzzle(difficulty, opts).render(true);
     default: ui.notifications.warn(`Unknown puzzle type: ${type}`);
+  }
+}
+
+// Pre-generates puzzle state on GM side so it can be transmitted via socket
+// and all clients (GM + players) see the exact same puzzle.
+export function generatePuzzleOpts(type, difficulty, userOpts = {}) {
+  switch (type) {
+    case 'sudoku': {
+      const { given, solution } = _makeSudokuPuzzle(difficulty);
+      return { ...userOpts, given, solution };
+    }
+    case 'sliding': {
+      const size  = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5;
+      const tiles = _slidingGenerateTiles(size, difficulty);
+      return { ...userOpts, tiles, size };
+    }
+    case 'simon': {
+      const seqLen   = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 9;
+      const sequence = Array.from({ length: seqLen }, () => Math.floor(Math.random() * 4));
+      return { ...userOpts, sequence };
+    }
+    default: return { ...userOpts };
   }
 }
 
@@ -140,12 +162,17 @@ function _makeSudokuPuzzle(difficulty) {
 }
 
 class SudokuPuzzle extends Application {
-  constructor(difficulty) {
+  constructor(difficulty, opts = {}) {
     super();
     this.difficulty = difficulty;
-    const { given, solution } = _makeSudokuPuzzle(difficulty);
-    this.given    = given;
-    this.solution = solution;
+    if (opts.given && opts.solution) {
+      this.given    = opts.given;
+      this.solution = opts.solution;
+    } else {
+      const generated = _makeSudokuPuzzle(difficulty);
+      this.given    = generated.given;
+      this.solution = generated.solution;
+    }
     this.board    = [...this.given];
     this.selected = null;
     this.errors   = new Set();
@@ -241,12 +268,36 @@ class SudokuPuzzle extends Application {
 // SLIDING PUZZLE
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function _slidingValidMoves(blankIdx, size) {
+  const r = Math.floor(blankIdx / size), c = blankIdx % size;
+  const moves = [];
+  if (r > 0)        moves.push(blankIdx - size);
+  if (r < size - 1) moves.push(blankIdx + size);
+  if (c > 0)        moves.push(blankIdx - 1);
+  if (c < size - 1) moves.push(blankIdx + 1);
+  return moves;
+}
+
+function _slidingGenerateTiles(size, difficulty) {
+  const n = size * size;
+  let tiles = Array.from({ length: n }, (_, i) => i);
+  const shuffles = difficulty === 'easy' ? 40 : difficulty === 'medium' ? 80 : 150;
+  let blankIdx = n - 1;
+  for (let s = 0; s < shuffles; s++) {
+    const moves = _slidingValidMoves(blankIdx, size);
+    const next  = moves[Math.floor(Math.random() * moves.length)];
+    [tiles[blankIdx], tiles[next]] = [tiles[next], tiles[blankIdx]];
+    blankIdx = next;
+  }
+  return tiles;
+}
+
 class SlidingPuzzle extends Application {
-  constructor(difficulty) {
+  constructor(difficulty, opts = {}) {
     super();
     this.difficulty = difficulty;
-    this.size = difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5;
-    this.tiles = this._generate();
+    this.size  = opts.size ?? (difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5);
+    this.tiles = opts.tiles ? [...opts.tiles] : _slidingGenerateTiles(this.size, difficulty);
     this.moves = 0;
   }
 
@@ -257,29 +308,8 @@ class SlidingPuzzle extends Application {
     });
   }
 
-  _generate() {
-    const n = this.size * this.size;
-    let tiles = Array.from({ length: n }, (_, i) => i);
-    // Shuffle (guarantee solvable by doing even # of swaps)
-    const shuffles = this.difficulty === 'easy' ? 40 : this.difficulty === 'medium' ? 80 : 150;
-    let blankIdx = n - 1;
-    for (let s = 0; s < shuffles; s++) {
-      const moves = this._validMoves(blankIdx);
-      const next  = moves[Math.floor(Math.random() * moves.length)];
-      [tiles[blankIdx], tiles[next]] = [tiles[next], tiles[blankIdx]];
-      blankIdx = next;
-    }
-    return tiles;
-  }
-
   _validMoves(blankIdx) {
-    const n = this.size, r = Math.floor(blankIdx / n), c = blankIdx % n;
-    const moves = [];
-    if (r > 0) moves.push(blankIdx - n);
-    if (r < n - 1) moves.push(blankIdx + n);
-    if (c > 0) moves.push(blankIdx - 1);
-    if (c < n - 1) moves.push(blankIdx + 1);
-    return moves;
+    return _slidingValidMoves(blankIdx, this.size);
   }
 
   async _renderInner() {
@@ -673,11 +703,12 @@ const RUNES = [
 const _lpmModuleId = 'lockpick-minigame';
 
 class SimonPuzzle extends Application {
-  constructor(difficulty) {
+  constructor(difficulty, opts = {}) {
     super();
     this.difficulty = difficulty;
     this.seqLen   = difficulty === 'easy' ? 4 : difficulty === 'medium' ? 6 : 9;
-    this.sequence = Array.from({ length: this.seqLen }, () => Math.floor(Math.random() * 4));
+    this.sequence = opts.sequence ? [...opts.sequence]
+      : Array.from({ length: this.seqLen }, () => Math.floor(Math.random() * 4));
     this.step     = 0;
     this.phase    = 'ready';
     this._timeouts = [];
