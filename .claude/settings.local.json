@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(start \"c:\\\\Users\\\\Jonkm\\\\AppData\\\\Local\\\\FoundryVTT\\\\Data\\\\modules\\\\lockpick-minigame\\\\demos\\\\lockpick-demos.html\")"
+      "Bash(start \"c:\\\\Users\\\\Jonkm\\\\AppData\\\\Local\\\\FoundryVTT\\\\Data\\\\modules\\\\lockpick-minigame\\\\demos\\\\lockpick-demos.html\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git tag *)"
     ]
   }
 }
