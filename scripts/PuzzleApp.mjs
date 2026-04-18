@@ -693,11 +693,8 @@ class SimonPuzzle extends Application {
   }
 
   async _renderInner() {
-    const isGM = game.user.isGM;
     return $(`<div class="lpm-simon-wrap">
-      <div class="lpm-simon-status" id="lpm-simon-status">
-        ${isGM ? '⏳ Очікування гравця…' : '🔮 Готовий почати?'}
-      </div>
+      <div class="lpm-simon-status" id="lpm-simon-status">🔮 Готовий почати?</div>
       <div class="lpm-simon-progress" id="lpm-simon-progress"></div>
 
       <div class="lpm-simon-grid" id="lpm-simon-grid">
@@ -713,14 +710,10 @@ class SimonPuzzle extends Application {
 
       <div id="lpm-simon-results" class="lpm-simon-results" style="display:none"></div>
 
-      ${!isGM ? `
-        <button id="lpm-simon-ready" class="lpm-simon-ready-btn">
-          ᚱ&nbsp;&nbsp;Готовий — почати!&nbsp;&nbsp;ᚱ
-        </button>
-        <div class="lpm-puzzle-hint">Запам'ятай послідовність → повтори руни у тому ж порядку</div>
-      ` : `
-        <div class="lpm-puzzle-hint">GM: очікуй поки гравець натисне «Готовий»</div>
-      `}
+      <button id="lpm-simon-ready" class="lpm-simon-ready-btn">
+        ᚱ&nbsp;&nbsp;Готовий — почати!&nbsp;&nbsp;ᚱ
+      </button>
+      <div class="lpm-puzzle-hint">Запам'ятай послідовність → повтори руни у тому ж порядку</div>
     </div>`);
   }
 

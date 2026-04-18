@@ -21,7 +21,7 @@ Hooks.once('init', () => {
 });
 
 Hooks.once('ready', () => {
-  _patchDoorControl();
+  try { _patchDoorControl(); } catch(e) { console.error(`${MODULE_ID} | _patchDoorControl failed:`, e); }
   _registerSocket();
 });
 
@@ -59,11 +59,13 @@ Hooks.once('vtools.ready', () => {
 function _registerSocket() {
   game.socket.on(`module.${MODULE_ID}`, (data) => {
     const { action, type, difficulty, userId } = data;
+    console.log(`${MODULE_ID} | socket received:`, action, 'userId:', userId, 'me:', game.user.id);
     if (action !== 'openPuzzle') return;
     if (!userId || userId === game.user.id) {
       import('./PuzzleApp.mjs').then(m => m.openPuzzle(type, difficulty, data.opts)).catch(console.error);
     }
   });
+  console.log(`${MODULE_ID} | socket registered for user: ${game.user.name} (isGM: ${game.user.isGM})`);
 }
 
 // ─── Puzzle dialog ────────────────────────────────────────────────────────────
