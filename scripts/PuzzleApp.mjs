@@ -164,7 +164,9 @@ function _makeSudokuPuzzle(difficulty) {
 class SudokuPuzzle extends Application {
   constructor(difficulty, opts = {}) {
     super();
-    this.difficulty = difficulty;
+    this.difficulty  = difficulty;
+    this._spectator  = opts.spectator ?? false;
+    this._syncHandler = null;
     if (opts.given && opts.solution) {
       this.given    = opts.given;
       this.solution = opts.solution;
@@ -195,13 +197,30 @@ class SudokuPuzzle extends Application {
   activateListeners(html) {
     super.activateListeners(html);
     this._renderGrid(html);
-    html[0].addEventListener('keydown', this._onKey.bind(this));
-    html[0].setAttribute('tabindex', '0');
-    html[0].focus();
+    if (this._spectator) {
+      this._syncHandler = (data) => {
+        if (data.action === 'puzzleSync' && data.puzzleType === 'sudoku') {
+          if (data.event === 'win') {
+            if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Судоку розгадано!</div>`;
+            setTimeout(() => this.close(), 2000);
+            return;
+          }
+          this.board  = data.board;
+          this.errors = new Set(data.errors);
+          this._renderGrid($(this.element));
+        }
+      };
+      game.socket.on(`module.${_lpmModuleId}`, this._syncHandler);
+    } else {
+      html[0].addEventListener('keydown', this._onKey.bind(this));
+      html[0].setAttribute('tabindex', '0');
+      html[0].focus();
+    }
   }
 
   _renderGrid(html) {
     const grid = html.find('#lpm-sudoku-grid')[0];
+    if (!grid) return;
     grid.innerHTML = '';
     for (let i = 0; i < 81; i++) {
       const cell = document.createElement('div');
@@ -211,20 +230,19 @@ class SudokuPuzzle extends Application {
       if (c % 3 === 0) cell.classList.add('border-left');
       if (r === 8)     cell.classList.add('border-bottom');
       if (c === 8)     cell.classList.add('border-right');
-      if (this.given[i])  cell.classList.add('given');
-      else if (this.board[i]) cell.classList.add('player'); // player-entered
+      if (this.given[i])       cell.classList.add('given');
+      else if (this.board[i])  cell.classList.add('player');
       if (i === this.selected) cell.classList.add('selected');
-      if (game.user.isGM) {
+      if (this._spectator) {
         if (this.errors.has(i)) cell.classList.add('error');
         else if (!this.given[i] && this.board[i] && this.board[i] === this.solution[i])
           cell.classList.add('correct');
       }
       if (this.board[i]) cell.textContent = this.board[i];
       cell.dataset.idx = i;
-      cell.addEventListener('click', () => {
-        this.selected = i;
-        this._renderGrid(html);
-      });
+      if (!this._spectator) {
+        cell.addEventListener('click', () => { this.selected = i; this._renderGrid(html); });
+      }
       grid.appendChild(cell);
     }
   }
@@ -250,6 +268,10 @@ class SudokuPuzzle extends Application {
     else if (e.key === 'ArrowUp')      this.selected = Math.max(0,  i - 9);
 
     this._renderGrid(html);
+    game.socket.emit(`module.${_lpmModuleId}`, {
+      action: 'puzzleSync', puzzleType: 'sudoku',
+      board: [...this.board], errors: [...this.errors],
+    });
   }
 
   _checkWin() {
@@ -257,10 +279,16 @@ class SudokuPuzzle extends Application {
   }
 
   _win() {
+    game.socket.emit(`module.${_lpmModuleId}`, { action: 'puzzleSync', puzzleType: 'sudoku', event: 'win' });
     const el = this.element[0];
     el.innerHTML = `<div class="lpm-puzzle-win">🎉 Судоку розгадано!</div>`;
     _postSuccess('Судоку');
     setTimeout(() => this.close(), 2000);
+  }
+
+  async close(opts = {}) {
+    if (this._syncHandler) game.socket.off(`module.${_lpmModuleId}`, this._syncHandler);
+    return super.close(opts);
   }
 }
 
@@ -295,7 +323,9 @@ function _slidingGenerateTiles(size, difficulty) {
 class SlidingPuzzle extends Application {
   constructor(difficulty, opts = {}) {
     super();
-    this.difficulty = difficulty;
+    this.difficulty  = difficulty;
+    this._spectator  = opts.spectator ?? false;
+    this._syncHandler = null;
     this.size  = opts.size ?? (difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5);
     this.tiles = opts.tiles ? [...opts.tiles] : _slidingGenerateTiles(this.size, difficulty);
     this.moves = 0;
@@ -324,6 +354,19 @@ class SlidingPuzzle extends Application {
   activateListeners(html) {
     super.activateListeners(html);
     this._renderGrid(html);
+    if (this._spectator) {
+      this._syncHandler = (data) => {
+        if (data.action !== 'puzzleSync' || data.puzzleType !== 'sliding') return;
+        if (data.event === 'win') {
+          if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Розгадано!</div>`;
+          setTimeout(() => this.close(), 2000);
+          return;
+        }
+        this.tiles = data.tiles;
+        this._renderGrid($(this.element));
+      };
+      game.socket.on(`module.${_lpmModuleId}`, this._syncHandler);
+    }
   }
 
   _renderGrid(html) {
@@ -369,7 +412,7 @@ class SlidingPuzzle extends Application {
           span.textContent = val;
           tile.appendChild(span);
 
-          tile.addEventListener('click', () => self._move(idx, html));
+          if (!self._spectator) tile.addEventListener('click', () => self._move(idx, html));
         }
         grid.appendChild(tile);
       });
@@ -445,6 +488,9 @@ class SlidingPuzzle extends Application {
     [this.tiles[blankIdx], this.tiles[idx]] = [this.tiles[idx], this.tiles[blankIdx]];
     this.moves++;
     this._renderGrid(html);
+    game.socket.emit(`module.${_lpmModuleId}`, {
+      action: 'puzzleSync', puzzleType: 'sliding', tiles: [...this.tiles],
+    });
     if (this._checkWin()) this._win();
   }
 
@@ -453,10 +499,16 @@ class SlidingPuzzle extends Application {
   }
 
   _win() {
+    game.socket.emit(`module.${_lpmModuleId}`, { action: 'puzzleSync', puzzleType: 'sliding', event: 'win' });
     const el = this.element[0];
     el.innerHTML = `<div class="lpm-puzzle-win">🎉 Розгадано за ${this.moves} ходів!</div>`;
     _postSuccess('Sliding Puzzle');
     setTimeout(() => this.close(), 2000);
+  }
+
+  async close(opts = {}) {
+    if (this._syncHandler) game.socket.off(`module.${_lpmModuleId}`, this._syncHandler);
+    return super.close(opts);
   }
 }
 
@@ -505,7 +557,9 @@ const CIPHER_WORDS = {
 class CipherPuzzle extends Application {
   constructor(difficulty, opts={}) {
     super();
-    this.difficulty = difficulty;
+    this.difficulty  = difficulty;
+    this._spectator  = opts.spectator ?? false;
+    this._syncHandler = null;
     this.shift      = opts.shift ?? (3 + Math.floor(Math.random() * 8));
 
     // Word: custom or random
@@ -552,6 +606,29 @@ class CipherPuzzle extends Application {
       `<div class="lpm-cipher-pair"><span class="lpm-coded">${fan}</span><span class="lpm-plain">${eng}</span></div>`
     ).join('');
     const showTable = this.difficulty !== 'hard';
+
+    if (this._spectator) {
+      return $(`<div class="lpm-cipher-wrap">
+        <div class="lpm-cipher-step">
+          <div class="lpm-cipher-step-label">🔑 Відповідь (тільки для ДМ)</div>
+          <div class="lpm-cipher-encoded" style="color:#4caf50;letter-spacing:6px;font-size:26px;">${this.answer}</div>
+        </div>
+        <div class="lpm-cipher-step">
+          <div class="lpm-cipher-step-label">Зашифрований текст</div>
+          <div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>
+        </div>
+        <div class="lpm-cipher-step">
+          <div class="lpm-cipher-step-label">Гравець вводить:</div>
+          <div id="lpm-cipher-player-input" style="
+            min-height:42px; padding:10px 12px;
+            background:#0e0e22; color:#eeeeff;
+            border:2px solid #5555aa; border-radius:6px;
+            font-size:20px; font-family:monospace; letter-spacing:5px;
+            text-transform:uppercase;
+          ">— очікування —</div>
+        </div>
+      </div>`);
+    }
 
     return $(`<div class="lpm-cipher-wrap">
       <div class="lpm-cipher-step">
@@ -614,25 +691,38 @@ class CipherPuzzle extends Application {
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    if (this._spectator) {
+      this._syncHandler = (data) => {
+        if (data.action !== 'puzzleSync' || data.puzzleType !== 'cipher') return;
+        const el = this.element?.[0]?.querySelector('#lpm-cipher-player-input');
+        if (el) el.textContent = data.input || '—';
+        if (data.event === 'win') {
+          if (el) el.style.color = '#4caf50';
+        }
+      };
+      game.socket.on(`module.${_lpmModuleId}`, this._syncHandler);
+      return;
+    }
+
     const divEl   = html.find('#lpm-cipher-input')[0];
     const checkEl = html.find('#lpm-cipher-check')[0];
     if (!divEl) return;
 
-    // Helper to get current text from contenteditable
     const getText = () => divEl.innerText.trim().toUpperCase().replace(/[^A-Z ]/g,'');
 
-    // Focus styling
     divEl.addEventListener('focus', () => divEl.style.borderColor = '#8888ff');
     divEl.addEventListener('blur',  () => divEl.style.borderColor = '#5555aa');
 
-    // Placeholder
     const updatePH = () => {
       divEl.dataset.empty = divEl.innerText.trim() === '' ? '1' : '0';
+      game.socket.emit(`module.${_lpmModuleId}`, {
+        action: 'puzzleSync', puzzleType: 'cipher', input: getText(),
+      });
     };
     divEl.addEventListener('input', updatePH);
     updatePH();
 
-    // Capture all keys while div is focused
     const _capture = (e) => {
       if (document.activeElement !== divEl) return;
       e.stopImmediatePropagation();
@@ -659,6 +749,9 @@ class CipherPuzzle extends Application {
   _check(val, html) {
     const clean = val.toUpperCase().replace(/[^A-Z ]/g,'');
     if (clean === this.answer) {
+      game.socket.emit(`module.${_lpmModuleId}`, {
+        action: 'puzzleSync', puzzleType: 'cipher', event: 'win', input: this.answer,
+      });
       html[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Шифр розгадано! Слово: ${this.answer}</div>`;
       _postSuccess('Шифр');
       setTimeout(() => this.close(), 2000);
@@ -666,6 +759,11 @@ class CipherPuzzle extends Application {
       const fb = html[0].querySelector('#lpm-cipher-feedback');
       if (fb) { fb.textContent = '❌ Невірно, спробуй ще.'; fb.style.color = '#ff6666'; }
     }
+  }
+
+  async close(opts = {}) {
+    if (this._syncHandler) game.socket.off(`module.${_lpmModuleId}`, this._syncHandler);
+    return super.close(opts);
   }
 }
 
@@ -724,23 +822,30 @@ class SimonPuzzle extends Application {
   }
 
   async _renderInner() {
+    const grid = SIMON_COLORS.map(c => `
+      <div class="lpm-simon-btn" data-id="${c.id}"
+           style="background:${c.dark};border-color:${c.border}">
+        <canvas class="lpm-rune-canvas" data-id="${c.id}"
+                width="120" height="110"
+                style="display:block;pointer-events:none;"></canvas>
+        <span class="lpm-rune-label">${c.label}</span>
+      </div>`).join('');
+
+    if (this._spectator) {
+      return $(`<div class="lpm-simon-wrap">
+        <div class="lpm-simon-status" id="lpm-simon-status">👁 Очікування гравця…</div>
+        <div class="lpm-simon-progress" id="lpm-simon-progress"></div>
+        <div class="lpm-simon-grid" id="lpm-simon-grid" style="pointer-events:none">${grid}</div>
+        <div id="lpm-simon-results" class="lpm-simon-results" style="display:none"></div>
+        <div class="lpm-puzzle-hint">GM: спостереження в реальному часі</div>
+      </div>`);
+    }
+
     return $(`<div class="lpm-simon-wrap">
       <div class="lpm-simon-status" id="lpm-simon-status">🔮 Готовий почати?</div>
       <div class="lpm-simon-progress" id="lpm-simon-progress"></div>
-
-      <div class="lpm-simon-grid" id="lpm-simon-grid">
-        ${SIMON_COLORS.map(c => `
-          <div class="lpm-simon-btn" data-id="${c.id}"
-               style="background:${c.dark};border-color:${c.border}">
-            <canvas class="lpm-rune-canvas" data-id="${c.id}"
-                    width="120" height="110"
-                    style="display:block;pointer-events:none;"></canvas>
-            <span class="lpm-rune-label">${c.label}</span>
-          </div>`).join('')}
-      </div>
-
+      <div class="lpm-simon-grid" id="lpm-simon-grid">${grid}</div>
       <div id="lpm-simon-results" class="lpm-simon-results" style="display:none"></div>
-
       <button id="lpm-simon-ready" class="lpm-simon-ready-btn">
         ᚱ&nbsp;&nbsp;Готовий — почати!&nbsp;&nbsp;ᚱ
       </button>
@@ -751,11 +856,14 @@ class SimonPuzzle extends Application {
   activateListeners(html) {
     super.activateListeners(html);
     this._html = html;
-
-    // Draw rune canvases
     requestAnimationFrame(() => this._drawAllRunes());
 
-    // Rune buttons
+    if (this._spectator) {
+      this._listenForResults();
+      return;
+    }
+
+    // Rune buttons — player only
     html.find('.lpm-simon-btn').on('click', e => {
       if (this.phase !== 'input') return;
       const id = parseInt(e.currentTarget.dataset.id);
@@ -763,31 +871,23 @@ class SimonPuzzle extends Application {
       this._handleInput(id);
     });
 
-    // Ready button (player only)
     html.find('#lpm-simon-ready').on('click', () => {
       html.find('#lpm-simon-ready').hide();
-      // Notify GM via socket
       game.socket.emit(`module.${_lpmModuleId}`, {
-        action: 'simonReady',
-        playerName: this._playerName,
-        userId: game.user.id,
+        action: 'simonReady', playerName: this._playerName, userId: game.user.id,
       });
       this._startSequence();
     });
-
-    // If GM — just watch results
-    if (game.user.isGM) {
-      this._listenForResults();
-    }
   }
 
   _listenForResults() {
     this._socketHandler = (data) => {
-      if (data.action === 'simonResult') {
-        this._showGMResult(data);
-      }
-      if (data.action === 'simonReady') {
-        this._setStatus(`▶️ ${data.playerName} починає…`);
+      if (data.action === 'simonResult') this._showGMResult(data);
+      if (data.action === 'simonReady')  this._setStatus(`▶️ ${data.playerName} починає…`);
+      if (data.action === 'puzzleSync' && data.puzzleType === 'simon') {
+        if (data.event === 'flash')    this._flash(data.colorId, data.duration);
+        if (data.event === 'progress') { this.step = data.step; this._updateProgress(); }
+        if (data.event === 'status')   this._setStatus(data.text);
       }
     };
     game.socket.on(`module.${_lpmModuleId}`, this._socketHandler);
@@ -807,6 +907,9 @@ class SimonPuzzle extends Application {
   _startSequence() {
     this.phase = 'watch';
     this._setStatus('🔮 Запам\u2019ятай послідовність…');
+    game.socket.emit(`module.${_lpmModuleId}`, {
+      action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '🔮 Гравець дивиться послідовність…',
+    });
     this._updateProgress();
 
     let delay = 500;
@@ -837,6 +940,12 @@ class SimonPuzzle extends Application {
       btn.style.transform   = '';
       this._flashRune(colorId, false);
     }, duration);
+    // Sync flash to GM spectator
+    if (!this._spectator) {
+      game.socket.emit(`module.${_lpmModuleId}`, {
+        action: 'puzzleSync', puzzleType: 'simon', event: 'flash', colorId, duration,
+      });
+    }
   }
 
   _flashRune(colorId, lit) {
@@ -924,16 +1033,26 @@ class SimonPuzzle extends Application {
 
   _handleInput(id) {
     if (id !== this.sequence[this.step]) {
-      this._setStatus('❌ Невірно! Спробуй знову…');
+      this.phase = 'done';
+      this._setStatus('❌ Невірна руна! Послідовність порушена.');
+      game.socket.emit(`module.${_lpmModuleId}`, {
+        action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '❌ Гравець помилився — провал.',
+      });
+      game.socket.emit(`module.${_lpmModuleId}`, {
+        action: 'simonResult', playerName: this._playerName, userId: game.user.id, success: false,
+      });
       this._t(() => {
-        this.step = 0;
-        this._startSequence();
-      }, 1200);
-      // Notify GM of failure attempt (not final — they can retry)
+        if (this.element) this.element[0].innerHTML =
+          `<div class="lpm-puzzle-win" style="color:var(--color-level-error,#e53935)">❌ Послідовність порушена!</div>`;
+        setTimeout(() => this.close(), 2000);
+      }, 900);
       return;
     }
     this.step++;
     this._updateProgress();
+    game.socket.emit(`module.${_lpmModuleId}`, {
+      action: 'puzzleSync', puzzleType: 'simon', event: 'progress', step: this.step,
+    });
 
     if (this.step === this.sequence.length) {
       this.phase = 'done';

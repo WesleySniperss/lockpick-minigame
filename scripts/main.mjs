@@ -164,11 +164,11 @@ async function _openPuzzleDialog() {
           const opts = generatePuzzleOpts(type, diff, baseOpts);
           const emit = (uid) => game.socket.emit(`module.${MODULE_ID}`, { action:'openPuzzle', type, difficulty:diff, userId:uid, opts });
           if (target === 'all') {
-            emit(null); openPuzzle(type, diff, opts);
+            emit(null); openPuzzle(type, diff, { ...opts, spectator: true });
           } else if (target === 'me') {
             openPuzzle(type, diff, opts);
           } else {
-            emit(target); openPuzzle(type, diff, opts); // GM always sees it too
+            emit(target); openPuzzle(type, diff, { ...opts, spectator: true });
           }
         }
       },
