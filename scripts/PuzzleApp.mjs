@@ -863,6 +863,16 @@ class SimonPuzzle extends Application {
       return;
     }
 
+    // Listen for flashes/progress from other players (non-spectator peer sync)
+    this._peerHandler = (data) => {
+      if (data.action !== 'puzzleSync' || data.puzzleType !== 'simon') return;
+      if (data.userId === game.user.id) return;
+      if (data.event === 'flash')    this._flash(data.colorId, data.duration, false);
+      if (data.event === 'progress') { this.step = data.step; this._updateProgress(); }
+      if (data.event === 'status')   this._setStatus(data.text);
+    };
+    game.socket.on(`module.${_lpmModuleId}`, this._peerHandler);
+
     // Rune buttons — player only
     html.find('.lpm-simon-btn').on('click', e => {
       if (this.phase !== 'input') return;
@@ -925,7 +935,7 @@ class SimonPuzzle extends Application {
     }, delay + 300);
   }
 
-  _flash(colorId, duration) {
+  _flash(colorId, duration, emit = true) {
     if (!this._html) return;
     const btn = this._html.find(`.lpm-simon-btn[data-id="${colorId}"]`)[0];
     if (!btn) return;
@@ -940,10 +950,11 @@ class SimonPuzzle extends Application {
       btn.style.transform   = '';
       this._flashRune(colorId, false);
     }, duration);
-    // Sync flash to GM spectator
-    if (!this._spectator) {
+    // Sync flash to all other clients (GM spectator + other players)
+    if (emit && !this._spectator) {
       game.socket.emit(`module.${_lpmModuleId}`, {
-        action: 'puzzleSync', puzzleType: 'simon', event: 'flash', colorId, duration,
+        action: 'puzzleSync', puzzleType: 'simon', event: 'flash',
+        colorId, duration, userId: game.user.id,
       });
     }
   }
@@ -1093,8 +1104,8 @@ class SimonPuzzle extends Application {
 
   async close(opts = {}) {
     this._timeouts.forEach(clearTimeout);
-    if (this._socketHandler)
-      game.socket.off(`module.${_lpmModuleId}`, this._socketHandler);
+    if (this._socketHandler) game.socket.off(`module.${_lpmModuleId}`, this._socketHandler);
+    if (this._peerHandler)   game.socket.off(`module.${_lpmModuleId}`, this._peerHandler);
     return super.close(opts);
   }
 }
