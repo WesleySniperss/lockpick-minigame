@@ -112,6 +112,23 @@ await wall.document.unsetFlag('lockpick-minigame', 'enabled');
 
 ## Compatibility
 
-- Foundry VTT **v12**
+- Foundry VTT **v12 – v14** (verified on v14)
 - dnd5e system **v3.0+**
 - No dependencies (libWrapper not required)
+
+### Foundry v14 notes
+
+v14 removed the bare `Application` and `Dialog` globals and renamed
+`CONST.CHAT_MESSAGE_TYPES`. All version-sensitive lookups are isolated in
+[`scripts/compat.mjs`](scripts/compat.mjs), which falls back to the old globals
+so v12/v13 keep working:
+
+| API | v12 / v13 | v14 |
+|---|---|---|
+| Application (V1) | `Application` | `foundry.appv1.api.Application` |
+| Dialog (V1) | `Dialog` | `foundry.appv1.api.Dialog` |
+| Door control | `DoorControl` | `foundry.canvas.containers.DoorControl` |
+| Chat OOC flag | `type: CHAT_MESSAGE_TYPES.OOC` | `style: CHAT_MESSAGE_STYLES.OOC` |
+
+The V1 application framework is deprecated by core until **v16**, so a migration
+to `ApplicationV2` will be required before then.

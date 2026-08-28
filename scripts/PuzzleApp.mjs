@@ -5,17 +5,20 @@
  * GM triggers via toolbar → broadcasts via socket → opens on all clients
  */
 
+import { AppV1, oocChatData } from './compat.mjs';
+import { Sfx } from './Sfx.mjs';
+
 export const PUZZLE_TYPES = [
-  { id: 'sudoku',  label: '🔢 Судоку',                 icon: 'fas fa-th' },
-  { id: 'sliding', label: '🟦 Sliding Puzzle (плитки)', icon: 'fas fa-border-all' },
-  { id: 'cipher',  label: '🔤 Шифр (розшифруй слово)',  icon: 'fas fa-font' },
-  { id: 'simon',   label: '🟢 Simon Says (послідовність)', icon: 'fas fa-circle' },
+  { id: 'sudoku',  label: '🔢 Sudoku',                    icon: 'fas fa-th' },
+  { id: 'sliding', label: '🟦 Sliding Puzzle (tiles)',    icon: 'fas fa-border-all' },
+  { id: 'cipher',  label: '🔤 Cipher (decode the word)',  icon: 'fas fa-font' },
+  { id: 'simon',   label: '🟢 Simon Says (sequence)',     icon: 'fas fa-circle' },
 ];
 
 export const DIFFICULTIES = [
-  { id: 'easy',   label: '🟢 Легка'   },
-  { id: 'medium', label: '🟡 Середня' },
-  { id: 'hard',   label: '🔴 Важка'   },
+  { id: 'easy',   label: '🟢 Easy'   },
+  { id: 'medium', label: '🟡 Medium' },
+  { id: 'hard',   label: '🔴 Hard'   },
 ];
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
@@ -52,11 +55,24 @@ export function generatePuzzleOpts(type, difficulty, userOpts = {}) {
   }
 }
 
+/**
+ * Banner shown at the top of a GM's watch-only puzzle window.
+ * Without it the GM sees a normal-looking puzzle that silently ignores clicks.
+ */
+function _spectatorBanner(active = true) {
+  if (!active) return '';
+  const n = game.users.filter(u => u.active && !u.isGM).length;
+  const who = n === 0
+    ? '⚠ no players connected — nobody is solving this'
+    : `watching ${n} player${n === 1 ? '' : 's'}`;
+  return `<div class="lpm-spectator-banner">👁 Spectator view — ${who}</div>`;
+}
+
 function _postSuccess(puzzleName) {
-  ChatMessage.create({
-    content: `<p>🎉 <strong>Головоломку "${puzzleName}" розгадано!</strong> Шлях відкрито.</p>`,
-    type   : CONST.CHAT_MESSAGE_TYPES?.OOC ?? 1,
-  });
+  // v13+ moved the OOC/IC value from `type` (now the document subtype) to `style`.
+  ChatMessage.create(oocChatData({
+    content: `<p>🎉 <strong>The "${puzzleName}" puzzle is solved!</strong> The way is open.</p>`,
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -161,11 +177,12 @@ function _makeSudokuPuzzle(difficulty) {
   return { given, solution };
 }
 
-class SudokuPuzzle extends Application {
+class SudokuPuzzle extends AppV1 {
   constructor(difficulty, opts = {}) {
     super();
     this.difficulty  = difficulty;
     this._spectator  = opts.spectator ?? false;
+    if (this._spectator) this.options.title = `👁 ${this.options.title} — Spectating`;
     this._syncHandler = null;
     if (opts.given && opts.solution) {
       this.given    = opts.given;
@@ -182,15 +199,24 @@ class SudokuPuzzle extends Application {
 
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
-      id: 'lpm-sudoku', title: '🔢 Судоку', width: 420, height: 500,
+      id: 'lpm-sudoku', title: '🔢 Sudoku', width: 420, height: 500,
       classes: ['lockpick-minigame', 'lpm-puzzle'],
     });
   }
 
   async _renderInner() {
-    return $(`<div class="lpm-sudoku-wrap">
+    const pad = this._spectator ? '' : `
+      <div class="lpm-sudoku-pad" id="lpm-sudoku-pad">
+        ${[1,2,3,4,5,6,7,8,9].map(n => `<button type="button" data-num="${n}">${n}</button>`).join('')}
+        <button type="button" class="wide" data-num="0">Clear</button>
+      </div>`;
+    return $(`<div class="lpm-sudoku-wrap" tabindex="0">
+      ${_spectatorBanner(this._spectator)}
       <div class="lpm-sudoku-grid" id="lpm-sudoku-grid"></div>
-      <div class="lpm-puzzle-hint">Клікни клітинку → введи цифру 1–9 (Delete або 0 — очистити)</div>
+      ${pad}
+      <div class="lpm-puzzle-hint">${this._spectator
+        ? 'Read-only — mirrors the player&rsquo;s board in real time'
+        : 'Click a cell → type 1–9 or use the pad (Delete / 0 clears)'}</div>
     </div>`);
   }
 
@@ -201,7 +227,7 @@ class SudokuPuzzle extends Application {
       this._syncHandler = (data) => {
         if (data.action === 'puzzleSync' && data.puzzleType === 'sudoku') {
           if (data.event === 'win') {
-            if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Судоку розгадано!</div>`;
+            if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Sudoku solved!</div>`;
             setTimeout(() => this.close(), 2000);
             return;
           }
@@ -211,11 +237,34 @@ class SudokuPuzzle extends Application {
         }
       };
       game.socket.on(`module.${_lpmModuleId}`, this._syncHandler);
-    } else {
-      html[0].addEventListener('keydown', this._onKey.bind(this));
-      html[0].setAttribute('tabindex', '0');
-      html[0].focus();
+      return;
     }
+
+    // Number pad — makes the puzzle fully playable with the mouse alone.
+    html.find('#lpm-sudoku-pad button').on('click', (ev) => {
+      ev.preventDefault();
+      this._setDigit(Number(ev.currentTarget.dataset.num));
+    });
+
+    // Keyboard: listen on the document in the CAPTURE phase. A plain listener on
+    // the app element never fires reliably (focus moves to the window frame), and
+    // without capture+stopPropagation the digits 1-9 fall through to Foundry's
+    // KeyboardManager and trigger hotbar macros instead.
+    this._keyHandler = this._onKey.bind(this);
+    document.addEventListener('keydown', this._keyHandler, true);
+
+    html[0].focus?.();
+  }
+
+  /** True when this window should receive keyboard input. */
+  _ownsKeyboard() {
+    const el = this.element?.[0];
+    if (!el || this._spectator) return false;
+    // An open text input elsewhere always wins.
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && !el.contains(ae)
+        && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
+    return this.selected !== null;
   }
 
   _renderGrid(html) {
@@ -241,37 +290,63 @@ class SudokuPuzzle extends Application {
       if (this.board[i]) cell.textContent = this.board[i];
       cell.dataset.idx = i;
       if (!this._spectator) {
-        cell.addEventListener('click', () => { this.selected = i; this._renderGrid(html); });
+        cell.addEventListener('click', () => {
+          Sfx.select();
+          this.selected = i;
+          this._renderGrid(html);
+          html[0]?.focus?.();          // keep keyboard input working after a click
+        });
       }
       grid.appendChild(cell);
     }
   }
 
   _onKey(e) {
-    if (this.selected === null) return;
+    if (!this._ownsKeyboard()) return;
     const i = this.selected;
-    if (this.given[i]) return;
-    const html = $(this.element);
 
-    if (e.key === 'Delete' || e.key === 'Backspace' || e.key === '0') {
+    const isDigit = e.key >= '1' && e.key <= '9';
+    const isClear = e.key === 'Delete' || e.key === 'Backspace' || e.key === '0';
+    const isMove  = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key);
+    if (!isDigit && !isClear && !isMove) return;
+
+    // Claim the key so core doesn't also fire a hotbar macro / pan the canvas.
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isDigit || isClear) { this._setDigit(isClear ? 0 : Number(e.key)); return; }
+
+    if      (e.key === 'ArrowRight') this.selected = Math.min(80, i + 1);
+    else if (e.key === 'ArrowLeft')  this.selected = Math.max(0,  i - 1);
+    else if (e.key === 'ArrowDown')  this.selected = Math.min(80, i + 9);
+    else if (e.key === 'ArrowUp')    this.selected = Math.max(0,  i - 9);
+    this._renderGrid($(this.element));
+  }
+
+  /** Write a digit (0 = clear) into the selected cell. Shared by keyboard and pad. */
+  _setDigit(n) {
+    const i = this.selected;
+    if (i === null || this.given[i]) return;
+
+    if (n === 0) {
       this.board[i] = 0;
       this.errors.delete(i);
-    } else if (e.key >= '1' && e.key <= '9') {
-      const n = parseInt(e.key);
+      Sfx.select();
+    } else {
       this.board[i] = n;
       if (n !== this.solution[i]) this.errors.add(i);
-      else                         this.errors.delete(i);
-      if (this._checkWin()) { this._win(); return; }
-    } else if (e.key === 'ArrowRight') this.selected = Math.min(80, i + 1);
-    else if (e.key === 'ArrowLeft')    this.selected = Math.max(0,  i - 1);
-    else if (e.key === 'ArrowDown')    this.selected = Math.min(80, i + 9);
-    else if (e.key === 'ArrowUp')      this.selected = Math.max(0,  i - 9);
+      else                        this.errors.delete(i);
+      // NOTE: deliberately the SAME cue either way. Mistakes are only revealed
+      // to the GM spectator, so the sound must not leak correctness to the player.
+      Sfx.place();
+    }
 
-    this._renderGrid(html);
+    this._renderGrid($(this.element));
     game.socket.emit(`module.${_lpmModuleId}`, {
       action: 'puzzleSync', puzzleType: 'sudoku',
       board: [...this.board], errors: [...this.errors],
     });
+    if (n !== 0 && this._checkWin()) this._win();
   }
 
   _checkWin() {
@@ -279,15 +354,20 @@ class SudokuPuzzle extends Application {
   }
 
   _win() {
+    Sfx.solved();
     game.socket.emit(`module.${_lpmModuleId}`, { action: 'puzzleSync', puzzleType: 'sudoku', event: 'win' });
     const el = this.element[0];
-    el.innerHTML = `<div class="lpm-puzzle-win">🎉 Судоку розгадано!</div>`;
-    _postSuccess('Судоку');
+    el.innerHTML = `<div class="lpm-puzzle-win">🎉 Sudoku solved!</div>`;
+    _postSuccess('Sudoku');
     setTimeout(() => this.close(), 2000);
   }
 
   async close(opts = {}) {
     if (this._syncHandler) game.socket.off(`module.${_lpmModuleId}`, this._syncHandler);
+    if (this._keyHandler) {
+      document.removeEventListener('keydown', this._keyHandler, true);
+      this._keyHandler = null;
+    }
     return super.close(opts);
   }
 }
@@ -320,11 +400,12 @@ function _slidingGenerateTiles(size, difficulty) {
   return tiles;
 }
 
-class SlidingPuzzle extends Application {
+class SlidingPuzzle extends AppV1 {
   constructor(difficulty, opts = {}) {
     super();
     this.difficulty  = difficulty;
     this._spectator  = opts.spectator ?? false;
+    if (this._spectator) this.options.title = `👁 ${this.options.title} — Spectating`;
     this._syncHandler = null;
     this.size  = opts.size ?? (difficulty === 'easy' ? 3 : difficulty === 'medium' ? 4 : 5);
     this.tiles = opts.tiles ? [...opts.tiles] : _slidingGenerateTiles(this.size, difficulty);
@@ -344,10 +425,13 @@ class SlidingPuzzle extends Application {
 
   async _renderInner() {
     return $(`<div class="lpm-sliding-wrap">
-      <div class="lpm-sliding-moves">Ходів: <span id="lpm-moves">0</span></div>
+      ${_spectatorBanner(this._spectator)}
+      <div class="lpm-sliding-moves">Moves: <span id="lpm-moves">0</span></div>
       <div class="lpm-sliding-grid" id="lpm-sliding-grid"
            style="--sz:${this.size}"></div>
-      <div class="lpm-puzzle-hint">Клікай плитки поряд з порожнім місцем</div>
+      <div class="lpm-puzzle-hint">${this._spectator
+        ? 'Read-only — mirrors the player&rsquo;s board in real time'
+        : 'Click tiles next to the empty space'}</div>
     </div>`);
   }
 
@@ -358,7 +442,7 @@ class SlidingPuzzle extends Application {
       this._syncHandler = (data) => {
         if (data.action !== 'puzzleSync' || data.puzzleType !== 'sliding') return;
         if (data.event === 'win') {
-          if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Розгадано!</div>`;
+          if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Solved!</div>`;
           setTimeout(() => this.close(), 2000);
           return;
         }
@@ -484,7 +568,8 @@ class SlidingPuzzle extends Application {
 
   _move(idx, html) {
     const blankIdx = this.tiles.indexOf(0);
-    if (!this._validMoves(blankIdx).includes(idx)) return;
+    if (!this._validMoves(blankIdx).includes(idx)) { Sfx.select(); return; }  // blocked
+    Sfx.slide();
     [this.tiles[blankIdx], this.tiles[idx]] = [this.tiles[idx], this.tiles[blankIdx]];
     this.moves++;
     this._renderGrid(html);
@@ -499,9 +584,10 @@ class SlidingPuzzle extends Application {
   }
 
   _win() {
+    Sfx.solved();
     game.socket.emit(`module.${_lpmModuleId}`, { action: 'puzzleSync', puzzleType: 'sliding', event: 'win' });
     const el = this.element[0];
-    el.innerHTML = `<div class="lpm-puzzle-win">🎉 Розгадано за ${this.moves} ходів!</div>`;
+    el.innerHTML = `<div class="lpm-puzzle-win">🎉 Solved in ${this.moves} moves!</div>`;
     _postSuccess('Sliding Puzzle');
     setTimeout(() => this.close(), 2000);
   }
@@ -519,7 +605,7 @@ class SlidingPuzzle extends Application {
 // Fantasy alphabets mapping to English letters
 const FANTASY_ALPHABETS = {
   infernal: {
-    name: 'Інфернальна',
+    name: 'Infernal',
     // Each entry: fantasy char → English letter
     map: {
       '𐌰':'A','𐌱':'B','𐌲':'C','𐌳':'D','𐌴':'E','𐌵':'F','𐌶':'G','𐌷':'H',
@@ -529,7 +615,7 @@ const FANTASY_ALPHABETS = {
     }
   },
   abyssal: {
-    name: 'Безоднянська',
+    name: 'Abyssal',
     map: {
       'ᚨ':'A','ᛒ':'B','ᚲ':'C','ᛞ':'D','ᛖ':'E','ᚠ':'F','ᚷ':'G','ᚺ':'H',
       'ᛁ':'I','ᛃ':'J','ᚲ':'K','ᛚ':'L','ᛗ':'M','ᚾ':'N','ᛟ':'O','ᛈ':'P',
@@ -538,7 +624,7 @@ const FANTASY_ALPHABETS = {
     }
   },
   elvish: {
-    name: 'Ельфійська (Tengwar)',
+    name: 'Elvish (Tengwar)',
     map: {
       'α':'A','β':'B','γ':'C','δ':'D','ε':'E','ζ':'F','η':'G','θ':'H',
       'ι':'I','κ':'J','λ':'K','μ':'L','ν':'M','ξ':'N','ο':'O','π':'P',
@@ -554,11 +640,12 @@ const CIPHER_WORDS = {
   hard:   ['DUNGEON MASTER', 'ANCIENT RUNES', 'FORBIDDEN TOME', 'DRAGONS HOARD'],
 };
 
-class CipherPuzzle extends Application {
+class CipherPuzzle extends AppV1 {
   constructor(difficulty, opts={}) {
     super();
     this.difficulty  = difficulty;
     this._spectator  = opts.spectator ?? false;
+    if (this._spectator) this.options.title = `👁 ${this.options.title} — Spectating`;
     this._syncHandler = null;
     this.shift      = opts.shift ?? (3 + Math.floor(Math.random() * 8));
 
@@ -595,7 +682,7 @@ class CipherPuzzle extends Application {
 
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
-      id:'lpm-cipher', title:'🔤 Шифр', width:540, height:480,
+      id:'lpm-cipher', title:'🔤 Cipher', width:540, height:480,
       classes:['lockpick-minigame','lpm-puzzle'], resizable:true,
     });
   }
@@ -609,42 +696,43 @@ class CipherPuzzle extends Application {
 
     if (this._spectator) {
       return $(`<div class="lpm-cipher-wrap">
+        ${_spectatorBanner(true)}
         <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">🔑 Відповідь (тільки для ДМ)</div>
+          <div class="lpm-cipher-step-label">🔑 Answer (GM only)</div>
           <div class="lpm-cipher-encoded" style="color:#4caf50;letter-spacing:6px;font-size:26px;">${this.answer}</div>
         </div>
         <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">Зашифрований текст</div>
+          <div class="lpm-cipher-step-label">Encoded text</div>
           <div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>
         </div>
         <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">Гравець вводить:</div>
+          <div class="lpm-cipher-step-label">Player is typing:</div>
           <div id="lpm-cipher-player-input" style="
             min-height:42px; padding:10px 12px;
             background:#0e0e22; color:#eeeeff;
             border:2px solid #5555aa; border-radius:6px;
             font-size:20px; font-family:monospace; letter-spacing:5px;
             text-transform:uppercase;
-          ">— очікування —</div>
+          ">— waiting —</div>
         </div>
       </div>`);
     }
 
     return $(`<div class="lpm-cipher-wrap">
       <div class="lpm-cipher-step">
-        <div class="lpm-cipher-step-label">Крок 1 — Розшифруй ${this.langData.name} алфавіт</div>
+        <div class="lpm-cipher-step-label">Step 1 — Decode the ${this.langData.name} alphabet</div>
         <div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>
         ${showTable
-          ? `<div class="lpm-cipher-sublabel">Таблиця ${this.langData.name} → Англійська:</div>
+          ? `<div class="lpm-cipher-sublabel">${this.langData.name} → English table:</div>
              <div class="lpm-cipher-table">${tableRows}</div>`
-          : '<p class="lpm-puzzle-hint">Таблицю не надано — знайди закономірність.</p>'}
+          : '<p class="lpm-puzzle-hint">No table provided — find the pattern.</p>'}
       </div>
       <div class="lpm-cipher-step">
-        <div class="lpm-cipher-step-label">Крок 2 — Шифр Цезаря</div>
+        <div class="lpm-cipher-step-label">Step 2 — Caesar cipher</div>
         <p class="lpm-puzzle-hint">${
           this.difficulty === 'hard'
-            ? 'Зсув невідомий. Знайди закономірність.'
-            : `Кожна буква зсунута на <strong>${this.shift}</strong> позицій вперед по алфавіту. Відніми ${this.shift} щоб отримати оригінал.`
+            ? 'The shift is unknown. Find the pattern.'
+            : `Each letter is shifted <strong>${this.shift}</strong> positions forward in the alphabet. Subtract ${this.shift} to get the original.`
         }</p>
       </div>
 
@@ -652,7 +740,7 @@ class CipherPuzzle extends Application {
         <div id="lpm-cipher-input"
              contenteditable="true"
              spellcheck="false"
-             data-placeholder="Введи відповідь англійською…"
+             data-placeholder="Type your answer in English…"
              style="
                display:block;
                width:calc(100% - 24px);
@@ -683,7 +771,7 @@ class CipherPuzzle extends Application {
                   cursor:pointer;
                   font-size:14px;
                   font-weight:600;
-                ">✓ Перевірити</button>
+                ">✓ Check</button>
       </div>
       <div id="lpm-cipher-feedback" style="text-align:center;min-height:20px;margin-top:6px;font-size:13px;"></div>
     </div>`);
@@ -726,21 +814,21 @@ class CipherPuzzle extends Application {
     const _capture = (e) => {
       if (document.activeElement !== divEl) return;
       e.stopImmediatePropagation();
-      if (e.type === 'keydown' && e.key === 'Enter') {
-        e.preventDefault();
-        this._check(getText(), html);
+      if (e.type === 'keydown') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this._check(getText(), html);
+        } else if (e.key.length === 1) {
+          Sfx.key();
+        }
       }
     };
     window.addEventListener('keydown',  _capture, true);
     window.addEventListener('keyup',    _capture, true);
     window.addEventListener('keypress', _capture, true);
-
-    Hooks.once('closeApplication', (app) => {
-      if (app !== this) return;
-      window.removeEventListener('keydown',  _capture, true);
-      window.removeEventListener('keyup',    _capture, true);
-      window.removeEventListener('keypress', _capture, true);
-    });
+    // Cleaned up in close(). NOTE: the previous code hooked 'closeApplication',
+    // which V1 never fires (it fires close<ClassName>), so these leaked forever.
+    this._captureHandler = _capture;
 
     checkEl.addEventListener('click', () => this._check(getText(), html));
     setTimeout(() => divEl.focus(), 200);
@@ -749,29 +837,45 @@ class CipherPuzzle extends Application {
   _check(val, html) {
     const clean = val.toUpperCase().replace(/[^A-Z ]/g,'');
     if (clean === this.answer) {
+      Sfx.solved();
       game.socket.emit(`module.${_lpmModuleId}`, {
         action: 'puzzleSync', puzzleType: 'cipher', event: 'win', input: this.answer,
       });
-      html[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Шифр розгадано! Слово: ${this.answer}</div>`;
-      _postSuccess('Шифр');
+      html[0].innerHTML = `<div class="lpm-puzzle-win">🎉 Cipher solved! Word: ${this.answer}</div>`;
+      _postSuccess('Cipher');
       setTimeout(() => this.close(), 2000);
     } else {
+      Sfx.fail();
       const fb = html[0].querySelector('#lpm-cipher-feedback');
-      if (fb) { fb.textContent = '❌ Невірно, спробуй ще.'; fb.style.color = '#ff6666'; }
+      if (fb) {
+        fb.textContent = '❌ Wrong, try again.';
+        fb.style.color = '#ff6666';
+        // Shake the panel so the rejection registers even if the text is missed.
+        const wrap = html[0].querySelector('.lpm-cipher-wrap') ?? html[0];
+        wrap.classList.remove('lpm-shake');
+        void wrap.offsetWidth;                 // restart the animation
+        wrap.classList.add('lpm-shake');
+      }
     }
   }
 
   async close(opts = {}) {
     if (this._syncHandler) game.socket.off(`module.${_lpmModuleId}`, this._syncHandler);
+    if (this._captureHandler) {
+      for (const ev of ['keydown', 'keyup', 'keypress']) {
+        window.removeEventListener(ev, this._captureHandler, true);
+      }
+      this._captureHandler = null;
+    }
     return super.close(opts);
   }
 }
 
 const SIMON_COLORS = [
-  { id: 0, hex: '#2ecc71', dark: '#061409', border: '#1a6b3a', label: 'Алгіз'  },  // emerald
-  { id: 1, hex: '#e74c3c', dark: '#160606', border: '#6b1a1a', label: 'Тіваз'  },  // ruby
-  { id: 2, hex: '#3498db', dark: '#060e18', border: '#1a4a6b', label: 'Іса'    },  // sapphire
-  { id: 3, hex: '#f39c12', dark: '#160e00', border: '#6b4800', label: 'Отала'  },  // amber
+  { id: 0, hex: '#2ecc71', dark: '#061409', border: '#1a6b3a', label: 'Algiz'  },  // emerald
+  { id: 1, hex: '#e74c3c', dark: '#160606', border: '#6b1a1a', label: 'Tiwaz'  },  // ruby
+  { id: 2, hex: '#3498db', dark: '#060e18', border: '#1a4a6b', label: 'Isa'    },  // sapphire
+  { id: 3, hex: '#f39c12', dark: '#160e00', border: '#6b4800', label: 'Othala' },  // amber
 ];
 
 // Elder Futhark rune paths — coords in 0-1 space (wide, bold shapes)
@@ -800,7 +904,7 @@ const RUNES = [
 
 const _lpmModuleId = 'lockpick-minigame';
 
-class SimonPuzzle extends Application {
+class SimonPuzzle extends AppV1 {
   constructor(difficulty, opts = {}) {
     super();
     this.difficulty = difficulty;
@@ -812,11 +916,15 @@ class SimonPuzzle extends Application {
     this._timeouts = [];
     this._html    = null;
     this._playerName = game.user.name;
+    // BUGFIX: this was never assigned, so a GM watching Simon fell through to the
+    // playable branch — no result listener, and the GM's own clicks drove the game.
+    this._spectator = opts.spectator ?? false;
+    if (this._spectator) this.options.title = `👁 ${this.options.title} — Spectating`;
   }
 
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
-      id: 'lpm-simon', title: '🔮 Послідовність Рун', width: 420, height: 530,
+      id: 'lpm-simon', title: '🔮 Rune Sequence', width: 420, height: 530,
       classes: ['lockpick-minigame', 'lpm-puzzle'],
     });
   }
@@ -833,23 +941,24 @@ class SimonPuzzle extends Application {
 
     if (this._spectator) {
       return $(`<div class="lpm-simon-wrap">
-        <div class="lpm-simon-status" id="lpm-simon-status">👁 Очікування гравця…</div>
+        ${_spectatorBanner(true)}
+        <div class="lpm-simon-status" id="lpm-simon-status">👁 Waiting for the player…</div>
         <div class="lpm-simon-progress" id="lpm-simon-progress"></div>
         <div class="lpm-simon-grid" id="lpm-simon-grid" style="pointer-events:none">${grid}</div>
         <div id="lpm-simon-results" class="lpm-simon-results" style="display:none"></div>
-        <div class="lpm-puzzle-hint">GM: спостереження в реальному часі</div>
+        <div class="lpm-puzzle-hint">Read-only — mirrors the player&rsquo;s runes in real time</div>
       </div>`);
     }
 
     return $(`<div class="lpm-simon-wrap">
-      <div class="lpm-simon-status" id="lpm-simon-status">🔮 Готовий почати?</div>
+      <div class="lpm-simon-status" id="lpm-simon-status">🔮 Ready to begin?</div>
       <div class="lpm-simon-progress" id="lpm-simon-progress"></div>
       <div class="lpm-simon-grid" id="lpm-simon-grid">${grid}</div>
       <div id="lpm-simon-results" class="lpm-simon-results" style="display:none"></div>
       <button id="lpm-simon-ready" class="lpm-simon-ready-btn">
-        ᚱ&nbsp;&nbsp;Готовий — почати!&nbsp;&nbsp;ᚱ
+        ᚱ&nbsp;&nbsp;Ready — begin!&nbsp;&nbsp;ᚱ
       </button>
-      <div class="lpm-puzzle-hint">Запам'ятай послідовність → повтори руни у тому ж порядку</div>
+      <div class="lpm-puzzle-hint">Memorize the sequence → repeat the runes in the same order</div>
     </div>`);
   }
 
@@ -882,6 +991,7 @@ class SimonPuzzle extends Application {
     });
 
     html.find('#lpm-simon-ready').on('click', () => {
+      Sfx.unlock();   // create the AudioContext inside a user gesture
       html.find('#lpm-simon-ready').hide();
       game.socket.emit(`module.${_lpmModuleId}`, {
         action: 'simonReady', playerName: this._playerName, userId: game.user.id,
@@ -893,7 +1003,7 @@ class SimonPuzzle extends Application {
   _listenForResults() {
     this._socketHandler = (data) => {
       if (data.action === 'simonResult') this._showGMResult(data);
-      if (data.action === 'simonReady')  this._setStatus(`▶️ ${data.playerName} починає…`);
+      if (data.action === 'simonReady')  this._setStatus(`▶️ ${data.playerName} is starting…`);
       if (data.action === 'puzzleSync' && data.puzzleType === 'simon') {
         if (data.event === 'flash')    this._flash(data.colorId, data.duration);
         if (data.event === 'progress') { this.step = data.step; this._updateProgress(); }
@@ -910,15 +1020,15 @@ class SimonPuzzle extends Application {
     const icon = data.success ? '✅' : '❌';
     const line = document.createElement('div');
     line.className = 'lpm-simon-result-row';
-    line.innerHTML = `${icon} <strong>${data.playerName}</strong> — ${data.success ? 'Успішно!' : 'Провал'}`;
+    line.innerHTML = `${icon} <strong>${data.playerName}</strong> — ${data.success ? 'Success!' : 'Failed'}`;
     el.appendChild(line);
   }
 
   _startSequence() {
     this.phase = 'watch';
-    this._setStatus('🔮 Запам\u2019ятай послідовність…');
+    this._setStatus('🔮 Memorize the sequence…');
     game.socket.emit(`module.${_lpmModuleId}`, {
-      action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '🔮 Гравець дивиться послідовність…',
+      action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '🔮 The player is watching the sequence…',
     });
     this._updateProgress();
 
@@ -931,7 +1041,7 @@ class SimonPuzzle extends Application {
     this._t(() => {
       this.phase = 'input';
       this.step  = 0;
-      this._setStatus('⚡ Твоя черга! Повтори послідовність рун.');
+      this._setStatus('⚡ Your turn! Repeat the rune sequence.');
     }, delay + 300);
   }
 
@@ -939,6 +1049,8 @@ class SimonPuzzle extends Application {
     if (!this._html) return;
     const btn = this._html.find(`.lpm-simon-btn[data-id="${colorId}"]`)[0];
     if (!btn) return;
+    // Each rune has its own pitch — that is what makes the sequence memorable.
+    Sfx.simonRune(colorId, Math.min(0.5, (duration ?? 300) / 1000));
     const c = SIMON_COLORS[colorId];
     btn.style.borderColor = c.hex;
     btn.style.boxShadow   = `0 0 32px 10px ${c.hex}77, inset 0 0 18px ${c.hex}33`;
@@ -1045,16 +1157,17 @@ class SimonPuzzle extends Application {
   _handleInput(id) {
     if (id !== this.sequence[this.step]) {
       this.phase = 'done';
-      this._setStatus('❌ Невірна руна! Послідовність порушена.');
+      Sfx.fail();
+      this._setStatus('❌ Wrong rune! The sequence is broken.');
       game.socket.emit(`module.${_lpmModuleId}`, {
-        action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '❌ Гравець помилився — провал.',
+        action: 'puzzleSync', puzzleType: 'simon', event: 'status', text: '❌ The player made a mistake — failed.',
       });
       game.socket.emit(`module.${_lpmModuleId}`, {
         action: 'simonResult', playerName: this._playerName, userId: game.user.id, success: false,
       });
       this._t(() => {
         if (this.element) this.element[0].innerHTML =
-          `<div class="lpm-puzzle-win" style="color:var(--color-level-error,#e53935)">❌ Послідовність порушена!</div>`;
+          `<div class="lpm-puzzle-win" style="color:#e05545">❌ The sequence is broken!</div>`;
         setTimeout(() => this.close(), 2000);
       }, 900);
       return;
@@ -1067,7 +1180,8 @@ class SimonPuzzle extends Application {
 
     if (this.step === this.sequence.length) {
       this.phase = 'done';
-      this._setStatus('✨ Руни відгукнулись! Успіх!');
+      this._t(() => Sfx.simonWin(), 260);   // let the last rune tone ring first
+      this._setStatus('✨ The runes respond! Success!');
       // Notify GM
       game.socket.emit(`module.${_lpmModuleId}`, {
         action: 'simonResult',
@@ -1076,8 +1190,8 @@ class SimonPuzzle extends Application {
         success: true,
       });
       this._t(() => {
-        if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">✨ Послідовність рун відтворено!</div>`;
-        _postSuccess('Послідовність рун');
+        if (this.element) this.element[0].innerHTML = `<div class="lpm-puzzle-win">✨ Rune sequence recreated!</div>`;
+        _postSuccess('Rune Sequence');
         setTimeout(() => this.close(), 2000);
       }, 700);
     }

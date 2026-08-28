@@ -1,7 +1,10 @@
 /**
- * lockpick-minigame | main.mjs — Foundry VTT v13
+ * lockpick-minigame | main.mjs — Foundry VTT v12–v14
  * Uses dynamic imports so errors in other files don't break toolbar buttons.
+ * Version-sensitive API lookups live in compat.mjs.
  */
+
+import { DialogV1, getDoorControlClass } from './compat.mjs';
 
 export const MODULE_ID = 'lockpick-minigame';
 
@@ -17,6 +20,19 @@ Hooks.once('init', () => {
   game.settings.register(MODULE_ID, 'defaultDC', {
     name: 'Default Lock DC',
     scope: 'world', config: true, type: Number, default: 15
+  });
+
+  // Кому транслювати чужий злам замка. Раніше вікно спостерігача бачив лише
+  // GM, і то завжди — тепер обидві аудиторії налаштовуються окремо.
+  game.settings.register(MODULE_ID, 'spectateGM', {
+    name: 'Show lockpicking to the GM',
+    hint: 'Opens a live spectator window for the GM when a player picks a lock.',
+    scope: 'world', config: true, type: Boolean, default: true
+  });
+  game.settings.register(MODULE_ID, 'spectatePlayers', {
+    name: 'Show lockpicking to other players',
+    hint: 'Opens the same live spectator window for everyone else at the table.',
+    scope: 'world', config: true, type: Boolean, default: false
   });
 });
 
@@ -68,7 +84,13 @@ function _registerSocket() {
       return;
     }
 
-    if (action === 'lockpickSpectate' && game.user.isGM) {
+    if (action === 'lockpickSpectate') {
+      // Хто саме дивиться — вирішують налаштування, а не жорстке «тільки GM».
+      if (data.userId === game.user.id) return;          // сам гравець уже грає
+      const key = game.user.isGM ? 'spectateGM' : 'spectatePlayers';
+      let allowed = game.user.isGM;
+      try { allowed = game.settings.get(MODULE_ID, key); } catch (e) {}
+      if (!allowed) return;
       const wall = canvas.walls?.get(data.wallId);
       if (!wall) return;
       const { LockpickApp } = await import('./LockpickApp.mjs');
@@ -78,8 +100,7 @@ function _registerSocket() {
         pickQty    : data.pickQty,
         spectator  : true,
         playerName : data.playerName,
-        sweetCenter: data.sweetCenter,
-        sweetSize  : data.sweetSize,
+        pins       : data.pins,
       }).render(true);
     }
   });
@@ -96,46 +117,46 @@ async function _openPuzzleDialog() {
   const playerOpts = game.users.filter(u => u.active)
     .map(u => `<option value="${u.id}">${u.name}${u.isGM ? ' (GM)' : ''}</option>`).join('');
 
-  const langOpts = Object.entries({infernal:'Інфернальна',abyssal:'Безоднянська',elvish:'Ельфійська'})
+  const langOpts = Object.entries({infernal:'Infernal',abyssal:'Abyssal',elvish:'Elvish'})
     .map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
 
-  const d = new Dialog({
-    title: '🧩 Відкрити головоломку',
+  const d = new DialogV1({
+    title: '🧩 Open Puzzle',
     content: `<form id="lpm-puzzle-form" style="padding:4px 0">
       <div class="form-group">
-        <label>Тип</label>
+        <label>Type</label>
         <div class="form-fields"><select id="lpm-ptype" name="ptype" style="width:100%">${typeOpts}</select></div>
       </div>
       <div class="form-group">
-        <label>Складність</label>
+        <label>Difficulty</label>
         <div class="form-fields"><select name="pdiff">${diffOpts}</select></div>
       </div>
       <div id="lpm-cipher-opts" style="display:none">
         <div class="form-group">
-          <label>Мова</label>
+          <label>Language</label>
           <div class="form-fields"><select name="plang" style="width:100%">${langOpts}</select></div>
         </div>
         <div class="form-group">
-          <label>Слово / фраза</label>
+          <label>Word / phrase</label>
           <div class="form-fields">
-            <input type="text" name="pword" placeholder="Залиш порожнім для рандомного" style="width:100%"
+            <input type="text" name="pword" placeholder="Leave empty for random" style="width:100%"
                    autocomplete="off" spellcheck="false">
           </div>
         </div>
         <div class="form-group">
-          <label>Зсув Цезаря</label>
+          <label>Caesar shift</label>
           <div class="form-fields">
-            <input type="number" name="pshift" value="" min="1" max="25" placeholder="Рандомний" style="width:80px">
+            <input type="number" name="pshift" value="" min="1" max="25" placeholder="Random" style="width:80px">
           </div>
         </div>
       </div>
       <div class="form-group">
-        <label>Кому</label>
+        <label>Send to</label>
         <div class="form-fields">
           <select name="ptarget" style="width:100%">
-            <option value="all">👥 Всім гравцям</option>
-            <option value="me">🛡️ Тільки мені (GM)</option>
-            <optgroup label="─── Конкретний гравець ───">${playerOpts}</optgroup>
+            <option value="all">👥 All players</option>
+            <option value="me">🛡️ Only me (GM)</option>
+            <optgroup label="─── Specific player ───">${playerOpts}</optgroup>
           </select>
         </div>
       </div>
@@ -149,7 +170,7 @@ async function _openPuzzleDialog() {
     },
     buttons: {
       open: {
-        icon: '<i class="fa-solid fa-puzzle-piece"></i>', label: 'Відкрити',
+        icon: '<i class="fa-solid fa-puzzle-piece"></i>', label: 'Open',
         callback: async (html) => {
           const { openPuzzle, generatePuzzleOpts } = await import('./PuzzleApp.mjs');
           const type   = html.find('[name="ptype"]').val();
@@ -163,16 +184,31 @@ async function _openPuzzleDialog() {
           // Pre-generate puzzle state so GM and players see the same puzzle
           const opts = generatePuzzleOpts(type, diff, baseOpts);
           const emit = (uid) => game.socket.emit(`module.${MODULE_ID}`, { action:'openPuzzle', type, difficulty:diff, userId:uid, opts });
-          if (target === 'all') {
-            emit(null); openPuzzle(type, diff, { ...opts, spectator: true });
-          } else if (target === 'me') {
-            openPuzzle(type, diff, opts);
-          } else {
-            emit(target); openPuzzle(type, diff, { ...opts, spectator: true });
+
+          if (target === 'me') {
+            openPuzzle(type, diff, opts);   // GM plays it themselves
+            return;
           }
+
+          // Everything else opens a watch-only mirror for the GM. Warn loudly if
+          // there is nobody on the other end, otherwise it just looks broken.
+          const recipients = target === 'all'
+            ? game.users.filter(u => u.active && !u.isGM)
+            : game.users.filter(u => u.id === target && u.active);
+          if (!recipients.length) {
+            ui.notifications.warn(
+              target === 'all'
+                ? 'No players are connected — nobody received the puzzle. Use "Only me" to solve it yourself.'
+                : 'That player is not connected — they did not receive the puzzle.'
+            );
+          } else {
+            ui.notifications.info(`🧩 Puzzle sent to ${recipients.map(u => u.name).join(', ')}.`);
+          }
+          emit(target === 'all' ? null : target);
+          openPuzzle(type, diff, { ...opts, spectator: true });
         }
       },
-      cancel: { label: 'Скасувати' }
+      cancel: { label: 'Cancel' }
     },
     default: 'open'
   });
@@ -186,7 +222,7 @@ export async function openFlagDialog(wall) {
   const enabled = doc.getFlag(MODULE_ID, 'enabled') ?? false;
   const dc      = doc.getFlag(MODULE_ID, 'dc')      ?? game.settings.get(MODULE_ID, 'defaultDC');
 
-  new Dialog({
+  new DialogV1({
     title: '🔒 Configure Lock — Lockpick Minigame',
     content: `<form style="padding:4px 0">
       <div class="form-group">
@@ -229,17 +265,33 @@ export async function openFlagDialog(wall) {
 
 // ─── Door click patching ──────────────────────────────────────────────────────
 
+/** Guards against opening several mini-games from repeated clicks on a door. */
+let _lockpickBusy = false;
+
 function _patchDoorControl() {
-  const proto = DoorControl.prototype;
+  const DoorControlCls = getDoorControlClass();
+  if (!DoorControlCls) {
+    console.error(`${MODULE_ID} | DoorControl class not found — door patching skipped.`);
+    return;
+  }
+  const proto = DoorControlCls.prototype;
   const _orig = proto._onMouseDown;
+  if (proto._lpmPatched) return;   // guard against double-patching (e.g. hot reload)
+  proto._lpmPatched = true;
 
   proto._onMouseDown = async function (event) {
+    // Core only treats button 0 as an activation; don't hijack middle/right clicks.
+    if (event.button !== 0) return _orig.call(this, event);
+
     const doc = this.wall.document;
     if (!doc.getFlag(MODULE_ID, 'enabled'))       return _orig.call(this, event);
     if (doc.ds !== CONST.WALL_DOOR_STATES.LOCKED) return _orig.call(this, event);
 
     event.preventDefault();
     event.stopPropagation();
+
+    // Don't stack a second mini-game while one is already opening/open.
+    if (_lockpickBusy) return;
 
     const token = canvas.tokens.controlled[0];
     if (!token?.actor)
@@ -250,51 +302,60 @@ function _patchDoorControl() {
     const pickItem = _findLockpicks(actor);
 
     if (!pickItem)
-      return ui.notifications.warn(`🗝️ ${actor.name} не має відмичок в інвентарі!`);
+      return ui.notifications.warn(`🗝️ ${actor.name} has no lockpicks in their inventory!`);
     if ((pickItem.system?.quantity ?? 1) < 1)
-      return ui.notifications.warn(`🗝️ ${actor.name} використав всі відмички!`);
+      return ui.notifications.warn(`🗝️ ${actor.name} has used up all their lockpicks!`);
 
-    const rollResult = await _rollThievesTools(actor, dc);
-    if (!rollResult) return;
+    _lockpickBusy = true;
+    try {
+      const rollResult = await _rollThievesTools(actor, dc);
+      if (!rollResult) { _lockpickBusy = false; return; }
 
-    const { LockpickApp } = await import('./LockpickApp.mjs');
-    const _wall = this.wall;
-    const app = new LockpickApp(_wall, {
-      dc, rollResult,
-      pickQty: pickItem.system?.quantity ?? 1,
-      async consumePick() {
-        const q = pickItem.system?.quantity ?? 1;
-        if (q <= 1) await pickItem.delete();
-        else        await pickItem.update({ 'system.quantity': q - 1 });
-      },
-      async onSuccess() {
-        await doc.update({ ds: CONST.WALL_DOOR_STATES.OPEN });
-        ChatMessage.create({
-          content: `<p>🔓 <strong>${token.name}</strong> майстерно зламав замок.</p>`,
-          speaker: ChatMessage.getSpeaker({ token })
-        });
-      },
-      async onFailure() {
-        ChatMessage.create({
-          content: `<p>💥 <strong>${token.name}</strong> зламав всі відмички. Замок тримається.</p>`,
-          speaker: ChatMessage.getSpeaker({ token })
+      const { LockpickApp } = await import('./LockpickApp.mjs');
+      const _wall = this.wall;
+      const app = new LockpickApp(_wall, {
+        dc, rollResult,
+        pickQty: pickItem.system?.quantity ?? 1,
+        async consumePick() {
+          const q = pickItem.system?.quantity ?? 1;
+          if (q <= 1) await pickItem.delete();
+          else        await pickItem.update({ 'system.quantity': q - 1 });
+        },
+        async onSuccess() {
+          await doc.update({ ds: CONST.WALL_DOOR_STATES.OPEN });
+          ChatMessage.create({
+            content: `<p>🔓 <strong>${token.name}</strong> skillfully picked the lock.</p>`,
+            speaker: ChatMessage.getSpeaker({ token })
+          });
+        },
+        async onFailure() {
+          ChatMessage.create({
+            content: `<p>💥 <strong>${token.name}</strong> broke every lockpick. The lock holds.</p>`,
+            speaker: ChatMessage.getSpeaker({ token })
+          });
+        },
+        broadcast: true,
+        onClose() { _lockpickBusy = false; }
+      });
+      app.render(true);
+
+      // Оголошуємо злам усім — хто саме побачить вікно, вирішує приймальна
+      // сторона за налаштуваннями. GM теж транслює, бо гравці можуть дивитись.
+      {
+        game.socket.emit(`module.${MODULE_ID}`, {
+          action     : 'lockpickSpectate',
+          wallId     : _wall.id,
+          dc,
+          rollResult,
+          pickQty    : pickItem.system?.quantity ?? 1,
+          playerName : token.name,
+          userId     : game.user.id,
+          pins       : app.controller.pins.map(p => ({ x: p.x, set: p.set })),
         });
       }
-    });
-    app.render(true);
-
-    // Notify GM so they can spectate
-    if (!game.user.isGM) {
-      game.socket.emit(`module.${MODULE_ID}`, {
-        action     : 'lockpickSpectate',
-        wallId     : _wall.id,
-        dc,
-        rollResult,
-        pickQty    : pickItem.system?.quantity ?? 1,
-        playerName : token.name,
-        sweetCenter: app.sweetCenter,
-        sweetSize  : app.sweetSize,
-      });
+    } catch (err) {
+      _lockpickBusy = false;
+      console.error(`${MODULE_ID} | failed to open lockpick mini-game:`, err);
     }
   };
 }
