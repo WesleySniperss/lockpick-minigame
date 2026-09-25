@@ -22,7 +22,7 @@ import { Sfx } from './Sfx.mjs';
 const MODULE_ID = 'lockpick-minigame';
 const CHANNEL   = `module.${MODULE_ID}`;
 
-/** Width / height of assets/stone.jpg — the sliding tiles cut a square from it. */
+/** Width / height of styles/stone.jpg — the sliding tiles cut a square from it. */
 const STONE_ASPECT = 679 / 452;
 
 export const PUZZLE_TYPES = [
@@ -676,8 +676,8 @@ class SlidingPuzzle extends PuzzleBase {
   async _renderInner() {
     const hint = this._spectator
       ? (this.shared ? 'Read-only — the party’s board' : 'Read-only — click a name to see their board')
-      : (this.shared ? 'One board for everyone — slide a glowing tile into the gap'
-                     : 'Slide a glowing tile into the gap. Restore the picture 1 → ' + (this.size * this.size - 1));
+      : (this.shared ? 'One board for everyone — click a tile next to the gap'
+                     : 'Click a tile next to the gap to slide it. Restore the picture 1 → ' + (this.size * this.size - 1));
     return $(`<div class="lpm-sliding-wrap">
       ${this._headerHTML()}
       <div class="lpm-sliding-moves">Moves: <span class="lpm-moves">0</span></div>

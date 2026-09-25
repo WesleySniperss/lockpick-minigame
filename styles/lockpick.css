@@ -147,7 +147,7 @@
    background-size/-position per tile (2 layers: shade, stone). */
 .lpm-tile:not(.empty) {
   cursor:default;
-  background-image:linear-gradient(rgba(0,0,0,.30),rgba(0,0,0,.30)), url("../assets/stone.jpg");
+  background-image:linear-gradient(rgba(0,0,0,.30),rgba(0,0,0,.30)), url("stone.jpg");
   background-repeat:no-repeat;
 }
 .lpm-tile-num {
@@ -156,17 +156,13 @@
   color:rgba(255,240,210,.8); font-family:Georgia,serif;
   text-shadow:0 1px 2px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.6); user-select:none;
 }
-/* Only tiles that can actually slide react to the pointer */
-.lpm-tile.movable { cursor:pointer; border-color:rgba(232,196,110,.55); }
-.lpm-tile.movable::after {
-  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  box-shadow:inset 0 0 0 2px rgba(232,196,110,.35), inset 0 0 14px rgba(232,196,110,.18);
-}
-.lpm-tile.movable:hover { transform:scale(1.04); filter:brightness(1.22); }
+/* Only tiles that can actually slide react to the pointer (no standing glow) */
+.lpm-tile.movable { cursor:pointer; }
+.lpm-tile.movable:hover { transform:scale(1.04); filter:brightness(1.18); }
 .lpm-tile.just-moved { animation:lpm-tile-in .16s ease-out; }
 @keyframes lpm-tile-in { from { transform:scale(.9); filter:brightness(1.4); } to { transform:scale(1); } }
 .lpm-tile.placed:not(.empty) {
-  background-image:linear-gradient(rgba(40,150,60,.26),rgba(20,90,30,.30)), url("../assets/stone.jpg");
+  background-image:linear-gradient(rgba(40,150,60,.26),rgba(20,90,30,.30)), url("stone.jpg");
   box-shadow:inset 0 2px 1px rgba(100,255,80,.14),0 0 10px rgba(40,180,40,.18),0 3px 6px rgba(0,0,0,.55);
 }
 .lpm-tile.placed .lpm-tile-num { color:rgba(190,255,170,.92); }
