@@ -64,9 +64,30 @@ await wall.document.unsetFlag('lockpick-minigame', 'enabled');
 1. A **player selects their token** and clicks a flagged, locked door.
 2. A **Thieves' Tools check** (1d20 + DEX mod + proficiency/expertise) is
    rolled and posted to chat.
-3. The **mini-game opens** — difficulty is determined by the roll result vs. DC.
-4. **Click each pin** when it touches the green zone to set it.
+3. The **mini-game opens** — a cutaway of the lock with the pick in the keyway.
+   Difficulty is determined by the roll result vs. DC.
+4. **Hold** the mouse to slide the pick, **release on green** under a pin to set
+   it; releasing on red costs an attempt.
 5. Set all pins → the door unlocks. Run out of picks → failure is posted to chat.
+
+Optionally the GM and/or the other players can watch the attempt live (see
+settings).
+
+---
+
+## Puzzles (GM)
+
+Open **VTools → Open Puzzle**: Sudoku, Sliding tiles, Cipher or Rune sequence,
+each in three difficulties.
+
+- **Send to** — all connected players, one player, or **Only me** (the GM solves
+  it; also used automatically when no player is connected).
+- **Solve together** (checkbox) — *checked*: one shared puzzle, every move by
+  anyone appears for everyone and one solve ends it for all; *unchecked*: each
+  player gets their own copy of the same puzzle.
+- The GM gets a spectator window with a roster of the players and their status.
+  With own copies, click a name to see that player's board; **Join in / Solve a
+  copy** lets the GM play too.
 
 ---
 
@@ -104,9 +125,10 @@ await wall.document.unsetFlag('lockpick-minigame', 'enabled');
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Require Thieves' Tools item | Off | Block the mini-game if the actor has no tools in inventory |
-| Lose a pick on miss | **On** | Clicking outside the green zone consumes a pick |
+| Lose a pick on miss | **On** | Releasing on red consumes a pick |
 | Default Lock DC | 15 | Fallback when no `dc` flag is set on the door |
+| Show lockpicking to the GM | **On** | Live spectator window for the GM |
+| Show lockpicking to other players | Off | The same window for everyone else |
 
 ---
 
@@ -114,7 +136,10 @@ await wall.document.unsetFlag('lockpick-minigame', 'enabled');
 
 - Foundry VTT **v12 – v14** (verified on v14)
 - dnd5e system **v3.0+**
-- No dependencies (libWrapper not required)
+- **libWrapper recommended**: with it, the door hook is registered through
+  libWrapper and coexists with other modules that wrap door clicks (e.g.
+  Monk's Active Tile Triggers). Without it the module patches the door click
+  directly.
 
 ### Foundry v14 notes
 

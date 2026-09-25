@@ -108,7 +108,8 @@ export class LockpickApp extends AppV1 {
       title    : 'Pick the Lock',
       width    : CANVAS_W,
       height   : 'auto',
-      classes  : ['lockpick-minigame'],
+      // theme-dark stops v14 forcing 'themed theme-light' onto every V1 app
+      classes  : ['lockpick-minigame', 'themed', 'theme-dark'],
       resizable: false,
     });
   }
