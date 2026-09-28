@@ -1,0 +1,49 @@
+
+// ── driver ──────────────────────────────────────────────────────────────
+const cv = document.getElementById('c');
+cv.width = CANVAS_W; cv.height = CANVAS_H;
+let dc = 15, margin = 0, drive = true;
+let ctl, ren, success = 0, dir = 1, press = null;
+
+function reset() {
+  ctl = new LockController(dc, { total: dc + margin, d20: 10, dc, margin });
+  if (ren && ren.dispose) ren.dispose();
+  ren = new LockRenderer(cv);
+  success = 0; press = null; dir = 1;
+}
+reset();
+
+let last = performance.now();
+function frame(t) {
+  const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (drive && !success) {
+    ctl.pickX += ctl.speed * 0.45 * dt * dir;
+    if (ctl.pickX > TRACK_W) { ctl.pickX = TRACK_W; dir = -1; }
+    if (ctl.pickX < 0)       { ctl.pickX = 0;       dir = 1; }
+  }
+  if (success > 0 && success < 1) success = Math.min(1, success + dt * 1.2);
+  if (press && press.t < 1) press.t = Math.min(1, press.t + dt / 0.32);
+
+  ren.draw(
+    { pins: ctl.pins, pickX: ctl.pickX, pickIn: true, zone: ctl.zoneAt(ctl.pickX).type },
+    { deflect: ctl.resistanceAt(ctl.pickX), vibrate: 0, shake: 0, particles: [],
+      hitFlash: null, missFlash: 0, success: success, press: press
+      }
+  );
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function mark(sel, el){ document.querySelectorAll(sel).forEach(function(b){b.classList.remove('on');}); el.classList.add('on'); }
+document.querySelectorAll('[data-dc]').forEach(function(b){ b.onclick=function(){ dc=+b.dataset.dc; mark('[data-dc]',b); reset(); }; });
+document.querySelectorAll('[data-roll]').forEach(function(b){ b.onclick=function(){ margin=+b.dataset.roll; mark('[data-roll]',b); reset(); }; });
+document.getElementById('pins').onclick=function(){
+  const p = ctl.pins.find(function(p){return !p.set;});
+  if (p) { p.set = true; press = { pinIndex: p.index, hit: true, t: 0 }; }
+};
+document.getElementById('open').onclick=function(){ ctl.pins.forEach(function(p){p.set=true;}); success=0.01; };
+document.getElementById('reset').onclick=reset;
+const d=document.getElementById('drive');
+d.onclick=function(){ drive=!drive; d.classList.toggle('on',drive); d.textContent='авто-хід: '+(drive?'увімк':'вимк'); };
+})();
+</script>

@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lock design preview</title>
+<style>
+  body{margin:0;background:#15131a;color:#ddd;font:13px/1.5 system-ui,sans-serif;
+       display:flex;flex-direction:column;align-items:center;gap:14px;padding:22px}
+  canvas{border:1px solid #333;border-radius:6px;width:520px;height:auto}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;max-width:560px}
+  button{background:#2a2733;color:#e8e4d8;border:1px solid #55503f;border-radius:4px;
+         padding:5px 11px;cursor:pointer;font:inherit}
+  button:hover{background:#3b3747;border-color:#c8a84e}
+  button.on{background:#4a3c18;border-color:#c8a84e;color:#fff6d8}
+  label{opacity:.7}
+  h1{font-size:14px;font-weight:600;opacity:.65;margin:0;letter-spacing:.06em;text-transform:uppercase}
+  .note{opacity:.45;font-size:11px;max-width:520px;text-align:center}
+</style>
+<h1>Lock design preview</h1>
+<canvas id="c" width="520" height="366"></canvas>
+<div class="row">
+  <label>DC</label>
+  <button data-dc="10">10</button><button data-dc="15" class="on">15</button>
+  <button data-dc="20">20</button><button data-dc="25">25</button><button data-dc="30">30</button>
+</div>
+<div class="row">
+  <label>кидок</label>
+  <button data-roll="-8">поганий</button><button data-roll="0" class="on">рівний</button>
+  <button data-roll="10">чудовий</button>
+</div>
+<div class="row">
+  <button id="pins">поставити пін</button>
+  <button id="open">відкрити замок</button>
+  <button id="reset">скинути</button>
+  <button id="drive" class="on">авто-хід: увімк</button>
+</div>
+<p class="note">Згенеровано з реальних джерел модуля. Перегенерувати після змін:
+demos/build-preview.sh</p>
+<script>
+(function(){
+"use strict";
