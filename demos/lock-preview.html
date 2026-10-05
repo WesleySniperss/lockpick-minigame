@@ -406,6 +406,32 @@ function screw(ctx, x, y, r, ang = 0.6, steel = false) {
   ctx.stroke();
 }
 
+/**
+ * Soft drop shadow from stacked translucent rounded rects. shadowBlur looks the
+ * same but is very slow on the software canvas path (it cost ~200 ms here).
+ */
+function softShadow(ctx, x, y, w, h, r, { dx = 3, dy = 5, spread = 14, alpha = 0.7 } = {}) {
+  const n = 7;
+  ctx.fillStyle = `rgba(0,0,0,${(alpha / n * 1.6).toFixed(3)})`;
+  for (let i = n; i >= 1; i--) {
+    const g = spread * i / n;
+    rr(ctx, x + dx - g / 2, y + dy - g / 2, w + g, h + g, r + g / 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Sprites that never depend on game state (wood + case shell, gears, the pick)
+ * are built once per page and DPR and shared by every lock window — the
+ * second lock opens without rebuilding anything.
+ */
+const SHARED = new Map();
+function sharedCache(dpr) {
+  let c = SHARED.get(dpr);
+  if (!c) { c = { base: null, gears: {}, pick: null }; SHARED.set(dpr, c); }
+  return c;
+}
+
 /** Напівкругла заклепка. */
 function rivet(ctx, x, y, r) {
   const g = ctx.createRadialGradient(x - r * 0.4, y - r * 0.5, 0.2, x, y, r);
@@ -439,11 +465,15 @@ class LockRenderer {
     this._plugSprite = null;
     this._scaleSprite = null;
     this._scaleKey = -1;
-    this._gearSprites = null;
+    this._shared = sharedCache(this._dpr);   // base shell, gear and pick sprites
     this._gearLayer = null;     // rendered wheels; re-rendered only when they turned
     this._gearKey = null;
-    this._pick = null;          // { full, shadow, snapped, snappedShadow, hook }
     this._grads = new Map();    // memoized gradients for the main context (perf)
+    // The result screen uses core fonts; make sure they are ready before the end.
+    try {
+      document.fonts?.load('700 40px "Modesto Condensed"');
+      document.fonts?.load('italic 16px "Amiri"');
+    } catch (e) { /* fonts API unavailable — fallbacks apply */ }
   }
 
   /**
@@ -478,12 +508,10 @@ class LockRenderer {
    * plus every cached sprite in memory.
    */
   dispose() {
-    const all = [this._static, this._plugSprite, this._scaleSprite, this._gearLayer,
-      ...Object.values(this._pick ?? {}), ...Object.values(this._gearSprites ?? {})];
+    // Shared sprites (base shell, gears, pick) stay cached for the next window.
+    const all = [this._static, this._plugSprite, this._scaleSprite, this._gearLayer];
     for (const c of all) if (c) { c.width = 0; c.height = 0; }
     this._static = this._plugSprite = this._scaleSprite = this._gearLayer = null;
-    this._pick = null;
-    this._gearSprites = null;
     this._grads?.clear();
     this._grads = null;
     this.canvas = null;
@@ -492,15 +520,22 @@ class LockRenderer {
 
   /** Render everything that never moves once, then just blit it each frame. */
   _buildStatic(state) {
+    if (!this._shared.base) {
+      const b = this._canvas(this.W, this.H);
+      const bx = b.getContext('2d');
+      this._drawWood(bx);
+      this._drawCase(bx);
+      this._drawMakerMark(bx);
+      this._drawGearBay(bx);
+      this._drawKeywayMouth(bx);
+      this._drawPlate(bx);
+      this._shared.base = b;
+    }
+    // Chambers follow this game's pin layout, so the housing is per window.
     const c = this._canvas(this.W, this.H);
     const ctx = c.getContext('2d');
-    this._drawWood(ctx);
-    this._drawCase(ctx);
-    this._drawMakerMark(ctx);
-    this._drawGearBay(ctx);
+    this._blit(ctx, this._shared.base, 0, 0);
     this._drawHousing(ctx, state.pins);
-    this._drawKeywayMouth(ctx);
-    this._drawPlate(ctx);
     this._static = c;
   }
 
@@ -523,8 +558,10 @@ class LockRenderer {
     if (!this._static) this._buildStatic(state);
 
     // Base fill so screen-shake never reveals a transparent edge sliver
-    ctx.fillStyle = '#0a0705';
-    ctx.fillRect(0, 0, this.W, this.H);
+    if (shx || shy) {
+      ctx.fillStyle = '#0a0705';
+      ctx.fillRect(0, 0, this.W, this.H);
+    }
 
     ctx.save();
     ctx.translate(shx, shy);
@@ -582,14 +619,14 @@ class LockRenderer {
       ctx.fillRect(px, 0, plankW, H);
 
       // Волокна — довгі хвилясті лінії, у кожної дошки свій малюнок
-      for (let k = 0; k < 30; k++) {
+      for (let k = 0; k < 24; k++) {
         const gx = px + 3 + R() * (plankW - 6);
         const amp = 1.5 + R() * 5, ph = R() * TAU, freq = 0.006 + R() * 0.012;
         const lit = R() < 0.35;
         ctx.strokeStyle = lit ? `rgba(176,126,72,${0.05 + R() * 0.08})` : `rgba(8,4,0,${0.12 + R() * 0.16})`;
         ctx.lineWidth = 0.6 + R() * 1.2;
         ctx.beginPath();
-        for (let y = -6; y <= H + 6; y += 7) {
+        for (let y = -6; y <= H + 18; y += 12) {
           const x = gx + Math.sin(y * freq + ph) * amp;
           if (y === -6) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
@@ -640,15 +677,7 @@ class LockRenderer {
     const { x, y, w, h, r } = CASE;
 
     // Корпус трохи виступає з деревини — тінь униз-праворуч
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.78)';
-    ctx.shadowBlur = 14 * this._dpr;
-    ctx.shadowOffsetX = 3 * this._dpr;
-    ctx.shadowOffsetY = 5 * this._dpr;
-    rr(ctx, x, y, w, h, r);
-    ctx.fillStyle = '#1a120a';
-    ctx.fill();
-    ctx.restore();
+    softShadow(ctx, x, y, w, h, r, { dx: 3, dy: 5, spread: 16, alpha: 0.75 });
 
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0,    '#a5874d');
@@ -816,12 +845,7 @@ class LockRenderer {
       this._renderGearLayer(this._gearAngle);
       this._gearKey = key;
     }
-    const gb = GEARBAY;
-    ctx.save();
-    rr(ctx, gb.x, gb.y, gb.w, gb.h, 7);
-    ctx.clip();
-    this._blit(ctx, this._gearLayer, gb.x, gb.y);
-    ctx.restore();
+    this._blit(ctx, this._gearLayer, GEARBAY.x, GEARBAY.y);   // already masked to the window
   }
 
   _renderGearLayer(a1) {
@@ -881,13 +905,20 @@ class LockRenderer {
     l.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = l;
     g.fillRect(0, 0, 9, gb.h);
+
+    // Mask to the window's rounded opening once here, instead of clipping every frame.
+    g.globalCompositeOperation = 'destination-in';
+    rr(g, 0, 0, gb.w, gb.h, 7);
+    g.fillStyle = '#000';
+    g.fill();
+    g.globalCompositeOperation = 'source-over';
   }
 
   /** A gear, textured but unlit (light is applied per frame so it never rotates). */
   _gearSprite(r, teeth, tone) {
-    this._gearSprites ??= {};
+    const cache = this._shared.gears;
     const key = `${r}|${teeth}|${tone}`;
-    if (this._gearSprites[key]) return this._gearSprites[key];
+    if (cache[key]) return cache[key];
 
     // r — ДІЛИЛЬНИЙ радіус. Головка вкорочена (0.78m), ніжка 1.25m; тіло по
     // колу западин, інакше зуб сусіда впирався б у суцільний диск.
@@ -971,7 +1002,7 @@ class LockRenderer {
     g.fillStyle = 'rgba(0,0,0,0.8)';
     g.fillRect(-hubR * 0.4, -0.8, hubR * 0.8, 1.6);
 
-    this._gearSprites[key] = c;
+    cache[key] = c;
     return c;
   }
 
@@ -1125,7 +1156,7 @@ class LockRenderer {
     ctx.beginPath();
     ctx.rect(CASE.x + 2, top - 2, CASE.w - 4, bot - top + 4);
     ctx.clip();
-    this._blit(ctx, this._plugSprite, dx, 0);
+    this._blit(ctx, this._plugSprite, HOUSE.x + dx, top - 1);
     ctx.restore();
   }
 
@@ -1133,8 +1164,10 @@ class LockRenderer {
   _buildPlugSprite(state) {
     const x = HOUSE.x, w = HOUSE.w;
     const top = SHEAR_Y, boreB = BORE_BOT, keyB = KEYWAY_BOT, bot = PLUG_BOT;
-    const c = this._canvas(this.W, this.H);
+    // Cropped to the plug itself; drawn in absolute coordinates via translate.
+    const c = this._canvas(w, bot - top + 2);
     const ctx = c.getContext('2d');
+    ctx.translate(-x, -(top - 1));
 
     // Трохи тепліший тон, ніж у корпуса, — плаг читається окремою деталлю
     const pg = ctx.createLinearGradient(0, top, 0, bot);
@@ -1428,14 +1461,22 @@ class LockRenderer {
       this._paintPick(g, snapped);
       return c;
     };
-    // М'яка тінь: силует, намальований далеко за полотном, лишає тут лише тінь
+    // М'яка тінь: чорний силует, накладений кількома зсунутими копіями
+    // (розмиття без shadowBlur, який у програмному рендері коштував ~150 мс)
     const shadowOf = src => {
+      const sil = this._canvas(W, H);
+      const sg = sil.getContext('2d');
+      this._blit(sg, src, 0, 0);
+      sg.globalCompositeOperation = 'source-in';
+      sg.fillStyle = '#000';
+      sg.fillRect(0, 0, W, H);
       const c = this._canvas(W, H);
       const g = c.getContext('2d');
-      g.shadowColor = 'rgba(0,0,0,0.75)';
-      g.shadowBlur = 4 * this._dpr;
-      g.shadowOffsetX = 2000 * this._dpr;
-      this._blit(g, src, -2000, 0);
+      g.globalAlpha = 0.24;
+      for (const [ox, oy] of [[0, 0], [1.6, 0], [-1.6, 0], [0, 1.6], [0, -1.6], [1.1, 1.1], [-1.1, -1.1]]) {
+        this._blit(g, sil, ox, oy);
+      }
+      sil.width = sil.height = 0;
       return c;
     };
     const full = make(false), snapped = make(true);
@@ -1447,11 +1488,12 @@ class LockRenderer {
     hg.beginPath(); hg.rect(-9.5, -6, 20, PICK_AX + 4); hg.clip();
     this._paintPick(hg, false);
     hg.restore();
-    this._pick = { full, snapped, shadow: shadowOf(full), snappedShadow: shadowOf(snapped), hook };
+    this._shared.pick = { full, snapped, shadow: shadowOf(full), snappedShadow: shadowOf(snapped), hook };
   }
 
   _drawPick(ctx, state, fx) {
-    if (!this._pick) this._buildPickSprites();
+    if (!this._shared.pick) this._buildPickSprites();
+    const pick = this._shared.pick;
     const tipX = TRACK_X + state.pickX;
     const deflect = (fx.deflect ?? 0) * 6;
     const jab = (fx.press && fx.press.t < 1) ? Math.sin(fx.press.t * Math.PI) * 9 : 0;
@@ -1464,8 +1506,8 @@ class LockRenderer {
     const cx0 = tipX;                               // вершина гака = точка контакту
     const cy0 = noseRest + 4 - lift + tipBob;
     const broken = !!fx.breakPiece;
-    const spr = broken ? this._pick.snapped : this._pick.full;
-    const shd = broken ? this._pick.snappedShadow : this._pick.shadow;
+    const spr = broken ? pick.snapped : pick.full;
+    const shd = broken ? pick.snappedShadow : pick.shadow;
     const sx = cx0 - PICK_OX, sy = cy0 - PICK_OY;
 
     // Тінь лягає на задню стінку паза; поза корпусом — далі й м'якше, на дерево
@@ -1499,12 +1541,12 @@ class LockRenderer {
 
   /** The snapped-off hook tumbling away. */
   _drawBreakPiece(ctx, p) {
-    if (!this._pick) return;
+    if (!this._shared.pick) return;
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
     ctx.translate(p.x, p.y);
     ctx.rotate(p.rot);
-    this._blit(ctx, this._pick.hook, -12, -20);
+    this._blit(ctx, this._shared.pick.hook, -12, -20);
     ctx.restore();
   }
 
@@ -1560,15 +1602,7 @@ class LockRenderer {
   /** Brass rule mounted on the wood under the case: bezel, channel, label, legend. */
   _drawPlate(ctx) {
     const { x, y, w, h, r } = PLATE;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur = 8 * this._dpr;
-    ctx.shadowOffsetX = 2 * this._dpr;
-    ctx.shadowOffsetY = 3 * this._dpr;
-    rr(ctx, x, y, w, h, r);
-    ctx.fillStyle = '#1a120a';
-    ctx.fill();
-    ctx.restore();
+    softShadow(ctx, x, y, w, h, r, { dx: 2, dy: 3, spread: 10, alpha: 0.65 });
 
     const g = ctx.createLinearGradient(0, y, 0, y + h);
     g.addColorStop(0,   '#ab8c50');
@@ -1645,9 +1679,13 @@ class LockRenderer {
     const half = HIT_ZONE / 2;
     const rad = 5;
 
-    if (!this._scaleSprite) this._scaleSprite = this._canvas(this.W, this.H);
+    // Cropped to the strip (it is rebuilt each time a pin sets — a full-canvas
+    // layer made that a visible hitch). Drawn in absolute coordinates.
+    if (!this._scaleSprite) this._scaleSprite = this._canvas(w + 4, h + 4);
     const ctx = this._scaleSprite.getContext('2d');
-    ctx.clearRect(0, 0, this.W, this.H);
+    ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+    ctx.clearRect(0, 0, w + 4, h + 4);
+    ctx.translate(-(x0 - 2), -(y - 2));
 
     ctx.save();
     rr(ctx, x0, y, w, h, rad);
@@ -1728,7 +1766,7 @@ class LockRenderer {
       this._buildScaleSprite(pins);
       this._scaleKey = key;
     }
-    this._blit(ctx, this._scaleSprite, 0, 0);
+    this._blit(ctx, this._scaleSprite, SCALE_X0 - 2, SCALE.y - 2);
 
     // Легке мерехтіння наступної цілі
     let target = null;
@@ -1784,39 +1822,111 @@ class LockRenderer {
 
   // ── Фінальний оверлей ─────────────────────────────────────────────────
 
-  drawEndOverlay(success) {
+  /**
+   * Result screen over the lock: brass medallion with an icon, title in
+   * Modesto Condensed, subtitle in Amiri (both are core fonts).
+   * Three outcomes: picked, the lock holds (tools intact), the pick snapped.
+   */
+  drawEndOverlay(success, { snapped = false } = {}) {
     const ctx = this.ctx;
     if (!ctx) return;
+    ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
     const cx = this.W / 2, cy = this.H / 2;
+    const tone = success
+      ? { wash: 'rgba(8,18,10,', hi: '#f6e3a4', mid: '#d6ac52', lo: '#8a6424', accent: '#7fdc93' }
+      : { wash: 'rgba(20,8,6,',  hi: '#f3c6b6', mid: '#d0715a', lo: '#7a2f20', accent: '#ff8a72' };
 
-    const g = ctx.createRadialGradient(cx, cy, 20, cx, cy, this.W * 0.7);
-    g.addColorStop(0, success ? 'rgba(12,26,12,0.86)' : 'rgba(26,10,8,0.86)');
-    g.addColorStop(1, success ? 'rgba(4,10,4,0.95)' : 'rgba(10,3,2,0.95)');
+    // Тло: затемнення з віньєткою — замок лишається ледь видно
+    const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, this.W * 0.72);
+    g.addColorStop(0, tone.wash + '0.80)');
+    g.addColorStop(1, tone.wash + '0.94)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.W, this.H);
 
-    const font = 'Georgia, "Times New Roman", serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
+    // Медальйон
+    const my = cy - 52, R = 30;
     ctx.save();
-    ctx.shadowColor = success ? 'rgba(120,255,140,0.55)' : 'rgba(255,80,60,0.55)';
-    ctx.shadowBlur = 20 * this._dpr;
-    ctx.fillStyle = success ? '#8be896' : '#e8604f';
-    ctx.font = `700 36px ${font}`;
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-    ctx.fillText(success ? 'Lock Picked' : 'Pick Broken', cx, cy - 12);
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 12 * this._dpr;
+    ctx.shadowOffsetY = 3 * this._dpr;
+    const ring = ctx.createLinearGradient(cx - R, my - R, cx + R, my + R);
+    ring.addColorStop(0, '#f2d68e'); ring.addColorStop(0.5, '#a07a36'); ring.addColorStop(1, '#4e3a17');
+    ctx.beginPath(); ctx.arc(cx, my, R, 0, TAU);
+    ctx.fillStyle = ring; ctx.fill();
+    ctx.restore();
+    const face = ctx.createRadialGradient(cx - 8, my - 10, 2, cx, my, R - 4);
+    face.addColorStop(0, '#2c2619'); face.addColorStop(1, '#100d08');
+    ctx.beginPath(); ctx.arc(cx, my, R - 4, 0, TAU);
+    ctx.fillStyle = face; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+    this._drawResultIcon(ctx, cx, my, success ? 'open' : snapped ? 'snapped' : 'closed', tone);
+
+    // Заголовок
+    const title = success ? 'Lock Picked' : snapped ? 'Pick Snapped' : 'The Lock Holds';
+    const sub   = success ? 'The mechanism gives way'
+                : snapped ? 'The pick breaks in the keyway'
+                :           'The pins drop back into place';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.save();
+    ctx.font = '700 40px "Modesto Condensed", "Signika", Georgia, serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.5px';
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillText(title, cx, cy + 22 + 2);
+    const tg = ctx.createLinearGradient(0, cy - 8, 0, cy + 24);
+    tg.addColorStop(0, tone.hi); tg.addColorStop(0.55, tone.mid); tg.addColorStop(1, tone.lo);
+    ctx.fillStyle = tg;
+    ctx.fillText(title, cx, cy + 22);
     ctx.restore();
 
-    ctx.strokeStyle = success ? 'rgba(120,220,140,0.4)' : 'rgba(220,90,70,0.4)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx - 90, cy + 12); ctx.lineTo(cx + 90, cy + 12);
-    ctx.stroke();
+    // Розділювач з ромбом
+    const ry = cy + 38;
+    ctx.fillStyle = 'rgba(214,178,100,0.45)';
+    ctx.fillRect(cx - 96, ry, 86, 1);
+    ctx.fillRect(cx + 10, ry, 86, 1);
+    ctx.save();
+    ctx.translate(cx, ry + 0.5); ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = tone.accent; ctx.fillRect(-3, -3, 6, 6);
+    ctx.restore();
 
-    ctx.fillStyle = 'rgba(224,214,186,0.7)';
-    ctx.font = `italic 500 14px ${font}`;
-    ctx.fillText(success ? 'The mechanism gives way' : 'The broken tip jams the lock', cx, cy + 32);
+    // Підзаголовок
+    ctx.font = 'italic 400 16px "Amiri", Georgia, "Times New Roman", serif';
+    ctx.fillStyle = 'rgba(232,222,196,0.82)';
+    ctx.fillText(sub, cx, ry + 26);
+  }
+
+  /** Icons inside the result medallion: open / closed padlock, snapped pick. */
+  _drawResultIcon(ctx, x, y, kind, tone) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const metal = ctx.createLinearGradient(x - 12, y - 14, x + 12, y + 14);
+    metal.addColorStop(0, tone.hi); metal.addColorStop(1, tone.mid);
+    if (kind === 'snapped') {
+      ctx.strokeStyle = metal; ctx.lineWidth = 3.4;
+      ctx.beginPath(); ctx.moveTo(x - 15, y + 9); ctx.lineTo(x - 3, y + 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 3, y - 1); ctx.lineTo(x + 11, y - 6); ctx.lineTo(x + 12, y - 13); ctx.stroke();
+      ctx.strokeStyle = tone.accent; ctx.lineWidth = 1.4;
+      for (const [dx, dy] of [[0, -9], [-6, -6], [6, 7], [-1, 9]]) {
+        ctx.beginPath(); ctx.moveTo(x, y + 0.5); ctx.lineTo(x + dx * 0.6, y + dy * 0.6); ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+    // Дужка
+    ctx.strokeStyle = metal; ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    if (kind === 'open') { ctx.moveTo(x - 7, y - 2); ctx.lineTo(x - 7, y - 9); ctx.arc(x, y - 9, 7, Math.PI, 0); ctx.lineTo(x + 7, y - 13); }
+    else                 { ctx.moveTo(x - 7, y - 2); ctx.lineTo(x - 7, y - 8); ctx.arc(x, y - 8, 7, Math.PI, 0); ctx.lineTo(x + 7, y - 2); }
+    ctx.stroke();
+    // Корпус з щілиною
+    rr(ctx, x - 11, y - 3, 22, 17, 3);
+    ctx.fillStyle = metal; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.fillStyle = 'rgba(20,14,6,0.85)';
+    ctx.beginPath(); ctx.arc(x, y + 4, 2.4, 0, TAU); ctx.fill();
+    ctx.fillRect(x - 1, y + 4, 2, 5);
+    ctx.restore();
   }
 }
 

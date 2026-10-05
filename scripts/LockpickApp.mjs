@@ -37,6 +37,9 @@ export class LockpickApp extends AppV1 {
     this.onFailure   = opts.onFailure   ?? (() => {});
     this.onClose     = opts.onClose     ?? (() => {});
     this.consumePick = opts.consumePick ?? (() => Promise.resolve());
+    // What the attempt is made with. Only consumable tools (lockpicks) break;
+    // Thieves' Tools just slip and leave the lock shut.
+    this.tool = { kind: 'thieves', label: "Thieves' Tools", consumable: false, ...(opts.tool ?? {}) };
 
     this.controller = new LockController(this.dc, this.rollResult);
     // Спектатор бачить ту саму розкладку пінів, що й гравець
@@ -87,6 +90,7 @@ export class LockpickApp extends AppV1 {
     this._syncHandler = null;
 
     this._boundWindowUp = this._onWindowUp.bind(this);
+    this._boundTick = this._tick.bind(this);
 
     /** Pending timeouts, cleared on close so nothing fires on a dead app. */
     this._timers = [];
@@ -116,7 +120,7 @@ export class LockpickApp extends AppV1 {
 
   async _renderInner() {
     const banner = this._spectator
-      ? `<div class="lpm-spectator-banner">👁 Spectating — ${this._playerName}</div>`
+      ? `<div class="lpm-spectator-banner"><i class="fa-solid fa-eye"></i> Spectating — ${foundry.utils.escapeHTML?.(this._playerName) ?? this._playerName}</div>`
       : '';
     return $(`<div class="lpm-root">
       ${banner}
@@ -168,7 +172,7 @@ export class LockpickApp extends AppV1 {
     html.find('#lpm-leave-btn').on('click', () => this.close());
 
     this._lastT = performance.now();
-    this._raf = requestAnimationFrame(this._tick.bind(this));
+    this._raf = requestAnimationFrame(this._boundTick);
   }
 
   // ── Ввід ──────────────────────────────────────────────────────────────
@@ -261,7 +265,7 @@ export class LockpickApp extends AppV1 {
     this._update(dt);
     this._draw();
 
-    this._raf = requestAnimationFrame(this._tick.bind(this));
+    this._raf = requestAnimationFrame(this._boundTick);
   }
 
   _update(dt) {
@@ -428,6 +432,7 @@ export class LockpickApp extends AppV1 {
 
   _beginBreak(tipCanvasX) {
     this._stopScrape();
+    if (!this.tool.consumable) return this._beginSlip();
     this._soundBreak();
     this._shake = 12;
     this._missFlash = 1;
@@ -441,6 +446,18 @@ export class LockpickApp extends AppV1 {
     this._later(() => this._end(false), 1100);
   }
 
+  /**
+   * Out of attempts with Thieves' Tools: nothing breaks. The pins drop back,
+   * the pick slides out and the attempt simply fails.
+   */
+  _beginSlip() {
+    this._soundMiss();
+    this._shake = 7;
+    this._missFlash = 0.7;
+    this._withdrawing = true;
+    this._later(() => this._end(false), 900);
+  }
+
   _end(success) {
     if (this._dead) return;
     this._dead = true;
@@ -449,7 +466,7 @@ export class LockpickApp extends AppV1 {
     this._stopScrape();
     cancelAnimationFrame(this._raf);
     this._raf = null;
-    this.renderer?.drawEndOverlay(success);
+    this.renderer?.drawEndOverlay(success, { snapped: !success && this.tool.consumable });
 
     // Tracked directly (not via _later) because _dead is already true. If the
     // player closes early, close() fires the outcome immediately instead.
@@ -637,30 +654,35 @@ export class LockpickApp extends AppV1 {
 
   // ── UI ────────────────────────────────────────────────────────────────
 
+  /** Roll badge: d20 icon, total, DC and how far it beat or missed. */
   _showRollResult() {
     const el = this.element?.[0]?.querySelector('#lpm-roll-display');
     if (!el) return;
     const { total, d20, dc, margin } = this.rollResult;
-    const beat = margin >= 0;
-    const crit = d20 === 20 ? ' — Critical!' : d20 === 1 ? ' — Critical fail!' : '';
-    const color =
-      d20 === 20 ? '#d4a030' :
-      d20 === 1  ? '#c04040' :
-      beat       ? '#4a8a4a' : '#a06020';
-    const sign = margin >= 0 ? '+' : '';
-    el.innerHTML = `<span class="lpm-roll-label">Roll</span>
-      <span class="lpm-roll-d20" style="color:${color}">${total}</span>
-      <span class="lpm-roll-vs">vs DC ${dc}</span>
-      <span class="lpm-roll-margin" style="color:${color}">(${sign}${margin})${crit}</span>`;
+    const state = d20 === 20 ? 'crit' : d20 === 1 ? 'fumble' : margin >= 0 ? 'beat' : 'miss';
+    const note  = { crit: 'Natural 20', fumble: 'Natural 1',
+                    beat: margin === 0 ? 'Exactly the DC' : `Beat by ${margin}`,
+                    miss: `Short by ${-margin}` }[state];
+    el.className = `lpm-roll-result lpm-roll lpm-roll--${state}`;
+    el.innerHTML = `<i class="fa-solid fa-dice-d20 lpm-roll__die"></i>`
+      + `<span class="lpm-roll__total">${total}</span>`
+      + `<span class="lpm-roll__meta"><span class="lpm-roll__vs">vs DC ${dc}</span>`
+      + `<span class="lpm-roll__note">${note}</span></span>`;
   }
 
+  /** Misses left. Lockpicks snap when they run out; Thieves' Tools only slip. */
   _refreshAttempts() {
     if (!this._attemptsEl) return;
     const left = this.controller.attemptsLeft;
+    const snaps = this.tool.consumable;
     const pips = Array.from({ length: 3 }, (_, i) =>
-      `<span class="lpm-attempt-pip${i < left ? '' : ' used'}">◆</span>`).join('');
-    this._attemptsEl.innerHTML = `<span class="lpm-attempts-label">Pick:</span> ${pips}`;
+      `<span class="lpm-pip${i < left ? '' : ' used'}"></span>`).join('');
+    const tip = snaps ? 'Misses left before the pick snaps'
+                      : "Misses left before the pins drop (Thieves' Tools never break)";
+    this._attemptsEl.innerHTML = `<span class="lpm-attempts-label" title="${tip}">`
+      + `${snaps ? 'Pick' : 'Tries'}</span><span class="lpm-pips" title="${tip}">${pips}</span>`;
   }
+
 
   async close(opts = {}) {
     this._dead = true;

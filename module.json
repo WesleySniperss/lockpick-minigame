@@ -2,7 +2,7 @@
   "id": "lockpick-minigame",
   "title": "Lockpick Minigame",
   "description": "Skyrim-style lockpicking mini-game + arcane puzzle system (Sudoku, Sliding, Cipher, Simon Says) for Foundry VTT.",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "compatibility": {
     "minimum": "12",
     "verified": "14"

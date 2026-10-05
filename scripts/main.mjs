@@ -5,6 +5,8 @@
  */
 
 import { DialogV1, getDoorControlClass } from './compat.mjs';
+import { TOOL_MODES, resolveTool, toolCheckTerms, rollFormula } from './tools.mjs';
+import { resultCard, checkFlavor, esc } from './cards.mjs';
 
 export const MODULE_ID = 'lockpick-minigame';
 
@@ -13,9 +15,14 @@ export const MODULE_ID = 'lockpick-minigame';
 Hooks.once('init', () => {
   console.log(`%c${MODULE_ID} | LOADED ✓`, 'color:lime;font-weight:bold');
 
-  game.settings.register(MODULE_ID, 'breakOnMiss', {
-    name: 'Lose a pick on miss',
-    scope: 'world', config: true, type: Boolean, default: true
+  // Systems ship Thieves' Tools, not "lockpicks" — the GM picks what is needed.
+  // (Replaces the old 'breakOnMiss' setting, which nothing ever read.)
+  game.settings.register(MODULE_ID, 'toolMode', {
+    name: 'Tool needed to pick a lock',
+    hint: "Thieves' Tools are never used up: a failed attempt only leaves the lock shut. "
+        + 'Lockpicks are consumable: a failed attempt snaps one.',
+    scope: 'world', config: true, type: String, default: 'thieves',
+    choices: TOOL_MODES,
   });
   game.settings.register(MODULE_ID, 'defaultDC', {
     name: 'Default Lock DC',
@@ -99,7 +106,7 @@ function _registerSocket() {
       new LockpickApp(wall, {
         dc         : data.dc,
         rollResult : data.rollResult,
-        pickQty    : data.pickQty,
+        tool       : data.tool,
         spectator  : true,
         playerName : data.playerName,
         pins       : data.pins,
@@ -128,7 +135,7 @@ async function _openPuzzleDialog() {
     .map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
 
   const d = new DialogV1({
-    title: '🧩 Open Puzzle',
+    title: 'Open Puzzle',
     content: `<form id="lpm-puzzle-form" style="padding:4px 0">
       <div class="form-group">
         <label>Type</label>
@@ -161,8 +168,8 @@ async function _openPuzzleDialog() {
         <label>Send to</label>
         <div class="form-fields">
           <select name="ptarget" style="width:100%">
-            <option value="all" ${players.length ? 'selected' : ''}>👥 All connected players (${players.length})</option>
-            <option value="me" ${players.length ? '' : 'selected'}>🛡️ Only me — I solve it</option>
+            <option value="all" ${players.length ? 'selected' : ''}>All connected players (${players.length})</option>
+            <option value="me" ${players.length ? '' : 'selected'}>Only me — I solve it</option>
             ${playerOpts ? `<optgroup label="─── Specific player ───">${playerOpts}</optgroup>` : ''}
           </select>
         </div>
@@ -235,7 +242,7 @@ async function _openPuzzleDialog() {
           game.socket.emit(`module.${MODULE_ID}`, {
             action: 'openPuzzle', type, difficulty: diff, userIds: recipients.map(u => u.id), opts,
           });
-          ui.notifications.info(`🧩 ${shared ? 'Shared puzzle' : 'Puzzle'} sent to ${recipients.map(u => u.name).join(', ')}.`);
+          ui.notifications.info(`${shared ? 'Shared puzzle' : 'Puzzle'} sent to ${recipients.map(u => u.name).join(', ')}.`);
           // The GM watches (and can join from the spectator window).
           openPuzzle(type, diff, { ...opts, spectator: true });
         }
@@ -255,7 +262,7 @@ export async function openFlagDialog(wall) {
   const dc      = doc.getFlag(MODULE_ID, 'dc')      ?? game.settings.get(MODULE_ID, 'defaultDC');
 
   new DialogV1({
-    title: '🔒 Configure Lock — Lockpick Minigame',
+    title: 'Configure Lock — Lockpick Minigame',
     content: `<form style="padding:4px 0">
       <div class="form-group">
         <label>Enable lockpick mini-game</label>
@@ -359,44 +366,68 @@ function _shouldIntercept(control, event) {
   return !_lockpickBusy;                                        // one mini-game at a time
 }
 
-/** Roll Thieves' Tools, open the mini-game and announce it to spectators. */
+/** Roll the tool check, open the mini-game and announce it to spectators. */
 async function _startLockpick(wall) {
   const doc = wall.document;
   const token = canvas.tokens.controlled[0];
   if (!token?.actor) return ui.notifications.warn('Select a token to pick this lock.');
 
-  const actor    = token.actor;
-  const dc       = doc.getFlag(MODULE_ID, 'dc') ?? game.settings.get(MODULE_ID, 'defaultDC');
-  const pickItem = _findLockpicks(actor);
-  if (!pickItem)
-    return ui.notifications.warn(`🗝️ ${actor.name} has no lockpicks in their inventory!`);
-  if ((pickItem.system?.quantity ?? 1) < 1)
-    return ui.notifications.warn(`🗝️ ${actor.name} has used up all their lockpicks!`);
+  const actor = token.actor;
+  const dc    = doc.getFlag(MODULE_ID, 'dc') ?? game.settings.get(MODULE_ID, 'defaultDC');
+  let mode = 'thieves';
+  try { mode = game.settings.get(MODULE_ID, 'toolMode') ?? 'thieves'; } catch (e) {}
+  const tool = resolveTool(actor, mode);
+  if (tool.error) return ui.notifications.warn(tool.error);
 
   _lockpickBusy = true;
-  const rollResult = await _rollThievesTools(actor, dc);
+  const rollResult = await _rollToolCheck(actor, dc, tool);
   if (!rollResult) { _lockpickBusy = false; return; }
+
+  const who     = `<strong>${esc(token.name)}</strong>`;
+  const sub     = `${tool.kind === 'none' ? 'Bare hands' : tool.label} · DC ${dc}`;
+  const speaker = ChatMessage.getSpeaker({ token });
+  const toolInfo = { kind: tool.kind, label: tool.label, consumable: tool.consumable };
+
+  // Picks left after a snap. Recorded when the pick is consumed (that happens
+  // before the failure message), so the message never subtracts twice.
+  let picksLeft = null;
 
   const { LockpickApp } = await import('./LockpickApp.mjs');
   const app = new LockpickApp(wall, {
     dc, rollResult,
-    pickQty: pickItem.system?.quantity ?? 1,
+    tool: toolInfo,
+    // Only lockpicks are used up. Thieves' Tools survive any failure.
     async consumePick() {
-      const q = pickItem.system?.quantity ?? 1;
-      if (q <= 1) await pickItem.delete();
-      else        await pickItem.update({ 'system.quantity': q - 1 });
+      if (!tool.consumable || !tool.item) return;
+      const q = Number(tool.item.system?.quantity ?? 1);
+      picksLeft = Math.max(0, q - 1);
+      if (q <= 1) await tool.item.delete();
+      else        await tool.item.update({ 'system.quantity': q - 1 });
     },
     async onSuccess() {
       await doc.update({ ds: CONST.WALL_DOOR_STATES.OPEN });
       ChatMessage.create({
-        content: `<p>🔓 <strong>${token.name}</strong> skillfully picked the lock.</p>`,
-        speaker: ChatMessage.getSpeaker({ token })
+        speaker,
+        content: resultCard({
+          tone: 'success', icon: 'fa-lock-open', title: 'Lock Picked', subtitle: sub,
+          body: `${who} eases the last pin past the shear line. The door swings open.`,
+        }),
       });
     },
     async onFailure() {
+      const left = picksLeft ?? Math.max(0, Number(tool.item?.system?.quantity ?? 1) - 1);
       ChatMessage.create({
-        content: `<p>💥 <strong>${token.name}</strong> broke every lockpick. The lock holds.</p>`,
-        speaker: ChatMessage.getSpeaker({ token })
+        speaker,
+        content: tool.consumable
+          ? resultCard({
+              tone: 'failure', icon: 'fa-burst', title: 'Lockpick Snapped', subtitle: sub,
+              body: `${who} snaps a lockpick in the keyway. The lock holds`
+                  + ` — ${left} ${left === 1 ? 'pick' : 'picks'} left.`,
+            })
+          : resultCard({
+              tone: 'failure', icon: 'fa-lock', title: 'The Lock Holds', subtitle: sub,
+              body: `${who} loses the pins and they drop back into place. The tools are fine; the door stays locked.`,
+            }),
       });
     },
     broadcast: true,
@@ -410,7 +441,7 @@ async function _startLockpick(wall) {
     wallId     : wall.id,
     dc,
     rollResult,
-    pickQty    : pickItem.system?.quantity ?? 1,
+    tool       : toolInfo,
     playerName : token.name,
     userId     : game.user.id,
     pins       : app.controller.pins.map(p => ({ x: p.x, set: p.set })),
@@ -419,35 +450,27 @@ async function _startLockpick(wall) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function _findLockpicks(actor) {
-  return actor.items.find(i => {
-    const n = i.name.toLowerCase();
-    return n.includes('lockpick') || n.includes('lock pick') ||
-           n.includes('відмичк')  || n.includes("thieves' tools") ||
-           n.includes('thieves tools') ||
-           i.system?.type?.baseItem === 'thievesTools';
-  }) ?? null;
-}
-
-async function _rollThievesTools(actor, dc) {
-  const dexMod    = actor.system.abilities?.dex?.mod ?? 0;
-  const prof      = actor.system.attributes?.prof    ?? 2;
-  const toolVal   = actor.system.tools?.thievesTools?.value ?? 0;
-  const profBonus = Math.floor(toolVal * prof);
-  const total     = dexMod + profBonus;
-  const sign      = total >= 0 ? '+' : '';
-
+/**
+ * 1d20 + the tool's bonus (system-aware, see tools.mjs), posted with a styled
+ * flavour line. Labelled terms ("+ 3[Dex] + 2[Prof]") show in the roll tooltip.
+ */
+async function _rollToolCheck(actor, dc, tool) {
+  const terms = toolCheckTerms(actor, tool);
   let roll;
   try {
-    roll = await new Roll(`1d20${sign}${total}`).evaluate();
-  } catch(e) { console.error(e); return null; }
+    roll = await new Roll(rollFormula(terms)).evaluate();
+  } catch (e) { console.error(e); return null; }
 
+  let rollMode;
+  try { rollMode = game.settings.get('core', 'rollMode'); } catch (e) {}
   await roll.toMessage({
-    speaker : ChatMessage.getSpeaker({ actor }),
-    flavor  : `🗝️ <strong>Thieves' Tools</strong> — DC ${dc}`,
-    rollMode: game.settings.get('core', 'rollMode')
+    speaker: ChatMessage.getSpeaker({ actor }),
+    flavor : checkFlavor(tool.kind === 'none' ? 'Dexterity' : tool.label, dc),
+    ...(rollMode ? { rollMode } : {}),
   });
 
-  return { total: roll.total, d20: roll.dice[0].results[0].result, dc, margin: roll.total - dc };
+  const die = roll.dice[0];
+  const d20 = die?.results?.find(r => r.active !== false)?.result ?? die?.total ?? 10;
+  return { total: roll.total, d20, dc, margin: roll.total - dc };
 }
 
