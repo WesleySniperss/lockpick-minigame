@@ -1,7 +1,8 @@
-# Lockpick Minigame — Foundry VTT v12 / dnd5e
+# Lockpick Minigame — Foundry VTT v12–v14 · dnd5e & Level Up (a5e)
 
-A Skyrim-style pin-tumbler lockpicking mini-game for **Foundry VTT v12** with
-full **dnd5e** integration (Thieves' Tools check, proficiency, DC scaling).
+A Skyrim-style pin-tumbler lockpicking mini-game for **Foundry VTT** with
+**dnd5e** and **Level Up Advanced 5e** integration (Thieves' Tools check,
+proficiency, DC scaling), plus a set of puzzles the GM can hand out.
 
 ---
 
@@ -62,13 +63,16 @@ await wall.document.unsetFlag('lockpick-minigame', 'enabled');
 ## How It Works
 
 1. A **player selects their token** and clicks a flagged, locked door.
-2. A **Thieves' Tools check** (1d20 + DEX mod + proficiency/expertise) is
-   rolled and posted to chat.
+2. A **tool check** (1d20 + Dex + Thieves' Tools proficiency/expertise) is
+   rolled and posted to chat. The bonus is read from the system: dnd5e
+   (`tools.thief`) or a5e (`proficiencies.tools` → `thievesTools`).
 3. The **mini-game opens** — a cutaway of the lock with the pick in the keyway.
    Difficulty is determined by the roll result vs. DC.
 4. **Hold** the mouse to slide the pick, **release on green** under a pin to set
    it; releasing on red costs an attempt.
-5. Set all pins → the door unlocks. Run out of picks → failure is posted to chat.
+5. Set all pins → the door unlocks. Three misses → the attempt fails. With
+   **Thieves' Tools** nothing breaks — the pins drop back and the door stays
+   locked; with **Lockpicks** one pick snaps and is removed from the inventory.
 
 Optionally the GM and/or the other players can watch the attempt live (see
 settings).
@@ -115,9 +119,16 @@ each in three difficulties.
 | Nat 20      | ∞           | Auto-success  |
 | Nat 1       | 6 px, 1 pick| Near-impossible |
 
-### Picks available
+### Tools
 
-`max(1, 3 + floor(margin / 5))` — beating the DC by more gives more picks.
+What a character needs is a world setting (**Tool needed to pick a lock**):
+
+| Mode | Needs | On a failed attempt |
+|------|-------|---------------------|
+| Thieves' Tools *(default)* | an item named Thieves' Tools (or dnd5e base item `thief`) | nothing is lost |
+| Lockpicks | an item named Lockpick(s), quantity ≥ 1 | one lockpick snaps |
+| Either | Thieves' Tools if carried, otherwise Lockpicks | as above |
+| Nothing | — anyone can try (carried Thieves' Tools still add proficiency) | nothing is lost |
 
 ---
 
@@ -125,7 +136,7 @@ each in three difficulties.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Lose a pick on miss | **On** | Releasing on red consumes a pick |
+| Tool needed to pick a lock | **Thieves' Tools** | Thieves' Tools / Lockpicks / Either / Nothing — see *Tools* |
 | Default Lock DC | 15 | Fallback when no `dc` flag is set on the door |
 | Show lockpicking to the GM | **On** | Live spectator window for the GM |
 | Show lockpicking to other players | Off | The same window for everyone else |

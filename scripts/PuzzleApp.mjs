@@ -17,6 +17,7 @@
  */
 
 import { AppV1, oocChatData } from './compat.mjs';
+import { resultCard } from './cards.mjs';
 import { Sfx } from './Sfx.mjs';
 
 const MODULE_ID = 'lockpick-minigame';
@@ -26,16 +27,16 @@ const CHANNEL   = `module.${MODULE_ID}`;
 const STONE_ASPECT = 679 / 452;
 
 export const PUZZLE_TYPES = [
-  { id: 'sudoku',  label: '🔢 Sudoku',                   icon: 'fas fa-th' },
-  { id: 'sliding', label: '🧱 Sliding tiles',            icon: 'fas fa-border-all' },
-  { id: 'cipher',  label: '🔤 Cipher (decode the word)', icon: 'fas fa-font' },
-  { id: 'simon',   label: '🔮 Rune sequence (memory)',   icon: 'fas fa-circle' },
+  { id: 'sudoku',  label: 'Sudoku',                   icon: 'fas fa-th' },
+  { id: 'sliding', label: 'Sliding tiles',            icon: 'fas fa-border-all' },
+  { id: 'cipher',  label: 'Cipher (decode the word)', icon: 'fas fa-font' },
+  { id: 'simon',   label: 'Rune sequence (memory)',   icon: 'fas fa-circle' },
 ];
 
 export const DIFFICULTIES = [
-  { id: 'easy',   label: '🟢 Easy'   },
-  { id: 'medium', label: '🟡 Medium' },
-  { id: 'hard',   label: '🔴 Hard'   },
+  { id: 'easy',   label: 'Easy'   },
+  { id: 'medium', label: 'Medium' },
+  { id: 'hard',   label: 'Hard'   },
 ];
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
@@ -104,11 +105,11 @@ const _esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const STATUS = {
-  waiting: { icon: '○', label: 'has not started yet' },
-  solving: { icon: '✎', label: 'is solving' },
-  solved:  { icon: '✓', label: 'solved it' },
-  failed:  { icon: '✗', label: 'failed' },
-  left:    { icon: '⏏', label: 'closed the puzzle' },
+  waiting: { icon: 'fa-regular fa-circle',           label: 'has not started yet' },
+  solving: { icon: 'fa-solid fa-pen',                label: 'is solving' },
+  solved:  { icon: 'fa-solid fa-check',              label: 'solved it' },
+  failed:  { icon: 'fa-solid fa-xmark',              label: 'failed' },
+  left:    { icon: 'fa-solid fa-right-from-bracket', label: 'closed the puzzle' },
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -120,6 +121,8 @@ class PuzzleBase extends AppV1 {
   static KEY  = 'puzzle';
   /** Human name for chat messages. */
   static NAME = 'Puzzle';
+  /** Font Awesome icon of the result medal and chat card. */
+  static ICON = 'fa-puzzle-piece';
 
   constructor(difficulty, opts = {}) {
     const session   = opts.session ?? foundry.utils.randomID();
@@ -148,7 +151,7 @@ class PuzzleBase extends AppV1 {
       this._peers.set(r.id, { name: r.name, status: 'waiting', state: null });
     }
 
-    if (spectator)        this.options.title = `👁 ${this.options.title} — ${this.shared ? 'Party view' : 'Spectating'}`;
+    if (spectator)        this.options.title = `${this.options.title} — ${this.shared ? 'Party view' : 'Spectating'}`;
     else if (this.shared) this.options.title = `${this.options.title} — Together`;
   }
 
@@ -169,11 +172,11 @@ class PuzzleBase extends AppV1 {
     let out = '';
     if (this._spectator) {
       const n   = this._peers.size;
-      const who = n === 0 ? '⚠ nobody received this puzzle'
+      const who = n === 0 ? 'nobody received this puzzle'
         : this.shared ? `party of ${n}` : `watching ${n} player${n === 1 ? '' : 's'}`;
       const join = this._canJoin()
         ? `<a class="lpm-join" role="button">▶ ${this.shared ? 'Join in' : 'Solve a copy'}</a>` : '';
-      out += `<div class="lpm-spectator-banner"><span>👁 Spectator view — ${who}</span>${join}</div>`;
+      out += `<div class="lpm-spectator-banner"><span><i class="fa-solid fa-eye"></i> Spectator view — ${who}</span>${join}</div>`;
     }
     if (this._spectator || this.shared) out += `<div class="lpm-roster"></div>`;
     return out;
@@ -193,7 +196,7 @@ class PuzzleBase extends AppV1 {
       if (pickable && id === this._watch) cls.push('watched');
       if (id === pulseId) cls.push('pulse');
       return `<span class="${cls.join(' ')}" data-user="${id}" title="${_esc(p.name)} ${st.label}">`
-           + `<i>${st.icon}</i>${_esc(p.name)}${me}</span>`;
+           + `<i class="${st.icon}"></i>${_esc(p.name)}${me}</span>`;
     });
     el.innerHTML = chips.join('') || '<span class="lpm-roster-empty">No players yet</span>';
     this._fit();
@@ -297,14 +300,23 @@ class PuzzleBase extends AppV1 {
 
   // ── Endings ──────────────────────────────────────────────────────────────
 
-  /** Replace the window body (never the header) with the outcome, then close. */
-  _finish(ok, text, { post = false } = {}) {
+  /**
+   * Replace the window body (never the header) with the outcome, then close.
+   * `title` is plain text; `sub` may contain already-escaped HTML.
+   */
+  _finish(ok, title, sub = '', { post = false } = {}) {
     if (this._ended) return;
     this._ended = true;
     if (post) this._postSuccess();
     const content = this.element?.[0]?.querySelector('.window-content');
     if (content) {
-      content.innerHTML = `<div class="lpm-puzzle-win ${ok ? 'is-win' : 'is-fail'}">${text}</div>`;
+      const icon = ok ? this.constructor.ICON : 'fa-xmark';
+      content.innerHTML = `<div class="lpm-result lpm-result--${ok ? 'win' : 'fail'}">`
+        + `<div class="lpm-result__medal"><i class="fa-solid ${icon}"></i></div>`
+        + `<div class="lpm-result__title">${_esc(title)}</div>`
+        + `<div class="lpm-result__rule"><span></span></div>`
+        + (sub ? `<div class="lpm-result__sub">${sub}</div>` : '')
+        + `</div>`;
     }
     this._later(() => this.close(), 2600);
   }
@@ -312,11 +324,15 @@ class PuzzleBase extends AppV1 {
   _postSuccess() {
     const what = `the “${this.constructor.NAME}” puzzle`;
     const me   = _esc(game.user.name);
-    let content;
-    if (this.shared)     content = `<p>🎉 <strong>The party solved ${what}!</strong> ${me} made the final move. The way is open.</p>`;
-    else if (this._solo) content = `<p>🎉 <strong>${what[0].toUpperCase()}${what.slice(1)} is solved!</strong> The way is open.</p>`;
-    else                 content = `<p>🎉 <strong>${me}</strong> solved ${what}.</p>`;
-    ChatMessage.create(oocChatData({ content }));
+    const body = this.shared ? `The party solved ${what}. <strong>${me}</strong> made the final move — the way is open.`
+               : this._solo  ? 'The way is open.'
+               :               `<strong>${me}</strong> solved ${what}.`;
+    ChatMessage.create(oocChatData({
+      content: resultCard({
+        tone: 'success', icon: this.constructor.ICON, title: `${this.constructor.NAME} Solved`,
+        subtitle: this.shared ? 'Solved together' : 'Puzzle', body,
+      }),
+    }));
   }
 
   _later(fn, ms) {
@@ -395,30 +411,46 @@ function _generateSudokuGrid() {
   return grid;
 }
 
-function _sudokuCanPlace(board, idx, v) {
-  const r = Math.floor(idx / 9), c = idx % 9;
-  for (let i = 0; i < 9; i++) {
-    if (board[r * 9 + i] === v || board[i * 9 + c] === v) return false;
-  }
-  const br = Math.floor(r / 3) * 3, bc = Math.floor(c / 3) * 3;
-  for (let i = 0; i < 3; i++)
-    for (let j = 0; j < 3; j++)
-      if (board[(br + i) * 9 + (bc + j)] === v) return false;
-  return true;
-}
+const _popcount = m => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
 
-// Returns how many solutions exist, stopping early once limit is reached.
+/**
+ * How many solutions exist (stops at `limit`). Bitmask candidates per row /
+ * column / box, always branching on the cell with the fewest candidates.
+ * The old first-empty-cell backtracker took up to ~1 s on a hard grid —
+ * and it runs when the GM clicks Open, freezing their tab.
+ */
 function _sudokuCountSolutions(board, limit = 2) {
-  const idx = board.indexOf(0);
-  if (idx === -1) return 1;
-  let count = 0;
-  for (let v = 1; v <= 9 && count < limit; v++) {
-    if (_sudokuCanPlace(board, idx, v)) {
-      board[idx] = v;
-      count += _sudokuCountSolutions(board, limit - count);
-      board[idx] = 0;
-    }
+  const rows = new Uint16Array(9), cols = new Uint16Array(9), boxes = new Uint16Array(9);
+  const empty = [];
+  for (let i = 0; i < 81; i++) {
+    const v = board[i];
+    if (!v) { empty.push(i); continue; }
+    const r = (i / 9) | 0, c = i % 9, bit = 1 << v;
+    rows[r] |= bit; cols[c] |= bit; boxes[((r / 3) | 0) * 3 + ((c / 3) | 0)] |= bit;
   }
+  let count = 0;
+  const solve = n => {
+    if (n === empty.length) { count++; return; }
+    let best = n, bestMask = 0, bestCnt = 10;
+    for (let k = n; k < empty.length; k++) {
+      const i = empty[k], r = (i / 9) | 0, c = i % 9;
+      const mask = ~(rows[r] | cols[c] | boxes[((r / 3) | 0) * 3 + ((c / 3) | 0)]) & 0x3FE;
+      const cnt = _popcount(mask);
+      if (cnt < bestCnt) { bestCnt = cnt; best = k; bestMask = mask; if (cnt <= 1) break; }
+    }
+    if (!bestCnt) return;                                  // dead end
+    [empty[n], empty[best]] = [empty[best], empty[n]];
+    const i = empty[n], r = (i / 9) | 0, c = i % 9, b = ((r / 3) | 0) * 3 + ((c / 3) | 0);
+    for (let m = bestMask; m && count < limit; ) {
+      const bit = m & -m;
+      m ^= bit;
+      rows[r] |= bit; cols[c] |= bit; boxes[b] |= bit;
+      solve(n + 1);
+      rows[r] ^= bit; cols[c] ^= bit; boxes[b] ^= bit;
+    }
+    [empty[n], empty[best]] = [empty[best], empty[n]];
+  };
+  solve(0);
   return count;
 }
 
@@ -450,6 +482,7 @@ function _makeSudokuPuzzle(difficulty) {
 class SudokuPuzzle extends PuzzleBase {
   static KEY  = 'sudoku';
   static NAME = 'Sudoku';
+  static ICON = 'fa-table-cells';
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
@@ -462,7 +495,7 @@ class SudokuPuzzle extends PuzzleBase {
   }
 
   static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: '🔢 Sudoku', width: 420 });
+    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Sudoku', width: 420 });
   }
 
   async _renderInner() {
@@ -593,7 +626,7 @@ class SudokuPuzzle extends PuzzleBase {
     if (n && this._solved()) {
       this._emit('win');
       Sfx.solved();
-      this._finish(true, '🎉 Sudoku solved!', { post: true });
+      this._finish(true, 'Sudoku Solved', 'Every digit is in its place', { post: true });
     }
   }
 
@@ -611,7 +644,7 @@ class SudokuPuzzle extends PuzzleBase {
     }
     if (data.event === 'win') {
       Sfx.solved();
-      this._finish(true, `🎉 Sudoku solved!<small>Final digit by ${_esc(peer.name)}</small>`);
+      this._finish(true, 'Sudoku Solved', `Final digit by ${_esc(peer.name)}`);
     }
   }
 
@@ -655,6 +688,7 @@ function _slidingGenerateTiles(size, difficulty) {
 class SlidingPuzzle extends PuzzleBase {
   static KEY  = 'sliding';
   static NAME = 'Sliding Tiles';
+  static ICON = 'fa-puzzle-piece';
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
@@ -670,7 +704,7 @@ class SlidingPuzzle extends PuzzleBase {
   }
 
   static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: '🧱 Sliding Tiles', width: 440 });
+    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Sliding Tiles', width: 440 });
   }
 
   async _renderInner() {
@@ -737,7 +771,7 @@ class SlidingPuzzle extends PuzzleBase {
     if (this._solved()) {
       this._emit('win');
       Sfx.solved();
-      this._finish(true, `🎉 Solved in ${this.moves} moves!`, { post: true });
+      this._finish(true, 'Tiles Restored', `Solved in ${this.moves} moves`, { post: true });
     }
   }
 
@@ -762,7 +796,7 @@ class SlidingPuzzle extends PuzzleBase {
     }
     if (data.event === 'win') {
       Sfx.solved();
-      this._finish(true, `🎉 Solved in ${this.moves} moves!<small>Last tile by ${_esc(peer.name)}</small>`);
+      this._finish(true, 'Tiles Restored', `${this.moves} moves · last tile by ${_esc(peer.name)}`);
     }
   }
 
@@ -829,6 +863,7 @@ function _makeCipher(difficulty, { lang, customWord, shift } = {}) {
 class CipherPuzzle extends PuzzleBase {
   static KEY  = 'cipher';
   static NAME = 'Cipher';
+  static ICON = 'fa-scroll';
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
@@ -852,7 +887,7 @@ class CipherPuzzle extends PuzzleBase {
   }
 
   static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: '🔤 Cipher', width: 540, resizable: true });
+    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Cipher', width: 540, resizable: true });
   }
 
   async _renderInner() {
@@ -865,7 +900,7 @@ class CipherPuzzle extends PuzzleBase {
       return $(`<div class="lpm-cipher-wrap">
         ${this._headerHTML()}
         <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">🔑 Answer (GM only) · shift ${this.shift}</div>
+          <div class="lpm-cipher-step-label"><i class="fa-solid fa-key"></i> Answer (GM only) · shift ${this.shift}</div>
           <div class="lpm-cipher-encoded lpm-cipher-answer">${_esc(this.answer)}</div>
         </div>
         <div class="lpm-cipher-step">
@@ -903,7 +938,7 @@ class CipherPuzzle extends PuzzleBase {
       <div class="lpm-cipher-answer-box">
         <div class="lpm-cipher-input" contenteditable="true" spellcheck="false"
              data-placeholder="Type your answer in English…" data-empty="1"></div>
-        <button type="button" class="lpm-cipher-check">✓ Check</button>
+        <button type="button" class="lpm-cipher-check"><i class="fa-solid fa-check"></i> Check</button>
       </div>
       <div class="lpm-cipher-feedback"></div>
     </div>`);
@@ -946,13 +981,13 @@ class CipherPuzzle extends PuzzleBase {
     if (guess === this.answer) {
       this._emit('win', { state: { typing: guess } });
       Sfx.solved();
-      this._finish(true, `🎉 Cipher solved!<small>${_esc(this.answer)}</small>`, { post: true });
+      this._finish(true, 'Cipher Solved', `The word was <b>${_esc(this.answer)}</b>`, { post: true });
       return;
     }
     Sfx.fail();
     this._emit('attempt', { guess });
     const fb = this._html?.[0]?.querySelector('.lpm-cipher-feedback');
-    if (fb) fb.textContent = `❌ “${guess}” is not it — try again.`;
+    if (fb) fb.textContent = `“${guess}” is not it — try again.`;
     const box = this._html?.[0]?.querySelector('.lpm-cipher-answer-box');
     if (box) { box.classList.remove('lpm-shake'); void box.offsetWidth; box.classList.add('lpm-shake'); }
   }
@@ -971,7 +1006,7 @@ class CipherPuzzle extends PuzzleBase {
     const rows = [...this._guesses].filter(([id]) => this._spectator || id !== game.user.id).map(([id, g]) => {
       const p = this._peers.get(id);
       const st = p?.status === 'solved' ? ' is-solved' : p?.status === 'left' ? ' is-left' : '';
-      const last = g.last ? `<span class="lpm-cipher-last">✗ ${_esc(g.last)}</span>` : '';
+      const last = g.last ? `<span class="lpm-cipher-last"><i class="fa-solid fa-xmark"></i> ${_esc(g.last)}</span>` : '';
       return `<div class="lpm-cipher-row${st}"><span class="lpm-cipher-who">${_esc(p?.name ?? '?')}</span>`
            + `<span class="lpm-cipher-typing">${_esc(g.typing) || '…'}</span>${last}</div>`;
     });
@@ -982,7 +1017,7 @@ class CipherPuzzle extends PuzzleBase {
   _applyRemote(data, peer) {
     if (data.event === 'win') {
       Sfx.solved();
-      this._finish(true, `🎉 Cipher solved!<small>${_esc(this.answer)} — cracked by ${_esc(peer.name)}</small>`);
+      this._finish(true, 'Cipher Solved', `<b>${_esc(this.answer)}</b> — cracked by ${_esc(peer.name)}`);
     }
   }
 }
@@ -1028,6 +1063,7 @@ const _simonSequence = d => Array.from({ length: _simonLength(d) }, () => Math.f
 class SimonPuzzle extends PuzzleBase {
   static KEY  = 'simon';
   static NAME = 'Rune Sequence';
+  static ICON = 'fa-wand-sparkles';
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
@@ -1038,7 +1074,7 @@ class SimonPuzzle extends PuzzleBase {
   }
 
   static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: '🔮 Rune Sequence', width: 420 });
+    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Rune Sequence', width: 420 });
   }
 
   // Joining a shared ritual only makes sense before it starts.
@@ -1052,7 +1088,7 @@ class SimonPuzzle extends PuzzleBase {
         <span class="lpm-rune-label">${c.label}</span>
       </div>`).join('');
 
-    const status = this._spectator ? '👁 Waiting for the player…' : '🔮 Ready to begin?';
+    const status = this._spectator ? '<i class="fa-solid fa-eye"></i> Waiting for the player…' : '<i class="fa-solid fa-wand-sparkles"></i> Ready to begin?';
     const hint = this._spectator
       ? (this.shared ? 'Read-only — the party’s runes in real time' : 'Read-only — click a name to follow that player')
       : (this.shared ? 'One ritual for the party — anyone may press the next rune'
@@ -1090,7 +1126,7 @@ class SimonPuzzle extends PuzzleBase {
     this.phase = 'watch';
     this.step  = 0;
     this._html?.find('.lpm-simon-ready-btn, .lpm-join').remove();
-    this._setStatus(by ? `🔮 ${_esc(by)} began the ritual — memorize the sequence…` : '🔮 Memorize the sequence…');
+    this._setStatus(by ? `<i class="fa-solid fa-eye"></i> ${_esc(by)} began the ritual — memorize the sequence…` : '<i class="fa-solid fa-eye"></i> Memorize the sequence…');
     this._updateProgress();
 
     let delay = 500;
@@ -1105,8 +1141,8 @@ class SimonPuzzle extends PuzzleBase {
   _toInput() {
     if (this.phase !== 'watch') return;
     this.phase = 'input';
-    this._setStatus(this._spectator ? '⚡ Repeating the runes…'
-      : this.shared ? '⚡ Your party’s turn — repeat the runes!' : '⚡ Your turn! Repeat the rune sequence.');
+    this._setStatus(this._spectator ? '<i class="fa-solid fa-hand-pointer"></i> Repeating the runes…'
+      : this.shared ? '<i class="fa-solid fa-hand-pointer"></i> Your party’s turn — repeat the runes!' : '<i class="fa-solid fa-hand-pointer"></i> Your turn — repeat the sequence.');
   }
 
   /** A rune pressed — locally (`local`) or by a teammate in shared mode. */
@@ -1120,9 +1156,9 @@ class SimonPuzzle extends PuzzleBase {
       this.phase = 'done';
       Sfx.fail();
       if (local) this._emit('fail', { state: { step: this.step, phase: 'done' } });
-      this._setStatus(local ? '❌ Wrong rune! The sequence is broken.' : `❌ ${_esc(by)} pressed the wrong rune!`);
-      this._later(() => this._finish(false,
-        local ? '❌ The sequence is broken!' : `❌ The sequence is broken!<small>${_esc(by)} pressed the wrong rune</small>`), 900);
+      this._setStatus(local ? '<i class="fa-solid fa-xmark"></i> Wrong rune — the sequence is broken.' : `<i class="fa-solid fa-xmark"></i> ${_esc(by)} pressed the wrong rune.`);
+      this._later(() => this._finish(false, 'Sequence Broken',
+        local ? 'A wrong rune breaks the ritual' : `${_esc(by)} pressed the wrong rune`), 900);
       return;
     }
 
@@ -1133,9 +1169,9 @@ class SimonPuzzle extends PuzzleBase {
     if (this.step === this.sequence.length) {
       this.phase = 'done';
       this._later(() => Sfx.simonWin(), 260);   // let the last rune tone ring first
-      this._setStatus('✨ The runes respond! Success!');
+      this._setStatus('<i class="fa-solid fa-wand-sparkles"></i> The runes respond!');
       if (local) this._emit('win', { state: { step: this.step, phase: 'done' } });
-      this._later(() => this._finish(true, '✨ Rune sequence recreated!', { post: local }), 700);
+      this._later(() => this._finish(true, 'Sequence Recreated', 'The runes answer', { post: local }), 700);
     }
   }
 
@@ -1159,13 +1195,13 @@ class SimonPuzzle extends PuzzleBase {
         if (this._ended || this.phase === 'done') break;
         this.phase = 'done';
         Sfx.fail();
-        this._finish(false, `❌ The sequence is broken!<small>${_esc(peer.name)} pressed the wrong rune</small>`);
+        this._finish(false, 'Sequence Broken', `${_esc(peer.name)} pressed the wrong rune`);
         break;
       case 'win':
         if (this._ended || this.phase === 'done') break;
         this.phase = 'done';
         Sfx.simonWin();
-        this._finish(true, '✨ Rune sequence recreated!');
+        this._finish(true, 'Sequence Recreated', 'The runes answer');
         break;
     }
   }
@@ -1176,19 +1212,19 @@ class SimonPuzzle extends PuzzleBase {
       this.step = peer?.state?.step ?? 0;
       this._updateProgress();
       const st = peer?.status;
-      this._setStatus(st === 'solved' ? `✅ ${name} recreated the sequence`
-        : st === 'failed' ? `❌ ${name} broke the sequence`
-        : st === 'waiting' ? `👁 ${name} has not started yet` : `👁 Following ${name}`);
+      this._setStatus(st === 'solved' ? `<i class="fa-solid fa-check"></i> ${name} recreated the sequence`
+        : st === 'failed' ? `<i class="fa-solid fa-xmark"></i> ${name} broke the sequence`
+        : st === 'waiting' ? `<i class="fa-solid fa-eye"></i> ${name} has not started yet` : `<i class="fa-solid fa-eye"></i> Following ${name}`);
       return;
     }
     switch (data.event) {
-      case 'ready':    this.step = 0; this._updateProgress(); this._setStatus(`🔮 ${name} is memorizing the sequence…`); break;
+      case 'ready':    this.step = 0; this._updateProgress(); this._setStatus(`<i class="fa-solid fa-eye"></i> ${name} is memorizing the sequence…`); break;
       case 'flash':    this._flash(data.colorId, data.duration, { emit: false }); break;
       case 'progress': this.step = data.state?.step ?? this.step; this._updateProgress();
-                       this._setStatus(`⚡ ${name}: ${this.step} / ${this.sequence.length}`); break;
-      case 'fail':     this._setStatus(`❌ ${name} broke the sequence`); Sfx.fail(); break;
+                       this._setStatus(`<i class="fa-solid fa-hand-pointer"></i> ${name}: ${this.step} / ${this.sequence.length}`); break;
+      case 'fail':     this._setStatus(`<i class="fa-solid fa-xmark"></i> ${name} broke the sequence`); Sfx.fail(); break;
       case 'win':      this.step = this.sequence.length; this._updateProgress();
-                       this._setStatus(`✅ ${name} recreated the sequence`); Sfx.simonWin(); break;
+                       this._setStatus(`<i class="fa-solid fa-check"></i> ${name} recreated the sequence`); Sfx.simonWin(); break;
       case 'leave':    this._setStatus(`⏏ ${name} closed the puzzle`); break;
     }
   }
