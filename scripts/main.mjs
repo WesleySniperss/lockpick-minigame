@@ -1,12 +1,14 @@
 /**
  * lockpick-minigame | main.mjs — Foundry VTT v12–v14
- * Uses dynamic imports so errors in other files don't break toolbar buttons.
+ * Settings, socket, GM tools and the puzzle dialog. Lockpicking and the Arcana
+ * workings are requested by the GM for a specific character (requests.mjs).
  * Version-sensitive API lookups live in compat.mjs.
  */
 
-import { DialogV1, getDoorControlClass } from './compat.mjs';
-import { TOOL_MODES, resolveTool, toolCheckTerms, rollFormula } from './tools.mjs';
-import { resultCard, checkFlavor, esc } from './cards.mjs';
+import { DialogV1, generation } from './compat.mjs';
+import { TOOL_MODES } from './tools.mjs';
+import { openRequestDialog, requestChallenge, requestLockpick, decorateRequestCard, onRequestStateMessage,
+         releaseDroppedAttempts, arcanaAppClass } from './requests.mjs';
 
 export const MODULE_ID = 'lockpick-minigame';
 
@@ -25,27 +27,39 @@ Hooks.once('init', () => {
     choices: TOOL_MODES,
   });
   game.settings.register(MODULE_ID, 'defaultDC', {
-    name: 'Default Lock DC',
+    name: 'Default DC',
+    hint: 'Pre-filled in the request dialog, for locks and Arcana challenges alike.',
     scope: 'world', config: true, type: Number, default: 15
   });
 
   // Кому транслювати чужий злам замка. Раніше вікно спостерігача бачив лише
   // GM, і то завжди — тепер обидві аудиторії налаштовуються окремо.
   game.settings.register(MODULE_ID, 'spectateGM', {
-    name: 'Show lockpicking to the GM',
-    hint: 'Opens a live spectator window for the GM when a player picks a lock.',
+    name: 'Show challenges live to the GM',
+    hint: 'Opens a spectator window for the GM while a player picks a lock or works an Arcana challenge.',
     scope: 'world', config: true, type: Boolean, default: true
   });
   game.settings.register(MODULE_ID, 'spectatePlayers', {
-    name: 'Show lockpicking to other players',
-    hint: 'Opens the same live spectator window for everyone else at the table.',
+    name: 'Show challenges live to other players',
+    hint: 'Opens the same spectator window for everyone else at the table.',
     scope: 'world', config: true, type: Boolean, default: false
   });
+
+  // For macros: game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door' })
+  const mod = game.modules.get(MODULE_ID);
+  if (mod) mod.api = { requestChallenge, requestLockpick, openRequestDialog, openPuzzleDialog: _openPuzzleDialog };
+
+  // Request cards get their button / status for the viewing user on every render.
+  // v13+ passes an HTMLElement to renderChatMessageHTML; v12 only has renderChatMessage (jQuery).
+  // Chosen here, not at import time: game.release is only reliable from 'init' on.
+  Hooks.on(generation() >= 13 ? 'renderChatMessageHTML' : 'renderChatMessage', decorateRequestCard);
+  // A player who drops out mid-attempt never reports back: the GM closes their card.
+  Hooks.on('userConnected', (user, active) => { if (!active) releaseDroppedAttempts(); });
 });
 
 Hooks.once('ready', () => {
-  try { _patchDoorControl(); } catch(e) { console.error(`${MODULE_ID} | _patchDoorControl failed:`, e); }
   _registerSocket();
+  releaseDroppedAttempts();             // cards left "busy" while no GM was here
 });
 
 // ─── VTools integration ───────────────────────────────────────────────────────
@@ -53,16 +67,21 @@ Hooks.once('ready', () => {
 Hooks.once('vtools.ready', () => {
   VTools.register({
     name   : `${MODULE_ID}-lock`,
-    title  : 'Configure Lock',
-    icon   : 'fa-solid fa-lock',
+    title  : 'Request Lockpicking',
+    icon   : 'fa-solid fa-key',
     onClick: () => {
       if (!game.user.isGM) return;
-      const wall = canvas.walls?.controlled?.[0];
-      if (!wall) { ui.notifications.warn('Select a door on the canvas first.'); return; }
-      if (wall.document.door === (CONST.WALL_DOOR_TYPES?.NONE ?? 0)) {
-        ui.notifications.warn('Selected wall is not a door.'); return;
-      }
-      openFlagDialog(wall);
+      openRequestDialog('lock');
+    }
+  });
+
+  VTools.register({
+    name   : `${MODULE_ID}-arcana`,
+    title  : 'Request Arcana Challenge',
+    icon   : 'fa-solid fa-hat-wizard',
+    onClick: () => {
+      if (!game.user.isGM) return;
+      openRequestDialog('ward');
     }
   });
 
@@ -80,9 +99,9 @@ Hooks.once('vtools.ready', () => {
 // ─── Socket ───────────────────────────────────────────────────────────────────
 
 function _registerSocket() {
-  game.socket.on(`module.${MODULE_ID}`, async (data) => {
+  // The server passes the sender's user id after the data.
+  game.socket.on(`module.${MODULE_ID}`, async (data, senderId) => {
     const { action, type, difficulty, userId } = data;
-    console.log(`${MODULE_ID} | socket received:`, action, 'userId:', userId, 'me:', game.user.id);
 
     if (action === 'openPuzzle') {
       // userIds = exact recipients. Never open a playable copy for a GM that was
@@ -93,27 +112,54 @@ function _registerSocket() {
       return;
     }
 
+    if (action === 'lockpickRequestState') {
+      onRequestStateMessage(data, senderId);              // only the active GM writes
+      return;
+    }
+
+    if (action === 'gameSpectate') {
+      if (data.userId === game.user.id) return;
+      if (!_wantsToWatch()) return;
+      const App = await arcanaAppClass(data.kind);
+      if (!App) return;
+      new App({
+        sessionId : data.sessionId,
+        init      : data.init,
+        dc        : data.dc,
+        rollResult: data.rollResult,
+        label     : data.label,
+        playerName: data.playerName,
+        playerUserId: data.userId,
+        spectator : true,
+      }).render(true);
+      return;
+    }
+
     if (action === 'lockpickSpectate') {
       // Хто саме дивиться — вирішують налаштування, а не жорстке «тільки GM».
       if (data.userId === game.user.id) return;          // сам гравець уже грає
-      const key = game.user.isGM ? 'spectateGM' : 'spectatePlayers';
-      let allowed = game.user.isGM;
-      try { allowed = game.settings.get(MODULE_ID, key); } catch (e) {}
-      if (!allowed) return;
-      const wall = canvas.walls?.get(data.wallId);
-      if (!wall) return;
+      if (!_wantsToWatch()) return;
       const { LockpickApp } = await import('./LockpickApp.mjs');
-      new LockpickApp(wall, {
+      new LockpickApp({
+        sessionId  : data.sessionId,
         dc         : data.dc,
         rollResult : data.rollResult,
         tool       : data.tool,
+        label      : data.label,
         spectator  : true,
         playerName : data.playerName,
+        playerUserId: data.userId,
         pins       : data.pins,
       }).render(true);
     }
   });
   console.log(`${MODULE_ID} | socket registered for user: ${game.user.name} (isGM: ${game.user.isGM})`);
+}
+
+/** Does this client watch other players' challenges (per the world settings)? */
+function _wantsToWatch() {
+  const key = game.user.isGM ? 'spectateGM' : 'spectatePlayers';
+  try { return !!game.settings.get(MODULE_ID, key); } catch (e) { return game.user.isGM; }
 }
 
 // ─── Puzzle dialog ────────────────────────────────────────────────────────────
@@ -253,224 +299,3 @@ async function _openPuzzleDialog() {
   });
   d.render(true);
 }
-
-// ─── Flag dialog ──────────────────────────────────────────────────────────────
-
-export async function openFlagDialog(wall) {
-  const doc     = wall.document;
-  const enabled = doc.getFlag(MODULE_ID, 'enabled') ?? false;
-  const dc      = doc.getFlag(MODULE_ID, 'dc')      ?? game.settings.get(MODULE_ID, 'defaultDC');
-
-  new DialogV1({
-    title: 'Configure Lock — Lockpick Minigame',
-    content: `<form style="padding:4px 0">
-      <div class="form-group">
-        <label>Enable lockpick mini-game</label>
-        <div class="form-fields">
-          <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''}>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Lock DC</label>
-        <div class="form-fields">
-          <input type="number" name="dc" value="${dc}" min="5" max="30" step="1" style="width:80px">
-        </div>
-      </div>
-    </form>`,
-    buttons: {
-      save: {
-        icon: '<i class="fa-solid fa-save"></i>', label: 'Save',
-        callback: async (html) => {
-          const newEnabled = html.find('[name="enabled"]').is(':checked');
-          const newDc      = parseInt(html.find('[name="dc"]').val()) || 15;
-          await doc.setFlag(MODULE_ID, 'enabled', newEnabled);
-          await doc.setFlag(MODULE_ID, 'dc', newDc);
-          ui.notifications.info(newEnabled ? `Lock enabled — DC ${newDc}` : 'Lockpick minigame disabled.');
-        }
-      },
-      remove: {
-        icon: '<i class="fa-solid fa-trash"></i>', label: 'Remove',
-        callback: async () => {
-          await doc.unsetFlag(MODULE_ID, 'enabled');
-          await doc.unsetFlag(MODULE_ID, 'dc');
-          ui.notifications.info('Lock flag removed.');
-        }
-      },
-      cancel: { label: 'Cancel' }
-    },
-    default: 'save'
-  }).render(true);
-}
-
-// ─── Door click patching ──────────────────────────────────────────────────────
-
-/** Guards against opening several mini-games from repeated clicks on a door. */
-let _lockpickBusy = false;
-
-/**
- * Hook the door click.
- *
- * With libWrapper present we register a MIXED wrapper instead of assigning the
- * prototype method. Assigning it directly is what produced "Lockpick Minigame
- * and Monk's Active Tile Triggers modify the same FoundryVTT functionality":
- * MATT wraps this exact method through libWrapper, and libWrapper traps any
- * direct overwrite of a wrapped method as a conflict. As MIXED we sit inside
- * MATT's WRAPPER, so MATT still runs its door triggers on every click.
- */
-function _patchDoorControl() {
-  const DoorControlCls = getDoorControlClass();
-  if (!DoorControlCls) {
-    console.error(`${MODULE_ID} | DoorControl class not found — door patching skipped.`);
-    return;
-  }
-
-  const handler = function (wrapped, event) {
-    if (!_shouldIntercept(this, event)) return wrapped(event);
-    event.preventDefault?.();
-    event.stopPropagation?.();
-    _startLockpick(this.wall).catch(err => {
-      _lockpickBusy = false;
-      console.error(`${MODULE_ID} | failed to open lockpick mini-game:`, err);
-    });
-    return false;
-  };
-
-  if (globalThis.libWrapper && game.modules.get('lib-wrapper')?.active) {
-    const target = foundry?.canvas?.containers?.DoorControl
-      ? 'foundry.canvas.containers.DoorControl.prototype._onMouseDown'
-      : 'DoorControl.prototype._onMouseDown';
-    libWrapper.register(MODULE_ID, target, handler, 'MIXED');
-    return;
-  }
-
-  // No libWrapper: patch directly, once.
-  const proto = DoorControlCls.prototype;
-  if (proto._lpmPatched) return;
-  proto._lpmPatched = true;
-  const orig = proto._onMouseDown;
-  proto._onMouseDown = function (event) { return handler.call(this, orig.bind(this), event); };
-}
-
-/**
- * Should this click open the mini-game instead of the core door behaviour?
- * Mirrors the core guards first, so a paused game or a user without door
- * permission still gets core's own feedback.
- */
-function _shouldIntercept(control, event) {
-  if (event?.button !== 0) return false;                       // core only acts on left click
-  if (!game.user.can?.('WALL_DOORS')) return false;
-  if (game.paused && !game.user.isGM) return false;
-  const doc = control.wall?.document;
-  if (!doc?.getFlag(MODULE_ID, 'enabled')) return false;
-  if (doc.ds !== CONST.WALL_DOOR_STATES.LOCKED) return false;
-  return !_lockpickBusy;                                        // one mini-game at a time
-}
-
-/** Roll the tool check, open the mini-game and announce it to spectators. */
-async function _startLockpick(wall) {
-  const doc = wall.document;
-  const token = canvas.tokens.controlled[0];
-  if (!token?.actor) return ui.notifications.warn('Select a token to pick this lock.');
-
-  const actor = token.actor;
-  const dc    = doc.getFlag(MODULE_ID, 'dc') ?? game.settings.get(MODULE_ID, 'defaultDC');
-  let mode = 'thieves';
-  try { mode = game.settings.get(MODULE_ID, 'toolMode') ?? 'thieves'; } catch (e) {}
-  const tool = resolveTool(actor, mode);
-  if (tool.error) return ui.notifications.warn(tool.error);
-
-  _lockpickBusy = true;
-  const rollResult = await _rollToolCheck(actor, dc, tool);
-  if (!rollResult) { _lockpickBusy = false; return; }
-
-  const who     = `<strong>${esc(token.name)}</strong>`;
-  const sub     = `${tool.kind === 'none' ? 'Bare hands' : tool.label} · DC ${dc}`;
-  const speaker = ChatMessage.getSpeaker({ token });
-  const toolInfo = { kind: tool.kind, label: tool.label, consumable: tool.consumable };
-
-  // Picks left after a snap. Recorded when the pick is consumed (that happens
-  // before the failure message), so the message never subtracts twice.
-  let picksLeft = null;
-
-  const { LockpickApp } = await import('./LockpickApp.mjs');
-  const app = new LockpickApp(wall, {
-    dc, rollResult,
-    tool: toolInfo,
-    // Only lockpicks are used up. Thieves' Tools survive any failure.
-    async consumePick() {
-      if (!tool.consumable || !tool.item) return;
-      const q = Number(tool.item.system?.quantity ?? 1);
-      picksLeft = Math.max(0, q - 1);
-      if (q <= 1) await tool.item.delete();
-      else        await tool.item.update({ 'system.quantity': q - 1 });
-    },
-    async onSuccess() {
-      await doc.update({ ds: CONST.WALL_DOOR_STATES.OPEN });
-      ChatMessage.create({
-        speaker,
-        content: resultCard({
-          tone: 'success', icon: 'fa-lock-open', title: 'Lock Picked', subtitle: sub,
-          body: `${who} eases the last pin past the shear line. The door swings open.`,
-        }),
-      });
-    },
-    async onFailure() {
-      const left = picksLeft ?? Math.max(0, Number(tool.item?.system?.quantity ?? 1) - 1);
-      ChatMessage.create({
-        speaker,
-        content: tool.consumable
-          ? resultCard({
-              tone: 'failure', icon: 'fa-burst', title: 'Lockpick Snapped', subtitle: sub,
-              body: `${who} snaps a lockpick in the keyway. The lock holds`
-                  + ` — ${left} ${left === 1 ? 'pick' : 'picks'} left.`,
-            })
-          : resultCard({
-              tone: 'failure', icon: 'fa-lock', title: 'The Lock Holds', subtitle: sub,
-              body: `${who} loses the pins and they drop back into place. The tools are fine; the door stays locked.`,
-            }),
-      });
-    },
-    broadcast: true,
-    onClose() { _lockpickBusy = false; }
-  });
-  app.render(true);
-
-  // Announce to everyone; each client decides from its own settings whether to watch.
-  game.socket.emit(`module.${MODULE_ID}`, {
-    action     : 'lockpickSpectate',
-    wallId     : wall.id,
-    dc,
-    rollResult,
-    tool       : toolInfo,
-    playerName : token.name,
-    userId     : game.user.id,
-    pins       : app.controller.pins.map(p => ({ x: p.x, set: p.set })),
-  });
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * 1d20 + the tool's bonus (system-aware, see tools.mjs), posted with a styled
- * flavour line. Labelled terms ("+ 3[Dex] + 2[Prof]") show in the roll tooltip.
- */
-async function _rollToolCheck(actor, dc, tool) {
-  const terms = toolCheckTerms(actor, tool);
-  let roll;
-  try {
-    roll = await new Roll(rollFormula(terms)).evaluate();
-  } catch (e) { console.error(e); return null; }
-
-  let rollMode;
-  try { rollMode = game.settings.get('core', 'rollMode'); } catch (e) {}
-  await roll.toMessage({
-    speaker: ChatMessage.getSpeaker({ actor }),
-    flavor : checkFlavor(tool.kind === 'none' ? 'Dexterity' : tool.label, dc),
-    ...(rollMode ? { rollMode } : {}),
-  });
-
-  const die = roll.dice[0];
-  const d20 = die?.results?.find(r => r.active !== false)?.result ?? die?.total ?? 10;
-  return { total: roll.total, d20, dc, margin: roll.total - dc };
-}
-

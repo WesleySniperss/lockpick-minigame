@@ -135,4 +135,57 @@ export const Sfx = {
   key() {
     noise(1800, { dur: 0.022, gain: 0.07, q: 1.8 });
   },
+
+  // ── Arcana mini-games ──────────────────────────────────────────────────
+
+  /** A stone rune ring grinds one step round. */
+  ringTurn() {
+    noise(700, { dur: 0.16, gain: 0.13, q: 0.6 });
+    tone(196, { dur: 0.14, gain: 0.06, type: 'triangle', glideTo: 174 });
+  },
+
+  /** Energy reaches ring `i`: a rising arcane chord, one note per ring. */
+  channel(i = 0) {
+    const f = [261.63, 329.63, 392.0, 493.88, 587.33, 659.25][i % 6];
+    tone(f, { dur: 0.9, gain: 0.13, type: 'sine', attack: 0.03 });
+    tone(f * 2, { dur: 0.6, gain: 0.04, type: 'triangle', attack: 0.02, detune: 6 });
+  },
+
+  /** A ward trap bites back. */
+  backlash() {
+    noise(180, { dur: 0.35, gain: 0.28, q: 0.7, type: 'lowpass' });
+    tone(110, { dur: 0.45, gain: 0.2, type: 'sawtooth', glideTo: 55 });
+    noise(4200, { when: 0.02, dur: 0.12, gain: 0.08, q: 1.5 });
+  },
+
+  /** A hidden binding between two rings shows itself. */
+  reveal() {
+    tone(880, { dur: 0.35, gain: 0.06, type: 'sine', glideTo: 1320 });
+    tone(1320, { when: 0.08, dur: 0.4, gain: 0.04, type: 'sine' });
+  },
+
+  /** The working comes apart (ward unwoven, resonance attuned, sigil sealed). */
+  unweave() {
+    [392.0, 493.88, 587.33, 783.99, 987.77].forEach((f, i) =>
+      tone(f, { when: i * 0.07, dur: 1.1, gain: 0.12, type: 'sine', attack: 0.02 }));
+    noise(6000, { when: 0.1, dur: 0.8, gain: 0.04, q: 0.5, type: 'highpass' });
+  },
+
+  /** Sigil: a star node touched — pitch rises with progress. */
+  node(i = 0) {
+    tone(440 * Math.pow(2, (i % 12) / 12), { dur: 0.32, gain: 0.12, type: 'triangle' });
+    tone(1760, { dur: 0.12, gain: 0.025, type: 'sine' });
+  },
+
+  /** Sigil: a wrong stroke cracks the line. */
+  crack() {
+    noise(900, { dur: 0.18, gain: 0.22, q: 0.9 });
+    tone(150, { dur: 0.22, gain: 0.12, type: 'square', glideTo: 90 });
+  },
+
+  /** Low-level access for continuous synthesis (the resonance tones). */
+  audio() {
+    const ac = ctx();
+    return ac ? { ac, out: _master } : null;
+  },
 };

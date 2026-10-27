@@ -5,10 +5,12 @@
  *   - затиснув ліву кнопку миші → відмичка повзе вправо (швидкість залежить від рола та DC)
  *   - біля прихованого піна кінчик піднімається і звук міняє тон — це підказка
  *   - відпустив кнопку → спроба зафіксувати пін у поточній точці
- *   - влучив → пін стає золотим; промазав → −1 спроба; 3 промахи → відмичка ламається
+ *   - влучив → пін стає золотим; промазав → −1 спроба; 3 промахи → спроба провалена
+ *     (відмичка ламається лише якщо інструмент витратний — див. tools.mjs)
  */
 
 import { AppV1 } from './compat.mjs';
+import { rollBadge } from './MiniGameApp.mjs';
 import { LockController, TRACK_W } from './LockController.mjs';
 import { LockRenderer, CANVAS_W, CANVAS_H, TRACK_X, KEYWAY_CY, SHEAR_Y } from './LockRenderer.mjs';
 
@@ -20,17 +22,25 @@ const DRIFT_MAX      = 620;   // px/сек — стеля швидкості д�
 
 export class LockpickApp extends AppV1 {
 
-  constructor(wall, opts = {}) {
+  /**
+   * @param {object} opts
+   * @param {string} [opts.sessionId]  links the player's window with spectators' windows
+   * @param {string} [opts.label]      what is being picked ("Iron-bound chest"), shown in the title
+   */
+  constructor(opts = {}) {
     const spectator = opts.spectator ?? false;
-    super(spectator
-      ? { id: `lpm-spectate-${wall.id}`, title: `👁 ${opts.playerName ?? 'Player'} — Picking the Lock` }
-      : {}
-    );
+    const sessionId = opts.sessionId ?? foundry.utils.randomID();
+    const what = opts.label ? ` — ${opts.label}` : '';
+    super({
+      id   : `lpm-lock-${sessionId}${spectator ? '-watch' : ''}`,
+      title: spectator ? `${opts.playerName ?? 'Player'} — Picking the Lock${what}` : `Pick the Lock${what}`,
+    });
 
     this._spectator  = spectator;
     this._playerName = opts.playerName ?? '';
+    this._playerUserId = opts.playerUserId ?? null;   // spectators: whose attempt this is
 
-    this.wall        = wall;
+    this.sessionId   = sessionId;
     this.dc          = opts.dc          ?? 15;
     this.rollResult  = opts.rollResult  ?? { total: 10, d20: 10, dc: 15, margin: -5 };
     this.onSuccess   = opts.onSuccess   ?? (() => {});
@@ -108,12 +118,11 @@ export class LockpickApp extends AppV1 {
 
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
-      id       : 'lockpick-minigame-app',
       title    : 'Pick the Lock',
       width    : CANVAS_W,
       height   : 'auto',
       // theme-dark stops v14 forcing 'themed theme-light' onto every V1 app
-      classes  : ['lockpick-minigame', 'themed', 'theme-dark'],
+      classes  : ['lockpick-minigame', 'lpm-lock', 'themed', 'theme-dark'],
       resizable: false,
     });
   }
@@ -149,13 +158,14 @@ export class LockpickApp extends AppV1 {
       window.addEventListener('mouseup', this._boundWindowUp);
     }
 
-    this._showRollResult();
+    rollBadge(html.find('#lpm-roll-display')[0], this.rollResult);
     this._refreshAttempts();
 
     // Спостерігач слухає стан того, хто зламує
     if (this._spectator) {
       this._syncHandler = (d) => {
-        if (d?.action !== 'lockpickSync' || d.wallId !== this.wall?.id) return;
+        if (d?.action !== 'lockpickSync' || d.sessionId !== this.sessionId) return;
+        if (d.left) { this.close(); return; }                 // the player walked away
         const c = this.controller;
         c.pickX = d.pickX;
         c.attemptsLeft = d.attemptsLeft;
@@ -167,6 +177,10 @@ export class LockpickApp extends AppV1 {
         if (d.ended !== undefined && !this._dead) this._end(!!d.ended);
       };
       game.socket.on('module.' + LPM_ID, this._syncHandler);
+      // …or their client went away (reload, crash) and will never say so.
+      this._userHook = Hooks.on('userConnected', (user, active) => {
+        if (!active && user?.id === this._playerUserId) this.close();
+      });
     }
 
     html.find('#lpm-leave-btn').on('click', () => this.close());
@@ -259,7 +273,7 @@ export class LockpickApp extends AppV1 {
 
   _tick(t) {
     if (this._dead) return;
-    const dt = Math.min(0.05, (t - this._lastT) / 1000 || 0.016);
+    const dt = Math.max(0, Math.min(0.05, (t - this._lastT) / 1000 || 0.016));   // rAF time can precede _lastT
     this._lastT = t;
 
     this._update(dt);
@@ -385,7 +399,7 @@ export class LockpickApp extends AppV1 {
     if (!this._broadcast) return;
     game.socket.emit('module.' + LPM_ID, {
       action: 'lockpickSync',
-      wallId: this.wall?.id,
+      sessionId: this.sessionId,
       pickX: this.controller.pickX,
       zone: this._zone,
       pickIn: this._pickIn || this._withdrawing,
@@ -654,22 +668,6 @@ export class LockpickApp extends AppV1 {
 
   // ── UI ────────────────────────────────────────────────────────────────
 
-  /** Roll badge: d20 icon, total, DC and how far it beat or missed. */
-  _showRollResult() {
-    const el = this.element?.[0]?.querySelector('#lpm-roll-display');
-    if (!el) return;
-    const { total, d20, dc, margin } = this.rollResult;
-    const state = d20 === 20 ? 'crit' : d20 === 1 ? 'fumble' : margin >= 0 ? 'beat' : 'miss';
-    const note  = { crit: 'Natural 20', fumble: 'Natural 1',
-                    beat: margin === 0 ? 'Exactly the DC' : `Beat by ${margin}`,
-                    miss: `Short by ${-margin}` }[state];
-    el.className = `lpm-roll-result lpm-roll lpm-roll--${state}`;
-    el.innerHTML = `<i class="fa-solid fa-dice-d20 lpm-roll__die"></i>`
-      + `<span class="lpm-roll__total">${total}</span>`
-      + `<span class="lpm-roll__meta"><span class="lpm-roll__vs">vs DC ${dc}</span>`
-      + `<span class="lpm-roll__note">${note}</span></span>`;
-  }
-
   /** Misses left. Lockpicks snap when they run out; Thieves' Tools only slip. */
   _refreshAttempts() {
     if (!this._attemptsEl) return;
@@ -685,12 +683,17 @@ export class LockpickApp extends AppV1 {
 
 
   async close(opts = {}) {
+    // Closed before the end: spectator windows close too instead of idling forever.
+    if (this._broadcast && this._pendingOutcome === undefined && !this._dead) {
+      game.socket.emit('module.' + LPM_ID, { action: 'lockpickSync', sessionId: this.sessionId, left: true });
+    }
     this._dead = true;
     this._stopScrape();
     cancelAnimationFrame(this._raf);
     this._raf = null;
     window.removeEventListener('mouseup', this._boundWindowUp);
     if (this._syncHandler) { game.socket.off('module.' + LPM_ID, this._syncHandler); this._syncHandler = null; }
+    if (this._userHook !== undefined) { Hooks.off('userConnected', this._userHook); this._userHook = undefined; }
     for (const t of this._timers) clearTimeout(t);
     this._timers.length = 0;
     try { await this._ac?.close(); } catch (e) {}

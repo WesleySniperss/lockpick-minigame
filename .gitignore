@@ -1,3 +1,6 @@
 
 # Local Claude Code tooling config (machine-specific paths)
 .claude/
+
+# Local dev harness (tests, extracted Foundry classes, node_modules) — never shipped
+.dev/

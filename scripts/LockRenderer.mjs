@@ -19,6 +19,7 @@
  */
 
 import { TRACK_W, HIT_ZONE, RED_W } from './LockController.mjs';
+import { drawResultOverlay } from './overlay.mjs';
 
 const TAU = Math.PI * 2;
 
@@ -1614,71 +1615,15 @@ export class LockRenderer {
    * Three outcomes: picked, the lock holds (tools intact), the pick snapped.
    */
   drawEndOverlay(success, { snapped = false } = {}) {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
-    const cx = this.W / 2, cy = this.H / 2;
-    const tone = success
-      ? { wash: 'rgba(8,18,10,', hi: '#f6e3a4', mid: '#d6ac52', lo: '#8a6424', accent: '#7fdc93' }
-      : { wash: 'rgba(20,8,6,',  hi: '#f3c6b6', mid: '#d0715a', lo: '#7a2f20', accent: '#ff8a72' };
-
-    // Тло: затемнення з віньєткою — замок лишається ледь видно
-    const g = ctx.createRadialGradient(cx, cy, 30, cx, cy, this.W * 0.72);
-    g.addColorStop(0, tone.wash + '0.80)');
-    g.addColorStop(1, tone.wash + '0.94)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.W, this.H);
-
-    // Медальйон
-    const my = cy - 52, R = 30;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.7)';
-    ctx.shadowBlur = 12 * this._dpr;
-    ctx.shadowOffsetY = 3 * this._dpr;
-    const ring = ctx.createLinearGradient(cx - R, my - R, cx + R, my + R);
-    ring.addColorStop(0, '#f2d68e'); ring.addColorStop(0.5, '#a07a36'); ring.addColorStop(1, '#4e3a17');
-    ctx.beginPath(); ctx.arc(cx, my, R, 0, TAU);
-    ctx.fillStyle = ring; ctx.fill();
-    ctx.restore();
-    const face = ctx.createRadialGradient(cx - 8, my - 10, 2, cx, my, R - 4);
-    face.addColorStop(0, '#2c2619'); face.addColorStop(1, '#100d08');
-    ctx.beginPath(); ctx.arc(cx, my, R - 4, 0, TAU);
-    ctx.fillStyle = face; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1; ctx.stroke();
-    this._drawResultIcon(ctx, cx, my, success ? 'open' : snapped ? 'snapped' : 'closed', tone);
-
-    // Заголовок
-    const title = success ? 'Lock Picked' : snapped ? 'Pick Snapped' : 'The Lock Holds';
-    const sub   = success ? 'The mechanism gives way'
-                : snapped ? 'The pick breaks in the keyway'
-                :           'The pins drop back into place';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.save();
-    ctx.font = '700 40px "Modesto Condensed", "Signika", Georgia, serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.5px';
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillText(title, cx, cy + 22 + 2);
-    const tg = ctx.createLinearGradient(0, cy - 8, 0, cy + 24);
-    tg.addColorStop(0, tone.hi); tg.addColorStop(0.55, tone.mid); tg.addColorStop(1, tone.lo);
-    ctx.fillStyle = tg;
-    ctx.fillText(title, cx, cy + 22);
-    ctx.restore();
-
-    // Розділювач з ромбом
-    const ry = cy + 38;
-    ctx.fillStyle = 'rgba(214,178,100,0.45)';
-    ctx.fillRect(cx - 96, ry, 86, 1);
-    ctx.fillRect(cx + 10, ry, 86, 1);
-    ctx.save();
-    ctx.translate(cx, ry + 0.5); ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = tone.accent; ctx.fillRect(-3, -3, 6, 6);
-    ctx.restore();
-
-    // Підзаголовок
-    ctx.font = 'italic 400 16px "Amiri", Georgia, "Times New Roman", serif';
-    ctx.fillStyle = 'rgba(232,222,196,0.82)';
-    ctx.fillText(sub, cx, ry + 26);
+    if (!this.ctx) return;
+    drawResultOverlay(this.ctx, {
+      W: this.W, H: this.H, dpr: this._dpr, success,
+      title: success ? 'Lock Picked' : snapped ? 'Pick Snapped' : 'The Lock Holds',
+      sub  : success ? 'The mechanism gives way'
+           : snapped ? 'The pick breaks in the keyway'
+           :           'The pins drop back into place',
+      icon : (ctx, x, y, tone) => this._drawResultIcon(ctx, x, y, success ? 'open' : snapped ? 'snapped' : 'closed', tone),
+    });
   }
 
   /** Icons inside the result medallion: open / closed padlock, snapped pick. */
