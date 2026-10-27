@@ -1,28 +1,25 @@
 {
   "id": "lockpick-minigame",
   "title": "Lockpick Minigame",
-  "description": "Skyrim-style lockpicking mini-game + arcane puzzle system (Sudoku, Sliding, Cipher, Simon Says) for Foundry VTT.",
-  "version": "2.6.0",
+  "description": "Mini-games the GM requests for a character from a chat card: lockpicking (Thieves' Tools check) and three Arcana challenges (Unweave the Ward, Attune the Resonance, Trace the Sigil), where the roll sets the difficulty, with live spectating. Plus puzzles (Sudoku, Sliding, Cipher, Rune Sequence) for Foundry VTT.",
+  "version": "3.0.0",
   "compatibility": {
     "minimum": "12",
     "verified": "14"
   },
   "authors": [
-    { "name": "WesleySniperss" }
+    {
+      "name": "WesleySniperss"
+    }
   ],
   "url": "https://github.com/WesleySniperss/lockpick-minigame",
   "manifest": "https://raw.githubusercontent.com/WesleySniperss/lockpick-minigame/main/module.json",
   "download": "https://github.com/WesleySniperss/lockpick-minigame/releases/latest/download/module.zip",
-  "relationships": {
-    "recommends": [
-      {
-        "id": "lib-wrapper",
-        "type": "module",
-        "reason": "Lets the door hook coexist with other modules that wrap door clicks (e.g. Monk's Active Tile Triggers)."
-      }
-    ]
-  },
   "socket": true,
-  "esmodules": ["scripts/main.mjs"],
-  "styles": ["styles/lockpick.css"]
+  "esmodules": [
+    "scripts/main.mjs"
+  ],
+  "styles": [
+    "styles/lockpick.css"
+  ]
 }

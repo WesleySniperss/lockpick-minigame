@@ -6,7 +6,6 @@
  *     v14's backwards-compatibility global mapping, so referencing the bare
  *     globals throws ReferenceError. The V1 classes still exist, namespaced
  *     under foundry.appv1.api.* and deprecated until v16.
- *   • globalThis.DoorControl is deprecated (until v15) → foundry.canvas.containers.DoorControl
  *   • CONST.CHAT_MESSAGE_TYPES was removed → CONST.CHAT_MESSAGE_STYLES, and the
  *     ChatMessage `type` field is now the document subtype (a string); the
  *     OOC/IC value lives in the `style` field.
@@ -24,9 +23,14 @@ export const AppV1 = foundry?.appv1?.api?.Application ?? globalThis.Application;
 /** V1 Dialog class (v14: foundry.appv1.api.Dialog). */
 export const DialogV1 = foundry?.appv1?.api?.Dialog ?? globalThis.Dialog;
 
-/** DoorControl class — resolved lazily (canvas namespace, used on 'ready'). */
-export function getDoorControlClass() {
-  return foundry?.canvas?.containers?.DoorControl ?? globalThis.DoorControl;
+/**
+ * Synchronous document lookup by UUID (v13+: foundry.utils.fromUuidSync; v12: global).
+ * Works for unlinked token actors too ("Scene.x.Token.y.Actor.z").
+ */
+export function docFromUuid(uuid) {
+  if (!uuid) return null;
+  const fn = foundry?.utils?.fromUuidSync ?? globalThis.fromUuidSync;
+  try { return fn ? fn(uuid) : null; } catch (e) { return null; }
 }
 
 /** Chat message style enum — resolved lazily so CONST is guaranteed populated. */
