@@ -8,6 +8,10 @@
 /* Window chrome */
 .lpm-lock .window-content,
 .lpm-puzzle .window-content { padding:0; background:#111; }
+/* v14 blurs what lies behind a dark window's content. Ours is opaque, so the
+   blur shows nothing, yet it is redone every frame over the animated games
+   (without a GPU: 57 → 23 fps with three windows open). */
+.application.lockpick-minigame .window-content { backdrop-filter:none; -webkit-backdrop-filter:none; }
 
 /* Lockpick root */
 .lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,'Cinzel',serif); }
@@ -56,6 +60,7 @@
 .lpm-roll--miss   { --lpm-roll:#eaa65e; }
 .lpm-roll--crit   { --lpm-roll:#f4d06c; }
 .lpm-roll--fumble { --lpm-roll:#ef6b5b; }
+.lpm-roll--secret { --lpm-roll:#c3cbe0; }
 .lpm-roll__die { font-size:17px; color:var(--lpm-roll); filter:drop-shadow(0 1px 1px rgba(0,0,0,.8)); }
 .lpm-roll__total {
   font:700 27px/1 var(--lpm-font-display); color:var(--lpm-roll);
@@ -529,7 +534,17 @@
   background:#1d1810; color:#f1dca2; border:1px solid rgba(201,154,60,.55);
 }
 
-/* Puzzle dialog */
+/* A secret DC: only the GM's copy of the card shows it */
+.lpm-card__secret { color:#d9c9a0; white-space:nowrap; }
+.lpm-card__secret i { margin-right:3px; color:#c99a3c; }
+
+/* Request and puzzle dialogs (DialogV2) */
+.lpm-request-dialog .form-group .hint,
+.lpm-puzzle-dialog .form-group .hint { flex:0 0 100%; margin:2px 0 0; }
+.lpm-request-blurb { margin:0 0 4px; }
+.lpm-request-dialog .lpm-hide-dc { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.lpm-request-dialog .lpm-dc-fields { flex-wrap:nowrap; gap:12px; }
+.lpm-request-dialog input[name="dc"] { flex:1 1 0; min-width:0; }
 .lpm-shared-group.lpm-disabled label { opacity: .55; }
 .lpm-shared-group .hint { flex: 0 0 100%; margin: 2px 0 0; font-size: 11px; }
 
@@ -622,6 +637,19 @@
   text-transform:uppercase; letter-spacing:.14em; color:#a7b3d0;
 }
 .lpm-dial__label b { color:#e6ecff; letter-spacing:.04em; }
+/* Per-dial light: dim = off, amber = close, green = matches the hum */
+.lpm-dial__name { display:inline-flex; align-items:center; gap:6px; }
+.lpm-dial__light {
+  width:8px; height:8px; border-radius:50%; background:#2a2f40;
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.8), 0 0 0 1px rgba(150,175,230,.2);
+  transition:background .15s, box-shadow .15s;
+}
+.lpm-dial.is-near .lpm-dial__light { background:#e7b04f; box-shadow:0 0 6px rgba(231,176,79,.7); }
+.lpm-dial.is-ok .lpm-dial__light   { background:#6fe08a; box-shadow:0 0 8px rgba(111,224,138,.9); }
+.lpm-dial.is-ok .lpm-dial__label   { color:#bfe9c9; }
+.lpm-dial.is-ok input[type="range"]::-webkit-slider-runnable-track {
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.9), 0 0 0 1px rgba(111,224,138,.5);
+}
 .lpm-dial__track { position:relative; height:18px; }
 .lpm-dial input[type="range"] {
   -webkit-appearance:none; appearance:none; width:100%; height:18px; margin:0; padding:0;
@@ -658,4 +686,5 @@
 .lpm-arcana .lpm-arcana-btn[disabled] { opacity:.4; cursor:default; filter:none; }
 .lpm-hint-cyan   { color:#86ecff; font-weight:700; }
 .lpm-hint-violet { color:#c3a5ff; font-weight:700; }
+.lpm-hint-amber  { color:#f0b45a; font-weight:700; }
 .lpm-recall-note { font:600 11px var(--lpm-font-body); color:#9aa6c4; }

@@ -1,14 +1,15 @@
 /**
  * ward-logic.mjs — rules of "Unweave the Ward" (no DOM, no Foundry).
  *
- * A ward is a stack of concentric rune rings around a core. Each ring has an
- * inlet on its inner edge and one or more outlets on its outer edge, joined by
- * a channel carved through the stone. Energy leaves the core at one sector; a
- * ring carries it when its inlet faces an incoming sector and passes it on
- * from its outlets. The ward unravels when the energy reaches every anchor on
- * the rim. Rings turn one sector (of 8) at a time and every turn costs focus.
- * Some rings are bound: turning one drags another along (one way, not chained).
- * Traps on the rim bite back when energy is spilled into them.
+ * A ward is a stack of concentric rune rings around a core. Each ring has a
+ * gate on its inner edge (the inlet) and one or two on its outer edge (the
+ * outlets), joined by a channel carved through the stone. Light leaves the
+ * core at one sector; a ring carries it when its inlet faces an incoming
+ * sector and passes it on from its outlets. The ward unravels when the light
+ * reaches every anchor crystal on the rim. Rings turn one sector (of 8) at a
+ * time and every turn costs focus. Some rings are bound by a golden link:
+ * turning one turns another as well (one way, not chained). Nothing is hidden:
+ * every gate and link is on the board from the start.
  *
  * The geometry is built aligned (all rotations 0 = solved) and then scrambled
  * with real moves, so a solution always exists. One BFS from every winning
@@ -44,9 +45,9 @@ export function shuffle(arr, R) {
 }
 
 /**
- * Difficulty. The DC shapes the ward (rings, anchors, bindings, decoys); the
- * Arcana roll shapes how well the caster reads it (spare focus, traps, whether
- * the bindings are visible from the start).
+ * Difficulty. The DC shapes the ward (rings, anchors, links); the Arcana roll
+ * shapes how well the caster reads it: spare focus, and with insight (beat
+ * the DC by 5, or a natural 20) a trace showing which way the next ring turns.
  */
 export function wardParams(dc = 15, roll = {}) {
   const margin = Number(roll.margin ?? 0), d20 = Number(roll.d20 ?? 10);
@@ -54,10 +55,8 @@ export function wardParams(dc = 15, roll = {}) {
   return {
     rings   : dc <= 12 ? 3 : dc <= 17 ? 4 : 5,
     anchors : dc >= 15 ? 2 : 1,
-    bindings: dc <= 12 ? 1 : dc <= 17 ? 2 : 3,
-    decoys  : dc <= 12 ? 0 : dc <= 17 ? 1 : 3,
-    slack   : nat20 ? 10 : nat1 ? 0 : margin >= 10 ? 8 : margin >= 5 ? 6 : margin >= 0 ? 4 : margin >= -4 ? 2 : 1,
-    traps   : nat20 ? 0 : nat1 ? 2 : margin < -4 ? 2 : margin < 0 ? 1 : 0,
+    bindings: dc <= 12 ? 0 : dc <= 17 ? 1 : 2,
+    slack   : nat20 ? 10 : nat1 ? 1 : margin >= 10 ? 8 : margin >= 5 ? 6 : margin >= 0 ? 4 : margin >= -4 ? 3 : 2,
     insight : nat20 || margin >= 5,
   };
 }
@@ -94,11 +93,7 @@ export function flow(ward, rot) {
     boundary.push(incoming);
   }
   const fed = blockedAt === -1 ? incoming : [];
-  return {
-    powered, boundary, blockedAt, fed,
-    win : ward.anchors.every(a => fed.includes(a)),
-    trap: ward.traps.filter(t => fed.includes(t)),
-  };
+  return { powered, boundary, blockedAt, fed, win: ward.anchors.every(a => fed.includes(a)) };
 }
 
 /** All ring rotations as one number: ring i's rotation is digit i in base 8. */
@@ -176,21 +171,10 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
   const core = randInt(SECTORS);
   const rings = [];
   let inSector = core;
-  // Rings that get a decoy outlet (never the outermost — it feeds the anchors)
-  const decoyRings = new Set();
-  const inner = shuffle(Array.from({ length: n - 1 }, (_, i) => i), R);
-  inner.slice(0, Math.min(p.decoys, n - 1)).forEach(i => decoyRings.add(i));
-
   for (let i = 0; i < n; i++) {
     const inlet = inSector;
     const main = offsetFrom(inlet);
-    const outlets = [main];
-    if (decoyRings.has(i)) {
-      let decoy;
-      do { decoy = randInt(SECTORS); } while (decoy === main || decoy === inlet);
-      outlets.push(decoy);
-    }
-    rings.push({ inlet, outlets });
+    rings.push({ inlet, outlets: [main] });
     inSector = main;
   }
 
@@ -204,10 +188,6 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
     anchors.push(second);
   }
 
-  // Traps: rim sectors that are not anchors (never fed in the solved position).
-  const free = shuffle(Array.from({ length: SECTORS }, (_, s) => s).filter(s => !anchors.includes(s)), R);
-  const traps = free.slice(0, p.traps);
-
   // Bindings: distinct ordered pairs, turning `from` drags `to` the same or the opposite way.
   const bindings = [];
   const pairs = [];
@@ -219,7 +199,7 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
     bindings.push({ from, to, dir: R() < 0.5 ? 1 : -1 });
   }
 
-  const ward = { core, rings, anchors, traps, bindings, params: p, seed, dc };
+  const ward = { core, rings, anchors, bindings, params: p, seed, dc };
 
   // Scramble with real turns until the start is unsolved and takes at least n turns.
   // Scrambled positions are reachable from the solved one, so their distance is known.
@@ -229,8 +209,7 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
     let r = new Array(n).fill(0);
     const moves = 2 * n + randInt(n + 2);
     for (let m = 0; m < moves; m++) r = applyTurn(ward, r, randInt(n), R() < 0.5 ? 1 : -1).rot;
-    const f = flow(ward, r);
-    if (f.win || f.trap.length) continue;
+    if (flow(ward, r).win) continue;
     const need = dist[encodeRot(r)];
     if (need >= n) { rot = r; best = need; break; }
     if (need > best) { rot = r; best = need; }
@@ -246,7 +225,23 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
 }
 
 /**
- * A turn-by-turn game state on top of a ward: focus, revealed bindings, traps.
+ * The shortest way to line ring `i`'s inlet up with the light waiting at its
+ * inner edge: { from, steps } in sectors (steps signed, + = clockwise), or
+ * null when the light does not reach ring i. Ignores links — it is a hint.
+ */
+export function nextGate(ward, rot, f, i) {
+  if (i < 0 || i >= ward.rings.length || !f.boundary[i]) return null;
+  const inlet = mod(ward.rings[i].inlet + rot[i]);
+  let best = null;
+  for (const s of f.boundary[i]) {
+    const steps = ((s - inlet) % SECTORS + SECTORS + SECTORS / 2) % SECTORS - SECTORS / 2;
+    if (!best || Math.abs(steps) < Math.abs(best.steps)) best = { from: inlet, to: s, steps };
+  }
+  return best;
+}
+
+/**
+ * A turn-by-turn game state on top of a ward: focus and the light's flow.
  * Returned events let the UI play sounds/effects without re-deriving rules.
  */
 export class WardGame {
@@ -254,13 +249,12 @@ export class WardGame {
     this.ward = ward;
     this.rot = ward.start.slice();
     this.focus = ward.focus;
-    this.revealed = new Set(ward.params.insight ? ward.bindings.map((_, i) => i) : []);
     this.state = 'playing';                                  // playing | won | lost
     this.flow = flow(ward, this.rot);
     this.turns = 0;
   }
 
-  /** Turn ring k by d. Returns { ok, fired:[binding], newlyPowered:[ring], revealed:[binding], trap, won, lost }. */
+  /** Turn ring k by d. Returns { ok, fired:[binding], newlyPowered:[ring], won, lost }. */
   turn(k, d) {
     if (this.state !== 'playing' || k < 0 || k >= this.rot.length) return { ok: false };
     const before = this.flow.powered.slice();
@@ -268,30 +262,22 @@ export class WardGame {
     this.rot = rot;
     this.turns++;
     this.focus = Math.max(0, this.focus - 1);
-    const revealed = fired.filter(i => !this.revealed.has(i));
-    revealed.forEach(i => this.revealed.add(i));
     this.flow = flow(this.ward, this.rot);
     const newlyPowered = this.flow.powered.map((p, i) => (p && !before[i] ? i : -1)).filter(i => i >= 0);
-    let trap = false;
-    if (this.flow.trap.length && !this.flow.win) {
-      trap = true;
-      this.focus = Math.max(0, this.focus - 2);             // backlash
-    }
     if (this.flow.win) this.state = 'won';
     else if (this.focus <= 0) this.state = 'lost';
-    return { ok: true, fired, newlyPowered, revealed, trap, won: this.state === 'won', lost: this.state === 'lost' };
+    return { ok: true, fired, newlyPowered, won: this.state === 'won', lost: this.state === 'lost' };
   }
 
   /** Plain data for spectators. */
   snapshot() {
-    return { rot: this.rot.slice(), focus: this.focus, revealed: [...this.revealed], state: this.state, turns: this.turns };
+    return { rot: this.rot.slice(), focus: this.focus, state: this.state, turns: this.turns };
   }
 
   apply(s) {
     if (!s) return;
     this.rot = s.rot.slice();
     this.focus = s.focus;
-    this.revealed = new Set(s.revealed);
     this.state = s.state;
     this.turns = s.turns;
     this.flow = flow(this.ward, this.rot);

@@ -67,7 +67,7 @@ export class SigilApp extends MiniGameApp {
     return best;
   }
 
-  bindInput(canvas, html) {
+  bindInput(canvas, root) {
     const pos = ev => {
       const b = canvas.getBoundingClientRect();
       return { x: (ev.clientX - b.left) * (W / b.width), y: (ev.clientY - b.top) * (H / b.height) };
@@ -91,7 +91,7 @@ export class SigilApp extends MiniGameApp {
     canvas.addEventListener('pointerup', up);
     canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('pointerleave', () => { this.hover = -1; });
-    html.find('.lpm-recall').on('click', () => {
+    root.querySelector('.lpm-recall')?.addEventListener('click', () => {
       if (!this.game.recall()) return;
       Sfx.reveal();
       this.show = { t: this.drawTime * 0.55, hold: 0.9, recall: true };    // a quicker replay
@@ -101,10 +101,10 @@ export class SigilApp extends MiniGameApp {
   }
 
   refreshRecall() {
-    const btn = this.element?.[0]?.querySelector('.lpm-recall');
+    const btn = this.root?.querySelector('.lpm-recall');
     if (!btn) return;
     btn.disabled = this.game.recalls <= 0 || this.game.phase !== 'trace' || this._over;
-    const note = this.element[0].querySelector('.lpm-recall-note');
+    const note = this.root.querySelector('.lpm-recall-note');
     if (note) note.textContent = `${this.game.recalls} left · costs 4 s of mana`;
   }
 

@@ -1,13 +1,14 @@
 /**
  * requests.mjs — the GM asks a specific character to take on a challenge:
- * pick a lock (Thieves' Tools) or one of the Arcana workings (unweave a ward,
- * attune a resonance, trace a sigil).
+ * pick a lock or one of the Arcana workings (unweave a ward, attune a
+ * resonance, trace a sigil).
  *
- *   1. GM: "Request Lockpicking" / "Request Arcana Challenge" (VTools, or the
- *      API from a macro) → challenge, character, DC, optionally what it is on
- *      → a request card in chat.
+ *   1. GM: "Request a Challenge" (VTools, or the API from a macro) → challenge,
+ *      character, DC (shown or secret), optionally what it is on → a request
+ *      card in chat.
  *   2. The character's owner presses the card's button → the check is rolled
- *      (the roll decides how hard the game is) → the game opens.
+ *      the system's own way (rolls.mjs; the roll decides how hard the game
+ *      is) → the game opens.
  *   3. The outcome is posted as a result card, and the request card shows it.
  *
  * The card's state lives in message flags: open → busy → success | failed.
@@ -18,11 +19,12 @@
  * the GM allows another try — a bad roll cannot be thrown away by leaving.
  */
 
-import { DialogV1, docFromUuid } from './compat.mjs';
-import { resolveTool, toolCheckTerms, rollFormula } from './tools.mjs';
-import { skillCheckTerms } from './checks.mjs';
-import { resultCard, requestCard, checkFlavor, esc } from './cards.mjs';
-import { CHALLENGES, ARCANA_KINDS, isChallenge } from './challenges.mjs';
+import { docFromUuid } from './compat.mjs';
+import { dialogContent } from './app-window.mjs';
+import { resolveTool } from './tools.mjs';
+import { rollArcana, rollLockpicking } from './rolls.mjs';
+import { resultCard, requestCard, esc } from './cards.mjs';
+import { CHALLENGES, isChallenge } from './challenges.mjs';
 
 const MODULE_ID = 'lockpick-minigame';
 const CHANNEL   = `module.${MODULE_ID}`;
@@ -57,6 +59,9 @@ export async function arcanaAppClass(kind) {
   return null;
 }
 
+/** Subtitle of a result card: what it was on, the check, the DC unless it is secret. */
+const resultSub = (label, check, dc, hideDC) => [label, check, hideDC ? '' : `DC ${dc}`].filter(Boolean).join(' · ');
+
 // ─── GM side ─────────────────────────────────────────────────────────────────
 
 /** @param {string} [kind] challenge preselected in the dialog ('lock', 'ward', …). */
@@ -77,9 +82,7 @@ export function openRequestDialog(kind = 'lock') {
   const challengeOpts = Object.entries(groups)
     .map(([g, opts]) => `<optgroup label="${esc(g)}">${opts.join('')}</optgroup>`).join('');
 
-  const d = new DialogV1({
-    title: ARCANA_KINDS.includes(kind) ? 'Request Arcana Challenge' : 'Request Lockpicking',
-    content: `<form class="lpm-request-form">
+  const content = `<div class="lpm-request-form">
       <div class="form-group">
         <label>Challenge</label>
         <div class="form-fields"><select name="kind">${challengeOpts}</select></div>
@@ -91,57 +94,75 @@ export function openRequestDialog(kind = 'lock') {
       </div>
       <div class="form-group">
         <label>DC</label>
-        <div class="form-fields">
+        <div class="form-fields lpm-dc-fields">
           <input type="number" name="dc" value="${Number(setting('defaultDC', 15))}" min="5" max="30" step="1">
+          <label class="checkbox lpm-hide-dc"><input type="checkbox" name="hideDC" ${setting('hideDC', false) ? 'checked' : ''}> Secret</label>
         </div>
+        <p class="hint">A secret DC is never shown to the players: not on the card, the roll or in the game.</p>
       </div>
       <div class="form-group">
         <label>What is it on</label>
         <div class="form-fields"><input type="text" name="label" autocomplete="off"></div>
       </div>
       <p class="hint">The player gets a card in chat. Their roll decides how hard the challenge is.</p>
-    </form>`,
-    render: html => {
-      html.find('input').on('keydown', e => e.stopPropagation());
-      const sync = () => {
-        const c = CHALLENGES[html.find('[name="kind"]').val()] ?? CHALLENGES.lock;
-        html.find('.lpm-request-blurb').text(c.blurb);
-        html.find('[name="label"]').attr('placeholder', `Optional — ${c.placeholder}`);
-        d.setPosition?.({ height: 'auto' });
-      };
-      html.find('[name="kind"]').on('change', sync);
-      sync();
-    },
-    buttons: {
-      send: {
-        icon: '<i class="fa-solid fa-paper-plane"></i>', label: 'Send to chat',
-        callback: html => requestChallenge({
-          kind : html.find('[name="kind"]').val(),
-          actor: docFromUuid(html.find('[name="actor"]').val()),
-          dc   : html.find('[name="dc"]').val(),
-          label: String(html.find('[name="label"]').val() ?? '').trim(),
-        }),
+    </div>`;
+
+  const { DialogV2 } = foundry.applications.api;
+  const dialog = new DialogV2({
+    window  : { title: 'Request a Challenge', icon: 'fa-solid fa-dice-d20' },
+    classes : ['lpm-request-dialog'],
+    position: { width: 440 },
+    content : dialogContent(content),
+    buttons : [{
+      action: 'send', label: 'Send to chat', icon: 'fa-solid fa-paper-plane', default: true,
+      callback: (event, button) => {
+        const f = button.form.elements;
+        return requestChallenge({
+          kind  : f.kind.value,
+          actor : docFromUuid(f.actor.value),
+          dc    : f.dc.value,
+          hideDC: f.hideDC.checked,
+          label : String(f.label.value ?? '').trim(),
+        });
       },
-      cancel: { label: 'Cancel' },
-    },
-    default: 'send',
+    }, { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }],
   });
-  d.render(true);
+  dialog.addEventListener('render', () => {
+    const root = dialog.element;
+    if (!root || root.dataset.lpmWired) return;
+    root.dataset.lpmWired = '1';
+    // Typing must not reach core hotkeys (Enter / Escape still work).
+    root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== 'Escape') e.stopPropagation();
+    }));
+    const kindEl = root.querySelector('[name="kind"]');
+    const sync = () => {
+      const c = CHALLENGES[kindEl.value] ?? CHALLENGES.lock;
+      root.querySelector('.lpm-request-blurb').textContent = c.blurb;
+      root.querySelector('[name="label"]').placeholder = `Optional — ${c.placeholder}`;
+      dialog.setPosition({ height: 'auto' });
+    };
+    kindEl.addEventListener('change', sync);
+    sync();
+  });
+  dialog.render({ force: true });
+  return dialog;
 }
 
 /**
  * Post a request card. Also usable from a macro:
- *   game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door' })
+ *   game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door', hideDC: true })
  */
-export async function requestChallenge({ kind = 'lock', actor, dc, label = '' } = {}) {
+export async function requestChallenge({ kind = 'lock', actor, dc, label = '', hideDC = false } = {}) {
   if (!game.user.isGM) return ui.notifications.warn('Only the GM can request a challenge.');
   if (!isChallenge(kind)) return ui.notifications.warn(`Unknown challenge: ${kind}`);
   if (typeof actor === 'string') actor = docFromUuid(actor) ?? game.actors.get(actor);
   if (!actor) return ui.notifications.warn('Choose a character to ask.');
   dc = Math.max(1, Math.round(Number(dc) || Number(setting('defaultDC', 15))));
+  hideDC = !!hideDC;
   return ChatMessage.create({
-    content: requestCard({ kind, name: actor.name, dc, label }),
-    flags  : { [MODULE_ID]: { [FLAG]: { kind, actorUuid: actor.uuid, actorName: actor.name, dc, label, state: 'open' } } },
+    content: requestCard({ kind, name: actor.name, dc, label, hideDC }),
+    flags  : { [MODULE_ID]: { [FLAG]: { kind, actorUuid: actor.uuid, actorName: actor.name, dc, hideDC, label, state: 'open' } } },
   });
 }
 
@@ -250,6 +271,21 @@ export function decorateRequestCard(message, html) {
   const status = card.querySelector('.lpm-card__status');
   card.dataset.state = req.state;
 
+  // A secret DC is left out of the card itself; the GM still sees it here.
+  if (req.hideDC && game.user.isGM && !card.querySelector('.lpm-card__secret')) {
+    let sub = card.querySelector('.lpm-card__sub');
+    if (!sub) {
+      sub = document.createElement('span');
+      sub.className = 'lpm-card__sub';
+      card.querySelector('.lpm-card__titles')?.append(sub);
+    }
+    const secret = document.createElement('span');
+    secret.className = 'lpm-card__secret';
+    secret.title = 'The players do not see this DC';
+    secret.innerHTML = `<i class="fa-solid fa-eye-slash"></i> DC ${Number(req.dc)}`;
+    sub.append(sub.textContent ? ' · ' : '', secret);
+  }
+
   const text = {
     open   : owner ? '' : `<i class="fa-solid fa-hourglass-start"></i> Waiting for ${name}`,
     busy   : `<i class="fa-solid fa-hourglass-half"></i> ${name} ${esc(c.busy)}`,
@@ -294,16 +330,17 @@ async function startFromRequest(message) {
 
   let tool = null;
   if (kind === 'lock') {
-    tool = resolveTool(actor, setting('toolMode', 'thieves'));
+    tool = resolveTool(actor, setting('toolMode', 'none'));
     if (tool.error) return ui.notifications.warn(tool.error);
   }
 
   _busy = true;
   if (!(await claim(message))) { _busy = false; return; }
   const onSettled = outcome => setState(message.id, outcome ?? { state: 'open' });
+  const opts = { actor, dc: req.dc, hideDC: !!req.hideDC, label: req.label, onSettled };
   try {
-    if (kind === 'lock') await startLockpick({ actor, tool, dc: req.dc, label: req.label, onSettled });
-    else                 await startArcana({ kind, actor, dc: req.dc, label: req.label, onSettled });
+    if (kind === 'lock') await startLockpick({ ...opts, tool });
+    else                 await startArcana({ ...opts, kind });
   } catch (e) {
     _busy = false;
     setState(message.id, { state: 'open' });
@@ -314,18 +351,18 @@ async function startFromRequest(message) {
 // ─── Lockpicking ─────────────────────────────────────────────────────────────
 
 /**
- * Roll the tool check, open the lockpicking game and announce it to spectators.
+ * Roll the check, open the lockpicking game and announce it to spectators.
  * `onSettled({state, by, snapped, quit})` fires once: success, failed (also
  * when the window is closed before the end), or null when nothing was rolled.
  */
-export async function startLockpick({ actor, tool, dc, label = '', onSettled = () => {} }) {
-  const rolled = await rollCheck(actor, dc, rollFormula(toolCheckTerms(actor, tool)),
-    checkFlavor(tool.kind === 'none' ? 'Dexterity' : tool.label, dc));
+export async function startLockpick({ actor, tool, dc, hideDC = false, label = '', onSettled = () => {} }) {
+  const rolled = await rollLockpicking(actor, tool, { dc, hideDC });
   if (!rolled) { _busy = false; onSettled(null); return; }
-  const { rollResult } = rolled;
+  const rollResult = { total: rolled.total, d20: rolled.d20, dc, margin: rolled.total - dc };
 
+  const bare     = tool.kind === 'none' && !tool.item;
   const who      = `<strong>${esc(actor.name)}</strong>`;
-  const sub      = [label, `${tool.kind === 'none' ? 'Bare hands' : tool.label} · DC ${dc}`].filter(Boolean).join(' · ');
+  const sub      = resultSub(label, bare ? 'Bare hands' : tool.label, dc, hideDC);
   const speaker  = ChatMessage.getSpeaker({ actor });
   const toolInfo = { kind: tool.kind, label: tool.label, consumable: tool.consumable };
   const sessionId = foundry.utils.randomID();
@@ -335,7 +372,7 @@ export async function startLockpick({ actor, tool, dc, label = '', onSettled = (
 
   const { LockpickApp } = await import('./LockpickApp.mjs');
   const app = new LockpickApp({
-    sessionId, dc, rollResult, label,
+    sessionId, dc, hideDC, rollResult, label,
     tool: toolInfo,
     playerName: actor.name,
     broadcast: true,
@@ -369,7 +406,8 @@ export async function startLockpick({ actor, tool, dc, label = '', onSettled = (
             })
           : resultCard({
               tone: 'failure', icon: 'fa-lock', title: 'The Lock Holds', subtitle: sub,
-              body: `${who} loses the pins and they drop back into place. The tools are fine; the lock stays shut.`,
+              body: bare ? `${who} loses the pins and they drop back into place. The lock stays shut.`
+                         : `${who} loses the pins and they drop back into place. The tools are fine; the lock stays shut.`,
             }),
       });
     },
@@ -378,12 +416,12 @@ export async function startLockpick({ actor, tool, dc, label = '', onSettled = (
       settle({ state: 'failed', quit: 'left' });   // closed before the end: gave up (the GM can allow another try)
     },
   });
-  app.render(true);
+  await app.render({ force: true });
 
   // Announce to everyone; each client decides from its own settings whether to watch.
   game.socket.emit(CHANNEL, {
     action: 'lockpickSpectate',
-    sessionId, dc, rollResult, label,
+    sessionId, dc, hideDC, rollResult, label,
     tool: toolInfo,
     playerName: actor.name,
     userId: game.user.id,
@@ -398,13 +436,13 @@ export async function startLockpick({ actor, tool, dc, label = '', onSettled = (
  * Roll Arcana, open the chosen working and announce it to spectators. The
  * game is generated from a seed, so spectators rebuild exactly the same one.
  */
-export async function startArcana({ kind, actor, dc, label = '', onSettled = () => {} }) {
+export async function startArcana({ kind, actor, dc, hideDC = false, label = '', onSettled = () => {} }) {
   const c = CHALLENGES[kind];
-  const rolled = await rollCheck(actor, dc, rollFormula(skillCheckTerms(actor, 'arc', 'Arcana')), checkFlavor('Arcana', dc, c.icon));
+  const rolled = await rollArcana(actor, { dc, hideDC, icon: c.icon });
   if (!rolled) { _busy = false; onSettled(null); return; }
-  const { rollResult } = rolled;
+  const rollResult = { total: rolled.total, d20: rolled.d20, dc, margin: rolled.total - dc };
   const who = `<strong>${esc(actor.name)}</strong>`;
-  const sub = [label, `Arcana · DC ${dc}`].filter(Boolean).join(' · ');
+  const sub = resultSub(label, 'Arcana', dc, hideDC);
   const speaker = ChatMessage.getSpeaker({ actor });
   const sessionId = foundry.utils.randomID();
   const init = { seed: Math.floor(Math.random() * 2 ** 31), dc, roll: { margin: rollResult.margin, d20: rollResult.d20 } };
@@ -413,7 +451,7 @@ export async function startArcana({ kind, actor, dc, label = '', onSettled = () 
 
   const App = await arcanaAppClass(kind);
   const app = new App({
-    sessionId, dc, rollResult, label, init,
+    sessionId, dc, hideDC, rollResult, label, init,
     playerName: actor.name,
     broadcast: true,
     async onSuccess() {
@@ -431,26 +469,11 @@ export async function startArcana({ kind, actor, dc, label = '', onSettled = () 
       settle({ state: 'failed', quit: 'left' });
     },
   });
-  app.render(true);
+  await app.render({ force: true });
 
   game.socket.emit(CHANNEL, {
-    action: 'gameSpectate', kind, sessionId, init, dc, rollResult, label,
+    action: 'gameSpectate', kind, sessionId, init, dc, hideDC, rollResult, label,
     playerName: actor.name, userId: game.user.id,
   });
   return app;
-}
-
-/**
- * 1d20 + bonus, posted with a styled flavour line; waits for Dice So Nice so
- * the game never opens under a rolling die. The message mode is left to core
- * (v14: core.messageMode; passing rollMode in the message data never worked).
- */
-async function rollCheck(actor, dc, formula, flavor) {
-  let roll;
-  try { roll = await new Roll(formula).evaluate(); } catch (e) { console.error(e); return null; }
-  const message = await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor });
-  try { if (message?.id) await game.dice3d?.waitFor3DAnimationByMessageID?.(message.id); } catch (e) {}
-  const die = roll.dice[0];
-  const d20 = die?.results?.find(r => r.active !== false)?.result ?? die?.total ?? 10;
-  return { rollResult: { total: roll.total, d20, dc, margin: roll.total - dc }, message };
 }

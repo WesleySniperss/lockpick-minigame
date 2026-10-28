@@ -11,8 +11,8 @@
  *   static KIND / TITLE / CANVAS {w, h}
  *   buildGame(init)           — create the game from {seed, dc, roll}
  *   update(dt)                — advance; return 'won' | 'lost' | null
- *   draw(ctx, dt)             — draw one frame in logical units (not render(): V1 uses that name)
- *   bindInput(canvas, html)   — player only
+ *   draw(ctx, dt)             — draw one frame in logical units (render() is the window's own)
+ *   bindInput(canvas, root)   — player only; root is the window content element
  *   meterHTML()               — right side of the footer
  *   hintHTML(), controlsHTML()
  *   syncState() / applySync(state)
@@ -20,26 +20,33 @@
  *   endDelay / renderEnding(ctx, t, success) — optional animation before the result screen
  */
 
-import { AppV1 } from './compat.mjs';
+import { GameWindow } from './app-window.mjs';
 import { drawResultOverlay } from './overlay.mjs';
 import { esc } from './cards.mjs';
 
 const MODULE_ID = 'lockpick-minigame';
 const CHANNEL   = `module.${MODULE_ID}`;
 
-/** Roll badge in the footer (same look as the lockpick window). */
-export function rollBadge(el, rollResult) {
+/**
+ * Roll badge in the footer (same look as the lockpick window). With `hidden`
+ * the DC stays secret: only the total and a natural 20 / 1 show.
+ */
+export function rollBadge(el, rollResult, { hidden = false } = {}) {
   if (!el || !rollResult) return;
   const { total, d20, dc, margin } = rollResult;
-  const state = d20 === 20 ? 'crit' : d20 === 1 ? 'fumble' : margin >= 0 ? 'beat' : 'miss';
-  const note = { crit: 'Natural 20', fumble: 'Natural 1',
+  const nat = d20 === 20 ? 'crit' : d20 === 1 ? 'fumble' : null;
+  const state = nat ?? (hidden ? 'secret' : margin >= 0 ? 'beat' : 'miss');
+  const note = { crit: 'Natural 20', fumble: 'Natural 1', secret: 'The DC is secret',
                  beat: margin === 0 ? 'Exactly the DC' : `Beat by ${margin}`, miss: `Short by ${-margin}` }[state];
   el.className = `lpm-roll-result lpm-roll lpm-roll--${state}`;
   el.innerHTML = `<i class="fa-solid fa-dice-d20 lpm-roll__die"></i>`
     + `<span class="lpm-roll__total">${total}</span>`
-    + `<span class="lpm-roll__meta"><span class="lpm-roll__vs">vs DC ${dc}</span>`
+    + `<span class="lpm-roll__meta"><span class="lpm-roll__vs">${hidden ? 'Your roll' : `vs DC ${dc}`}</span>`
     + `<span class="lpm-roll__note">${note}</span></span>`;
 }
+
+/** Hide the DC from this client? Only from players: a GM always sees it. */
+export const dcHiddenHere = hideDC => !!hideDC && !game.user?.isGM;
 
 /** A labelled bar: "Focus ▮▮▮▯ 9 / 12". */
 export function barHTML(label, value, max, { text = `${Math.round(value)} / ${Math.round(max)}`, tip = '', low = 0.25 } = {}) {
@@ -49,18 +56,21 @@ export function barHTML(label, value, max, { text = `${Math.round(value)} / ${Ma
     + `<span class="lpm-bar__num">${esc(text)}</span>`;
 }
 
-export class MiniGameApp extends AppV1 {
+export class MiniGameApp extends GameWindow {
   static KIND   = 'game';
   static TITLE  = 'Mini-game';
   static CANVAS = { w: 520, h: 420 };
+
+  static DEFAULT_OPTIONS = { classes: ['lpm-arcana'] };
 
   constructor(opts = {}) {
     const spectator = !!opts.spectator;
     const sessionId = opts.sessionId ?? foundry.utils.randomID();
     const what = opts.label ? ` — ${opts.label}` : '';
     super({
-      id   : `lpm-${new.target.KIND}-${sessionId}${spectator ? '-watch' : ''}`,
-      title: spectator ? `${opts.playerName ?? 'Player'} — ${new.target.TITLE}${what}` : `${new.target.TITLE}${what}`,
+      id      : `lpm-${new.target.KIND}-${sessionId}${spectator ? '-watch' : ''}`,
+      window  : { title: spectator ? `${opts.playerName ?? 'Player'} — ${new.target.TITLE}${what}` : `${new.target.TITLE}${what}` },
+      position: { width: new.target.CANVAS.w },
     });
     this.sessionId  = sessionId;
     this._spectator = spectator;
@@ -69,6 +79,7 @@ export class MiniGameApp extends AppV1 {
     this.playerUserId = opts.playerUserId ?? null;   // spectators: whose game this is
     this.dc         = opts.dc ?? 15;
     this.rollResult = opts.rollResult ?? { total: 10, d20: 10, dc: this.dc, margin: 10 - this.dc };
+    this.hideDC     = !!opts.hideDC;
     this.init       = opts.init ?? { seed: Math.floor(Math.random() * 2 ** 31), dc: this.dc,
                                      roll: { margin: this.rollResult.margin, d20: this.rollResult.d20 } };
     this.onSuccess  = opts.onSuccess ?? (() => {});
@@ -94,15 +105,6 @@ export class MiniGameApp extends AppV1 {
     return this;
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      classes  : ['lockpick-minigame', 'lpm-arcana', 'themed', 'theme-dark'],
-      width    : this.CANVAS.w,
-      height   : 'auto',
-      resizable: false,
-    });
-  }
-
   // ── subclass hooks (defaults) ─────────────────────────────────────────
   buildGame() {}
   update() { return null; }
@@ -118,12 +120,12 @@ export class MiniGameApp extends AppV1 {
 
   // ── window ────────────────────────────────────────────────────────────
 
-  async _renderInner() {
+  contentHTML() {
     this.ensureGame();
     const { w, h } = this.constructor.CANVAS;
     const banner = this._spectator
       ? `<div class="lpm-spectator-banner"><i class="fa-solid fa-eye"></i> Spectating — ${esc(this.playerName)}</div>` : '';
-    return $(`<div class="lpm-root lpm-arcana-root">
+    return `<div class="lpm-root lpm-arcana-root">
       ${banner}
       <canvas class="lpm-canvas lpm-arcana-canvas" width="${w}" height="${h}"
               style="width:${w}px;height:${h}px;${this._spectator ? 'pointer-events:none;' : ''}"></canvas>
@@ -138,19 +140,18 @@ export class MiniGameApp extends AppV1 {
           <button type="button" class="lpm-leave-btn">Leave</button>
         </div>
       </div>
-    </div>`);
+    </div>`;
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
+  onReady(root) {
     const { w, h } = this.constructor.CANVAS;
     this.W = w; this.H = h;
-    this.canvas = html.find('.lpm-arcana-canvas')[0];
+    this.canvas = root.querySelector('.lpm-arcana-canvas');
     this.canvas.width = Math.round(w * this._dpr);
     this.canvas.height = Math.round(h * this._dpr);
     this.ctx = this.canvas.getContext('2d');
-    this._meterEl = html.find('.lpm-meter')[0];
-    rollBadge(html.find('.lpm-roll-result')[0], this.rollResult);
+    this._meterEl = root.querySelector('.lpm-meter');
+    rollBadge(root.querySelector('.lpm-roll-result'), this.rollResult, { hidden: dcHiddenHere(this.hideDC) });
     this.refreshMeter();
 
     if (this._spectator) {
@@ -167,9 +168,9 @@ export class MiniGameApp extends AppV1 {
         if (!active && user?.id === this.playerUserId) this.close();
       });
     } else {
-      this.bindInput(this.canvas, html);
+      this.bindInput(this.canvas, root);
     }
-    html.find('.lpm-leave-btn').on('click', () => this.close());
+    root.querySelector('.lpm-leave-btn').addEventListener('click', () => this.close());
 
     this._last = performance.now();
     this._raf = requestAnimationFrame(this._boundTick);

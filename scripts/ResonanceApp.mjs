@@ -1,26 +1,29 @@
 /**
- * ResonanceApp.mjs — "Attune the Resonance": match a drifting arcane hum.
+ * ResonanceApp.mjs — "Attune the Resonance": match an arcane hum and hold it.
  *
- * The violet wave is the working's resonance; the cyan wave is yours, shaped
- * by three dials. Hold them together (the waves turn gold) until the
- * attunement crystal fills, before your concentration runs out. Two quiet
- * tones follow the waves and fall into harmony as they meet.
+ * The violet wave is the working's hum; the cyan wave is yours, shaped by
+ * three dials. Each dial has a light that turns green when that dial matches
+ * the hum (amber when close), so the player always knows which one is off.
+ * With all three green the waves turn gold and the attunement bar fills;
+ * hold it there before concentration runs out. Two quiet tones follow the
+ * waves and fall into harmony as they meet.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
-import { generateResonance, ResonanceGame, RANGES, waveAt, matchQuality } from './resonance-logic.mjs';
+import { generateResonance, ResonanceGame, RANGES, DIALS, waveAt } from './resonance-logic.mjs';
 import { ARC, TAU, layer, blit, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
 const W = 520, H = 300;
 const SCOPE = { x: 22, y: 20, w: 476, h: 196 };
-const METER = { x: 22, y: 240, w: 476, h: 16 };
-const DIALS = [
-  { key: 'freq',  label: 'Frequency', fmt: v => v.toFixed(2) },
-  { key: 'amp',   label: 'Amplitude', fmt: v => `${Math.round(v * 100)}%` },
-  { key: 'phase', label: 'Phase',     fmt: v => `${Math.round(v / TAU * 360)}°` },
-];
+const METER = { x: 22, y: 246, w: 476, h: 16 };
+const DIAL = {
+  freq : { label: 'Frequency', step: 0.01,         fmt: v => v.toFixed(2) },
+  amp  : { label: 'Amplitude', step: 0.01,         fmt: v => `${Math.round(v * 100)}%` },
+  phase: { label: 'Phase',     step: Math.PI / 180, fmt: v => `${Math.round(v / TAU * 360)}°` },
+};
+const STATUS = { ok: 'Matches the hum', near: 'Close', off: 'Off' };
 const toHz = f => 220 * Math.pow(2, (f - RANGES.freq[0]) / 1.85);
 
 export class ResonanceApp extends MiniGameApp {
@@ -36,12 +39,15 @@ export class ResonanceApp extends MiniGameApp {
   }
 
   controlsHTML() {
-    return `<div class="lpm-arcana-controls lpm-res-controls">${DIALS.map(d => {
-      const [lo, hi] = RANGES[d.key];
-      return `<label class="lpm-dial" data-dial="${d.key}">
-        <span class="lpm-dial__label">${d.label} <b class="lpm-dial__value"></b></span>
+    return `<div class="lpm-arcana-controls lpm-res-controls">${DIALS.map(key => {
+      const d = DIAL[key], [lo, hi] = RANGES[key];
+      return `<label class="lpm-dial" data-dial="${key}">
+        <span class="lpm-dial__label">
+          <span class="lpm-dial__name"><i class="lpm-dial__light" title="${STATUS.off}"></i>${d.label}</span>
+          <b class="lpm-dial__value"></b>
+        </span>
         <span class="lpm-dial__track">
-          <input type="range" min="${lo}" max="${hi}" step="0.001" value="${this.game.player[d.key]}"
+          <input type="range" min="${lo}" max="${hi}" step="${d.step}" value="${this.game.player[key]}"
                  ${this._spectator ? 'disabled' : ''} aria-label="${d.label}">
           <i class="lpm-dial__ghost"></i>
         </span>
@@ -56,16 +62,14 @@ export class ResonanceApp extends MiniGameApp {
   }
 
   hintHTML() {
-    return 'Shape <span class="lpm-hint-cyan">your wave</span> with the dials until it lies on'
-      + ' <span class="lpm-hint-violet">the hum</span> &middot; <strong>hold it</strong> until the crystal fills';
+    return 'Turn each dial until its light is <span class="lpm-hint-green">green</span>'
+      + ' &middot; <strong>hold</strong> <span class="lpm-hint-cyan">your wave</span> on <span class="lpm-hint-violet">the hum</span>';
   }
 
-  bindInput(canvas, html) {
-    this._inputs = {};
-    html.find('.lpm-dial').each((_, el) => {
+  bindInput(canvas, root) {
+    for (const el of root.querySelectorAll('.lpm-dial')) {
       const key = el.dataset.dial, input = el.querySelector('input');
-      this._inputs[key] = el;
-      const set = v => { this.game.setDial(key, v); this.startTones(); };
+      const set = v => { this.game.setDial(key, v); this.startTones(); this.refreshDials(); };
       input.addEventListener('input', () => set(input.value));
       input.addEventListener('keydown', e => e.stopPropagation());       // arrows must not pan the canvas
       el.addEventListener('wheel', e => {
@@ -75,29 +79,32 @@ export class ResonanceApp extends MiniGameApp {
         set(Number(input.value) + (e.deltaY < 0 ? step : -step));
         input.value = this.game.player[key];
       }, { passive: false });
-    });
+    }
     this.refreshDials();
   }
 
+  /** Values, the per-dial lights and the insight marks. */
   refreshDials() {
-    const root = this.element?.[0];
+    const root = this.root;
     if (!root) return;
-    const t = this.game.target();
-    for (const d of DIALS) {
-      const el = root.querySelector(`.lpm-dial[data-dial="${d.key}"]`);
+    const t = this.game.target(), m = this.game.match;
+    for (const key of DIALS) {
+      const el = root.querySelector(`.lpm-dial[data-dial="${key}"]`);
       if (!el) continue;
-      const v = this.game.player[d.key];
-      el.querySelector('.lpm-dial__value').textContent = d.fmt(v);
+      const v = this.game.player[key];
+      el.querySelector('.lpm-dial__value').textContent = DIAL[key].fmt(v);
       if (this._spectator) el.querySelector('input').value = v;
+      const state = m[key].ok ? 'ok' : m[key].near ? 'near' : 'off';
+      el.classList.toggle('is-ok', state === 'ok');
+      el.classList.toggle('is-near', state === 'near');
+      el.querySelector('.lpm-dial__light').title = STATUS[state];
       // Insight: a mark where the true value lies
       const ghost = el.querySelector('.lpm-dial__ghost');
-      const show = this.res.params.ghost === 'all' || (this.res.params.ghost === 'freq' && d.key === 'freq');
+      const show = this.res.params.ghost === 'all' || (this.res.params.ghost === 'freq' && key === 'freq');
       ghost.classList.toggle('is-on', show && !this._over);
       if (show) {
-        const [lo, hi] = RANGES[d.key];
-        let tv = t[d.key];
-        if (d.key === 'phase') tv = ((tv % TAU) + TAU) % TAU;
-        ghost.style.left = `${((tv - lo) / (hi - lo)) * 100}%`;
+        const [lo, hi] = RANGES[key];
+        ghost.style.left = `${((t[key] - lo) / (hi - lo)) * 100}%`;
       }
     }
   }
@@ -142,14 +149,13 @@ export class ResonanceApp extends MiniGameApp {
 
   update(dt) {
     if (this._over) return null;
+    const wasInTune = this.game.match.inTune;
     const out = this._spectator ? null : this.game.update(dt);
-    if (this._spectator) {            // keep the target moving between syncs
-      this.game.t += dt;
-      this.game.quality = matchQuality(this.game.player, this.game.target());
-    }
+    if (this._spectator) this.game.advance(dt);         // keep the hum moving between syncs
+    if (!this._spectator && this.game.match.inTune && !wasInTune) Sfx.channel(2);
     this.updateTones();
     this._meterAcc = (this._meterAcc ?? 0) + dt;
-    if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); this.refreshDials(); }
+    if (this._meterAcc > 0.2) { this._meterAcc = 0; this.refreshMeter(); this.refreshDials(); }
     if (out === 'won') Sfx.unweave();
     if (out === 'lost') Sfx.fail();
     return out;
@@ -161,9 +167,7 @@ export class ResonanceApp extends MiniGameApp {
   draw(ctx) {
     if (!this._static) this._static = this.buildStatic();
     blit(ctx, this._static);
-    const g = this.game, t = g.target(), q = g.quality;
-    const thr = this.res.params.threshold;
-    const matched = q >= thr;
+    const g = this.game, t = g.target(), m = g.match;
     const S = SCOPE, midY = S.y + S.h / 2, amp = S.h * 0.42;
     const px = i => S.x + 6 + i * (S.w - 12) / 120;
     const wavePath = w => () => {
@@ -175,12 +179,11 @@ export class ResonanceApp extends MiniGameApp {
     };
     ctx.save();
     ctx.beginPath(); ctx.rect(S.x + 2, S.y + 2, S.w - 4, S.h - 4); ctx.clip();
-    // closeness tints both waves toward gold
-    const mix = Math.max(0, Math.min(1, (q - thr + 0.12) / 0.12));
-    const hum = mix > 0 ? ARC.gold : ARC.violet, you = mix > 0.5 ? ARC.gold : ARC.energy;
-    glow(ctx, wavePath(t), { color: hum, width: 2.4, intensity: 0.85, core: mix > 0.5 });
+    // In tune: both waves turn gold and the glass glows.
+    const hum = m.inTune ? ARC.gold : ARC.violet, you = m.inTune ? ARC.gold : ARC.energy;
+    glow(ctx, wavePath(t), { color: hum, width: 2.4, intensity: 0.85, core: m.inTune });
     glow(ctx, wavePath(g.player), { color: you, width: 2.2, intensity: 0.95 });
-    if (matched) {
+    if (m.inTune) {
       const pulse = 0.5 + 0.5 * Math.sin(this._t * 9);
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const bloom = ctx.createLinearGradient(0, S.y, 0, S.y + S.h);
@@ -190,19 +193,29 @@ export class ResonanceApp extends MiniGameApp {
     }
     ctx.restore();
 
-    // harmony readout, engraved into the frame
+    // legend in the glass, top-left
+    ctx.save();
+    ctx.font = '700 10px "Signika", sans-serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.5px';
+    const key = (x, col, label) => {
+      ctx.fillStyle = hexA(col, 0.95); ctx.fillRect(x, S.y + 12, 14, 3);
+      ctx.fillStyle = 'rgba(200,210,235,0.75)'; ctx.fillText(label, x + 20, S.y + 17);
+    };
+    key(S.x + 10, ARC.violet, 'THE HUM');
+    key(S.x + 96, ARC.energy, 'YOUR WAVE');
+    ctx.restore();
+
+    // status, engraved under the glass
+    const okCount = DIALS.filter(k => m[k].ok).length;
     ctx.save();
     ctx.font = '700 10px "Signika", sans-serif';
     if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
     ctx.textAlign = 'right';
-    ctx.fillStyle = matched ? hexA(ARC.gold, 0.95) : 'rgba(170,185,220,0.7)';
-    ctx.fillText(`HARMONY ${Math.round(q * 100)}%`, S.x + S.w - 8, S.y + S.h + 15);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(170,185,220,0.55)';
-    ctx.fillText(`NEEDED ${Math.round(thr * 100)}%`, S.x + 8, S.y + S.h + 15);
+    ctx.fillStyle = m.inTune ? hexA(ARC.gold, 0.95) : 'rgba(170,185,220,0.7)';
+    ctx.fillText(m.inTune ? 'IN TUNE — HOLD IT' : `DIALS MATCHED ${okCount} / 3`, S.x + S.w - 8, S.y + S.h + 17);
     ctx.restore();
 
-    // attunement crystal bar
+    // attunement bar
     const M = METER, fillW = (M.w - 4) * g.meter;
     ctx.fillStyle = '#0a0b10'; ctx.fillRect(M.x, M.y, M.w, M.h);
     if (fillW > 0) {
@@ -254,6 +267,10 @@ export class ResonanceApp extends MiniGameApp {
     for (let i = 1; i < 6; i++) { const y = S.y + i * S.h / 6 + 0.5; ctx.beginPath(); ctx.moveTo(S.x, y); ctx.lineTo(S.x + S.w, y); ctx.stroke(); }
     ctx.strokeStyle = 'rgba(150,180,240,0.22)';
     ctx.beginPath(); ctx.moveTo(S.x, S.y + S.h / 2 + 0.5); ctx.lineTo(S.x + S.w, S.y + S.h / 2 + 0.5); ctx.stroke();
+    // the middle line the phase is read at
+    ctx.strokeStyle = 'rgba(150,180,240,0.16)'; ctx.setLineDash([3, 5]);
+    ctx.beginPath(); ctx.moveTo(S.x + S.w / 2 + 0.5, S.y); ctx.lineTo(S.x + S.w / 2 + 0.5, S.y + S.h); ctx.stroke();
+    ctx.setLineDash([]);
     // glass sheen
     const sheen = ctx.createLinearGradient(S.x, S.y, S.x + S.w * 0.6, S.y + S.h);
     sheen.addColorStop(0, 'rgba(200,220,255,0.07)'); sheen.addColorStop(0.4, 'rgba(200,220,255,0)');

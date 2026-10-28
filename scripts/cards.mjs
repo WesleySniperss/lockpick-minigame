@@ -40,10 +40,10 @@ export function resultCard({ tone = 'success', icon = 'fa-lock-open', title, sub
  * line are filled in on render from the message flags (requests.mjs), so the
  * same card shows the right thing to the owner, the table and later readers.
  */
-export function requestCard({ kind = 'lock', name, dc, label = '' }) {
+export function requestCard({ kind = 'lock', name, dc, label = '', hideDC = false }) {
   const c = CHALLENGES[kind] ?? CHALLENGES.lock;
   const check = c.group === 'Arcana' ? 'Arcana' : '';
-  const subtitle = [label, check, `DC ${dc}`].filter(Boolean).join(' · ');
+  const subtitle = [label, check, hideDC ? '' : `DC ${dc}`].filter(Boolean).join(' · ');
   const what = label ? `${c.on} <em>${esc(label)}</em>` : c.none;
   return `<div class="lpm-card lpm-card--neutral lpm-request" data-kind="${kind}">`
     + cardHead(c.icon, c.title, subtitle)
@@ -57,9 +57,10 @@ export function requestCard({ kind = 'lock', name, dc, label = '' }) {
     + `</div>`;
 }
 
-/** Flavour line above the check roll. */
+/** Flavour line above the check roll (no DC when it is hidden: dc = null). */
 export function checkFlavor(toolLabel, dc, icon = 'fa-key') {
   return `<span class="lpm-flavor"><i class="fa-solid ${icon}"></i>`
     + `<span class="lpm-flavor__what">${esc(toolLabel)} check</span>`
-    + `<span class="lpm-flavor__dc">DC ${esc(dc)}</span></span>`;
+    + (dc === null || dc === undefined ? '' : `<span class="lpm-flavor__dc">DC ${esc(dc)}</span>`)
+    + `</span>`;
 }

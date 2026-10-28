@@ -3,8 +3,8 @@
 Mini-games the GM requests for a specific character, for **Foundry VTT** with
 **dnd5e** and **Level Up Advanced 5e**: a pin-tumbler **lockpicking** game
 (Thieves' Tools check) and three **Arcana** workings — unweave a ward, attune
-to a resonance, trace a sigil. The character's roll decides how hard the game
-is. Plus a set of puzzles the GM can hand out.
+to a resonance, trace a sigil. The character's roll, made the system's own way,
+decides how hard the game is. Plus a set of puzzles the GM can hand out.
 
 ---
 
@@ -20,10 +20,12 @@ then enable it in **Game Settings → Manage Modules**.
 Nothing is tied to doors or tiles: the GM asks a specific character for a
 challenge whenever the story needs it.
 
-1. **VTools → Request Lockpicking** or **Request Arcana Challenge** — choose the
-   challenge, the character (the selected token's character is first in the
-   list), the **DC** and, optionally, **what it is on** ("Iron-bound chest",
-   "Sealed vault door").
+1. **VTools → Request a Challenge** — choose the challenge (the lock or one of
+   the Arcana workings), the character (the selected token's character is first
+   in the list), the **DC** and, optionally, **what it is on** ("Iron-bound
+   chest", "Sealed vault door"). Tick **Secret** to keep the DC from the
+   players: it is left off the card, the roll and the game, and only the GM's
+   copy of the card shows it.
 2. A **request card** appears in chat. Only that character's owner (and the GM)
    gets the button (**Roll & pick the lock**, **Roll Arcana & unweave**, …);
    everyone else sees "Waiting for …". If several players own the character,
@@ -45,10 +47,24 @@ From a macro:
 const api = game.modules.get('lockpick-minigame').api;
 const actor = canvas.tokens.controlled[0]?.actor;
 api.requestLockpick({ actor, dc: 17, label: 'Iron-bound chest' });
-api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door' });
+api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true });
 //                     kind: 'lock' | 'ward' | 'resonance' | 'sigil'
 api.openRequestDialog('sigil');   // the toolbar dialog, with a challenge preselected
 ```
+
+### The roll
+
+The check is rolled the way the game system rolls it, so its roll dialog,
+advantage and disadvantage, Reliable Talent, expertise dice and situational
+bonuses all apply, and the roll card is the system's own:
+
+| | dnd5e | Level Up (a5e) | any other system |
+|---|---|---|---|
+| Lockpicking | Thieves' Tools check (a Dexterity check without the tools) | Dexterity check, the Thieves' Tools proficiency pre-filled as a situational bonus | 1d20 + Dex + proficiency |
+| Arcana | Arcana skill check | Arcana skill check | 1d20 + the Arcana bonus |
+
+Closing the system's roll dialog cancels the attempt and leaves the card open.
+With Dice So Nice the game opens once the die has landed.
 
 ---
 
@@ -57,11 +73,8 @@ api.openRequestDialog('sigil');   // the toolbar dialog, with a challenge presel
 ### How it works
 
 1. The player presses **Roll & pick the lock** on the request card.
-2. A **tool check** (1d20 + Dex + Thieves' Tools proficiency/expertise) is
-   rolled and posted to chat — this roll sets how hard the game will be. The
-   bonus is read from the system: dnd5e (`tools.thief`) or a5e
-   (`proficiencies.tools` → `thievesTools`). With Dice So Nice the game opens
-   once the die has landed.
+2. The **check** is rolled (see *The roll* above) — it sets how hard the game
+   will be. Without Thieves' Tools it is a plain Dexterity check.
 3. The **mini-game opens** — a cutaway of the lock with the pick in the keyway.
 4. **Hold** the mouse to slide the pick, **release on green** under a pin to set
    it; releasing on red costs an attempt.
@@ -98,62 +111,67 @@ What a character needs is a world setting (**Tool needed to pick a lock**):
 
 | Mode | Needs | On a failed attempt |
 |------|-------|---------------------|
-| Thieves' Tools *(default)* | an item named Thieves' Tools (or dnd5e base item `thief`) | nothing is lost |
+| Nothing *(default)* | — anyone can try; carried Thieves' Tools add their proficiency, without them it is a Dexterity check | nothing is lost |
+| Thieves' Tools | an item named Thieves' Tools (or dnd5e base item `thief`) | nothing is lost |
 | Lockpicks | an item named Lockpick(s), quantity ≥ 1 | one lockpick snaps |
 | Either | Thieves' Tools if carried, otherwise Lockpicks | as above |
-| Nothing | — anyone can try (carried Thieves' Tools still add proficiency) | nothing is lost |
 
 ---
 
 ## Arcana challenges
 
-Each one starts with an **Arcana check** (1d20 + the character's Arcana bonus:
-dnd5e `skills.arc.total`, a5e `skills.arc.mod`). As with locks, **the DC
-shapes the puzzle and the roll decides how much room the caster gets**; a
-natural 20 and a natural 1 are the extremes. Every working is generated from a
-seed, so spectators see exactly the same board.
+Each one starts with an **Arcana check** (see *The roll* above). As with
+locks, **the DC shapes the puzzle and the roll decides how much room the caster
+gets**; a natural 20 and a natural 1 are the extremes. Every working is
+generated from a seed, so spectators see exactly the same board.
 
 ### Unweave the Ward
 
-Concentric rune rings stand between a glowing core and the anchor crystals on
-the rim. **Left-click** a ring to turn it one step, **right-click** to turn it
-back (the mouse wheel works too). Light flows outward through every ring whose
-channels line up; the ward comes apart when it reaches every anchor. Each turn
-costs **Focus** — when it runs out, the ward holds.
+The goal is written on the board: **lead the light from the core to every
+crystal on the rim**. Between them sit rune rings, each with a channel that has
+a **gate** on its inner edge and one on its outer edge. The light runs outward
+as far as the gates line up. Where it stops, it glows at the next ring's inner
+edge and that ring's gate pulses amber: turn the ring until the gate meets the
+light.
 
-- **Bindings** (golden threads): turning one ring drags another along, sometimes
-  the other way. A binding shows itself the first time it fires.
-- **Traps** (red runes on the rim): letting the light into one costs 2 extra Focus.
+**Drag** a ring to turn it (a click turns it one step clockwise, a right-click
+one step back, the mouse wheel works too). Every step costs **Focus**; when it
+runs out, the ward holds. A **golden link** means turning one ring turns
+another as well (crossed: the other way). Hovering a ring outlines every ring
+that will move with it. Nothing is hidden: every gate and link is on the board
+from the start.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
 | Rings | 3 | 4 | 5 |
-| Bindings | 1 | 2 | 3 |
-| Decoy channels | 0 | 1 | 3 |
+| Golden links | 0 | 1 | 2 |
 
-From DC 15 there are two anchors instead of one. **The roll** sets the spare
+From DC 15 there are two crystals instead of one. **The roll** sets the spare
 Focus on top of the fewest turns that solve the ward: +10 on a natural 20, +8
-when it beats the DC by 10, +6 by 5, +4 when it just makes it, +2 when it misses
-by up to 4, +1 below that and +0 on a natural 1 (only the perfect solution
-works). A missed check adds one trap (two when it misses by 5 or more, or on a
-natural 1); beating the DC by 5 shows every binding from the start.
+when it beats the DC by 10, +6 by 5, +4 when it just makes it, +3 when it misses
+by up to 4, +2 below that and +1 on a natural 1. Beating the DC by 5 (or a
+natural 20) adds a dotted trace from the amber gate to the light: which way to
+turn and how far.
 
 ### Attune the Resonance
 
-A drifting arcane hum (the violet wave) runs through the scope. Shape your own
-wave (cyan) with three dials — **frequency, amplitude, phase**; the mouse wheel
-fine-tunes a dial. While **Harmony** stays above the needed level the
-attunement crystal fills, and below it the crystal drains. Fill it before your
-**Concentration** runs out. With sound on, you hear both tones.
+An arcane hum (the violet wave) runs through the scope. Shape your own wave
+(cyan) with three dials — **frequency, amplitude, phase**. Each dial has a
+light: **green** when that dial matches the hum, amber when it is close. With
+all three green you are **in tune**: both waves turn gold and the attunement
+bar fills; out of tune it drains at half that speed. Fill it before your
+**Concentration** runs out. The hum breathes slowly around its note, so keep an
+eye on the lights while you hold it. The mouse wheel fine-tunes a dial (Shift
+for finer steps). With sound on, you hear both tones.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
-| Harmony needed | 80% | 86% | 90% |
+| How exact (frequency / amplitude / phase) | ±0.12 / ±10% / ±24° | ±0.09 / ±8% / ±19° | ±0.065 / ±6% / ±15° |
 | Time to hold it | 3 s | 4 s | 5 s |
 
 **The roll** sets Concentration: 45 s ± 2 s per point above or below the DC,
-between 25 and 70 s (80 s on a natural 20, 25 s on a natural 1). The better the
-roll, the more slowly the hum drifts. Beating the DC by 5 marks the hum's true
+between 30 and 70 s (80 s on a natural 20, 30 s on a natural 1). The better the
+roll, the less the hum moves. Beating the DC by 5 marks the hum's true
 frequency on its dial; a natural 20 marks all three.
 
 ### Trace the Sigil
@@ -195,8 +213,9 @@ each in three difficulties.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Tool needed to pick a lock | **Thieves' Tools** | Thieves' Tools / Lockpicks / Either / Nothing — see *Tools* |
+| Tool needed to pick a lock | **Nothing** | Nothing / Thieves' Tools / Lockpicks / Either — see *Tools* |
 | Default DC | 15 | Pre-filled in the request dialog |
+| Keep the DC secret by default | Off | Pre-ticks **Secret** in the request dialog |
 | Show challenges live to the GM | **On** | Spectator window for the GM while a player picks a lock or works an Arcana challenge |
 | Show challenges live to other players | Off | The same window for everyone else |
 
@@ -209,20 +228,17 @@ each in three difficulties.
 - Level Up Advanced 5e (a5e) system
 - No dependencies. VTools adds the toolbar buttons; without it use the macro API.
 
-### Foundry v14 notes
+### Foundry versions
 
-v14 removed the bare `Application` and `Dialog` globals and renamed
-`CONST.CHAT_MESSAGE_TYPES`. All version-sensitive lookups are isolated in
-[`scripts/compat.mjs`](scripts/compat.mjs), which falls back to the old globals
-so v12/v13 keep working:
+Every window and dialog is an **ApplicationV2** / **DialogV2** (no jQuery), so
+nothing depends on the V1 framework that core removes in v16. The game windows
+share one base ([`scripts/app-window.mjs`](scripts/app-window.mjs)): always
+dark, and never popped out into a separate browser window (the games listen
+for the pointer and animation frames on the main one). The remaining
+version-sensitive lookups live in [`scripts/compat.mjs`](scripts/compat.mjs):
 
-| API | v12 / v13 | v14 |
+| API | v12 | v13 / v14 |
 |---|---|---|
-| Application (V1) | `Application` | `foundry.appv1.api.Application` |
-| Dialog (V1) | `Dialog` | `foundry.appv1.api.Dialog` |
-| Chat OOC flag | `type: CHAT_MESSAGE_TYPES.OOC` | `style: CHAT_MESSAGE_STYLES.OOC` |
 | Chat card hook | `renderChatMessage` (jQuery) | `renderChatMessageHTML` (HTMLElement) |
 | UUID lookup | `fromUuidSync` | `foundry.utils.fromUuidSync` |
-
-The V1 application framework is deprecated by core until **v16**, so a migration
-to `ApplicationV2` will be required before then.
+| DialogV2 content | an HTML string | a `<div>` (a string would be sanitised) |
