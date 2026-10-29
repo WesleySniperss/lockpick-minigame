@@ -5,9 +5,11 @@
  * the rim. Each ring has a channel with a gate on its inner edge and a gate on
  * its outer edge. The light runs as far as the gates line up; where it stops,
  * the waiting light glows and the gate of the ring that has to meet it pulses
- * amber. Drag a ring to turn it (click turns it clockwise, right-click back).
- * A golden link means turning one ring turns another too; hovering a ring
- * outlines every ring that will move with it. Every turn costs focus.
+ * amber. Drag a ring to turn it (click turns it clockwise, right-click back);
+ * turning is free. A golden link means turning one ring turns another too;
+ * hovering a ring outlines every ring that will move with it. Meanwhile the
+ * ward knits itself back together: a violet seam creeps around the rim, and
+ * when it closes the circle the ward holds.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
@@ -56,12 +58,16 @@ export class WardApp extends MiniGameApp {
   }
 
   meterHTML() {
-    return barHTML('Focus', this.game.focus, this.ward.focus, { tip: 'Every turn of a ring costs 1 focus.' });
+    return barHTML('Re-forms in', this.game.timeLeft, this.ward.params.time, {
+      text: `${Math.ceil(this.game.timeLeft)} s`,
+      tip: 'The ward knits itself back together. When the seam closes around the rim, it holds.',
+    });
   }
 
   hintHTML() {
     return '<strong title="Click turns it clockwise, right-click back">Drag</strong> a ring to turn it'
-      + ' &middot; bring its <span class="lpm-hint-amber">gate</span> to the <span class="lpm-hint-cyan">light</span>';
+      + ' &middot; bring its <span class="lpm-hint-amber">gate</span> to the <span class="lpm-hint-cyan">light</span>'
+      + ' &middot; before the <span class="lpm-hint-violet">rim</span> closes';
   }
 
   // ── input ─────────────────────────────────────────────────────────────
@@ -146,9 +152,7 @@ export class WardApp extends MiniGameApp {
     for (const i of r.fired) { const b = this.ward.bindings[i]; this.tgt[b.to] += d * b.dir; this.flash.link.set(i, 1); }
     Sfx.ringTurn();
     r.newlyPowered.forEach((i, n) => this.later(() => Sfx.channel(i), 140 + n * 110));
-    this.refreshMeter();
     if (r.won) this.later(() => { Sfx.unweave(); this._end(true); }, 380);
-    else if (r.lost) this.later(() => { Sfx.fail(); this._end(false); }, 420);
   }
 
   // ── sync ──────────────────────────────────────────────────────────────
@@ -174,7 +178,15 @@ export class WardApp extends MiniGameApp {
     });
     if (!this.drag && !this.animating() && this.queue.length && !this._over) this.turn(...this.queue.shift());
     for (const [i, v] of this.flash.link) { if (v <= 0) this.flash.link.delete(i); else this.flash.link.set(i, v - dt * 1.8); }
-    return null;
+    // The clock: the player's decides; spectators count down between syncs.
+    let out = null;
+    if (this._over) return null;
+    if (this._spectator) this.game.timeLeft = Math.max(0, this.game.timeLeft - dt);
+    else if (this.game.state === 'playing') out = this.game.update(dt);
+    this._meterAcc = (this._meterAcc ?? 0) + dt;
+    if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); }
+    if (out === 'lost') Sfx.fail();
+    return out;
   }
 
   draw(ctx) {
@@ -229,6 +241,9 @@ export class WardApp extends MiniGameApp {
     // Where the light stops: it waits at the next ring's inner edge, whose gate pulses amber
     if (f.blockedAt >= 0 && !this._over) this.drawWaiting(ctx, f, t);
 
+    // The ward knitting itself back together: a seam creeping around the rim
+    this.drawSeam(ctx, t);
+
     // Rim: anchor crystals, and light spilled where there is none
     const rimR = (RIM_IN + RIM_OUT) / 2;
     for (const s of this.ward.anchors) {
@@ -272,12 +287,12 @@ export class WardApp extends MiniGameApp {
   endScreen(success) {
     return success
       ? { title: 'Ward Unwoven', sub: 'The weave comes apart in a sigh of light', icon: (c, x, y, tone) => ARCANE_ICONS.ward(c, x, y, tone, true) }
-      : { title: 'The Ward Holds', sub: 'The rings lock and the ward flares back', icon: (c, x, y, tone) => ARCANE_ICONS.ward(c, x, y, tone, false) };
+      : { title: 'The Ward Holds', sub: 'The rim closes and the ward knits itself whole', icon: (c, x, y, tone) => ARCANE_ICONS.ward(c, x, y, tone, false) };
   }
 
   // ── overlays ──────────────────────────────────────────────────────────
 
-  /** Top-left: what to do, and how many crystals the light reaches. */
+  /** Top-left: what to do, by when, and how many crystals the light reaches. */
   drawGoal(ctx, f) {
     const lit = this.ward.anchors.filter(s => f.fed.includes(s)).length, all = this.ward.anchors.length;
     ctx.save();
@@ -286,10 +301,36 @@ export class WardApp extends MiniGameApp {
     ctx.fillStyle = 'rgba(200,212,240,0.78)';
     ctx.fillText('LEAD THE LIGHT', 14, 22);
     ctx.fillText(all > 1 ? 'TO EVERY CRYSTAL' : 'TO THE CRYSTAL', 14, 36);
+    ctx.fillStyle = 'rgba(185,162,255,0.8)';
+    ctx.fillText('BEFORE THE RIM CLOSES', 14, 50);
     ctx.font = '700 12px "Signika", sans-serif';
-    ctx.fillStyle = lit ? hexA(ARC.energy, 0.95) : 'rgba(185,162,255,0.85)';
-    ctx.fillText(`${lit} / ${all} LIT`, 14, 56);
+    ctx.fillStyle = lit ? hexA(ARC.energy, 0.95) : 'rgba(200,212,240,0.85)';
+    ctx.fillText(`${lit} / ${all} LIT`, 14, 70);
     ctx.restore();
+  }
+
+  /**
+   * The ward's clock, on the board: a violet seam that stitches itself around
+   * the rim from the top, clockwise. When it closes the circle, the ward holds.
+   * In the last quarter it turns red and the needle pulses.
+   */
+  drawSeam(ctx, t) {
+    const total = this.ward.params.time, left = this.game.timeLeft;
+    const done = Math.max(0, Math.min(1, 1 - left / total));
+    if (done <= 0) return;
+    const r = (RIM_IN + RIM_OUT) / 2, a0 = -Math.PI / 2, a1 = a0 + TAU * done;
+    const late = left / total < 0.25;
+    const col = late ? '#ff6a8a' : ARC.violet;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = hexA(col, late ? 0.55 : 0.4); ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.arc(CX, CY, r, a0, a1); ctx.stroke();
+    ctx.strokeStyle = hexA(col, 0.9); ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 4]);                          // the stitches
+    ctx.beginPath(); ctx.arc(CX, CY, r, a0, a1); ctx.stroke();
+    ctx.restore();
+    const needle = polar(r, a1);
+    spark(ctx, needle.x, needle.y, late ? 13 + 5 * Math.abs(Math.sin(t * 7)) : 11, col, 0.95);
   }
 
   /** The light waiting at ring i's inner edge, the gate that must meet it, and (insight) which way. */

@@ -1,14 +1,14 @@
 /**
  * lockpick-minigame | main.mjs — Foundry VTT v12–v14
- * Settings, socket, GM tools and the puzzle dialog. Lockpicking and the Arcana
- * workings are requested by the GM for a specific character (requests.mjs).
+ * Settings, socket and the GM's one menu (menu.mjs: puzzles, and the lock and
+ * Arcana challenges the GM requests for a specific character, requests.mjs).
  * Version-sensitive API lookups live in compat.mjs.
  */
 
 import { generation } from './compat.mjs';
-import { dialogContent } from './app-window.mjs';
 import { TOOL_MODES } from './tools.mjs';
-import { openRequestDialog, requestChallenge, requestLockpick, decorateRequestCard, onRequestStateMessage,
+import { openMenu } from './menu.mjs';
+import { requestChallenge, requestLockpick, decorateRequestCard, onRequestStateMessage,
          releaseDroppedAttempts, arcanaAppClass } from './requests.mjs';
 
 export const MODULE_ID = 'lockpick-minigame';
@@ -29,12 +29,12 @@ Hooks.once('init', () => {
   });
   game.settings.register(MODULE_ID, 'defaultDC', {
     name: 'Default DC',
-    hint: 'Pre-filled in the request dialog, for locks and Arcana challenges alike.',
+    hint: 'Pre-filled in the Puzzles & Challenges menu, for locks and Arcana challenges alike.',
     scope: 'world', config: true, type: Number, default: 15
   });
   game.settings.register(MODULE_ID, 'hideDC', {
     name: 'Keep the DC secret by default',
-    hint: 'Pre-ticks "Secret" in the request dialog: the players see neither the DC nor how far their roll beat it.',
+    hint: 'Pre-ticks "Secret" in the Puzzles & Challenges menu: the players see neither the DC nor how far their roll beat it.',
     scope: 'world', config: true, type: Boolean, default: false
   });
 
@@ -50,10 +50,17 @@ Hooks.once('init', () => {
     hint: 'Opens the same spectator window for everyone else at the table.',
     scope: 'world', config: true, type: Boolean, default: false
   });
+  // The GM's "Show the answers" tick in a watched sudoku, remembered on this client.
+  game.settings.register(MODULE_ID, 'sudokuAnswers', { scope: 'client', config: false, type: Boolean, default: false });
 
   // For macros: game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door' })
+  // openRequestDialog / openPuzzleDialog are kept for macros written against 3.0: both open the one menu.
   const mod = game.modules.get(MODULE_ID);
-  if (mod) mod.api = { requestChallenge, requestLockpick, openRequestDialog, openPuzzleDialog: _openPuzzleDialog };
+  if (mod) mod.api = {
+    openMenu, requestChallenge, requestLockpick,
+    openRequestDialog: (kind = 'lock') => openMenu(kind),
+    openPuzzleDialog : (type = 'sudoku') => openMenu(type),
+  };
 
   // Request cards get their button / status for the viewing user on every render.
   // v13+ passes an HTMLElement to renderChatMessageHTML; v12 only has renderChatMessage (jQuery).
@@ -71,24 +78,14 @@ Hooks.once('ready', () => {
 // ─── VTools integration ───────────────────────────────────────────────────────
 
 Hooks.once('vtools.ready', () => {
-  // One request for every challenge: the dialog has the lock and the Arcana workings.
-  VTools.register({
-    name   : `${MODULE_ID}-request`,
-    title  : 'Request a Challenge',
-    icon   : 'fa-solid fa-dice-d20',
-    onClick: () => {
-      if (!game.user.isGM) return;
-      openRequestDialog();
-    }
-  });
-
+  // One button: the menu has the puzzles and the rolled challenges (lock, Arcana).
   VTools.register({
     name   : `${MODULE_ID}-puzzle`,
-    title  : 'Open Puzzle',
+    title  : 'Puzzles & Challenges',
     icon   : 'fa-solid fa-puzzle-piece',
     onClick: () => {
       if (!game.user.isGM) return;
-      _openPuzzleDialog();
+      openMenu();
     }
   });
 });
@@ -159,146 +156,4 @@ function _registerSocket() {
 function _wantsToWatch() {
   const key = game.user.isGM ? 'spectateGM' : 'spectatePlayers';
   try { return !!game.settings.get(MODULE_ID, key); } catch (e) { return game.user.isGM; }
-}
-
-// ─── Puzzle dialog ────────────────────────────────────────────────────────────
-
-async function _openPuzzleDialog() {
-  const { PUZZLE_TYPES, DIFFICULTIES } = await import('./PuzzleApp.mjs');
-
-  const esc        = s => foundry.utils.escapeHTML?.(s) ?? String(s).replace(/[&<>"']/g, '');
-  const typeOpts   = PUZZLE_TYPES.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
-  const diffOpts   = DIFFICULTIES.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
-  // Other connected users only: picking yourself used to open nothing but a
-  // read-only spectator window, which looked like a puzzle that ignores clicks.
-  const others     = game.users.filter(u => u.active && u.id !== game.user.id);
-  const players    = others.filter(u => !u.isGM);
-  const playerOpts = others
-    .map(u => `<option value="${u.id}">${esc(u.name)}${u.isGM ? ' (GM)' : ''}</option>`).join('');
-
-  const langOpts = Object.entries({infernal:'Infernal',abyssal:'Abyssal',elvish:'Elvish'})
-    .map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
-
-  const content = `<div class="lpm-puzzle-form">
-      <div class="form-group">
-        <label>Type</label>
-        <div class="form-fields"><select name="ptype">${typeOpts}</select></div>
-      </div>
-      <div class="form-group">
-        <label>Difficulty</label>
-        <div class="form-fields"><select name="pdiff">${diffOpts}</select></div>
-      </div>
-      <div class="lpm-cipher-opts" hidden>
-        <div class="form-group">
-          <label>Language</label>
-          <div class="form-fields"><select name="plang">${langOpts}</select></div>
-        </div>
-        <div class="form-group">
-          <label>Word / phrase</label>
-          <div class="form-fields">
-            <input type="text" name="pword" placeholder="Leave empty for random" autocomplete="off" spellcheck="false">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Caesar shift</label>
-          <div class="form-fields">
-            <input type="number" name="pshift" value="" min="1" max="25" placeholder="Random">
-          </div>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Send to</label>
-        <div class="form-fields">
-          <select name="ptarget">
-            <option value="all" ${players.length ? 'selected' : ''}>All connected players (${players.length})</option>
-            <option value="me" ${players.length ? '' : 'selected'}>Only me — I solve it</option>
-            ${playerOpts ? `<optgroup label="─── Specific player ───">${playerOpts}</optgroup>` : ''}
-          </select>
-        </div>
-      </div>
-      <div class="form-group lpm-shared-group">
-        <label>Solve together</label>
-        <div class="form-fields"><input type="checkbox" name="pshared"></div>
-        <p class="hint lpm-shared-hint"></p>
-      </div>
-    </div>`;
-
-  const { DialogV2 } = foundry.applications.api;
-  const dialog = new DialogV2({
-    window  : { title: 'Open Puzzle', icon: 'fa-solid fa-puzzle-piece' },
-    classes : ['lpm-puzzle-dialog'],
-    position: { width: 420 },
-    content : dialogContent(content),
-    buttons : [{
-      action: 'open', label: 'Open', icon: 'fa-solid fa-puzzle-piece', default: true,
-      callback: async (event, button) => {
-        const f = button.form.elements;
-        const { openPuzzle, generatePuzzleOpts } = await import('./PuzzleApp.mjs');
-        const type   = f.ptype.value;
-        const diff   = f.pdiff.value;
-        const target = f.ptarget.value;
-        const solo   = target === 'me' || target === game.user.id;
-        const recipients = solo ? []
-          : target === 'all' ? game.users.filter(u => u.active && !u.isGM)
-          : game.users.filter(u => u.id === target && u.active);
-        const shared = recipients.length > 1 && f.pshared.checked;
-
-        // Pre-generate puzzle state so GM and players see the same puzzle
-        const opts = generatePuzzleOpts(type, diff, {
-          lang      : f.plang.value || undefined,
-          customWord: f.pword.value || undefined,
-          shift     : parseInt(f.pshift.value) || undefined,
-          shared,
-          recipients: recipients.map(u => ({ id: u.id, name: u.name })),
-        });
-
-        // Nobody on the other end: open it playable for the GM instead of a
-        // read-only mirror of nothing (that looked like a puzzle that ignores clicks).
-        if (!recipients.length) {
-          if (!solo) ui.notifications.warn(target === 'all'
-            ? 'No players are connected — opening the puzzle for you to solve.'
-            : 'That player is not connected — opening the puzzle for you to solve.');
-          openPuzzle(type, diff, opts);
-          return;
-        }
-
-        game.socket.emit(`module.${MODULE_ID}`, {
-          action: 'openPuzzle', type, difficulty: diff, userIds: recipients.map(u => u.id), opts,
-        });
-        ui.notifications.info(`${shared ? 'Shared puzzle' : 'Puzzle'} sent to ${recipients.map(u => u.name).join(', ')}.`);
-        // The GM watches (and can join from the spectator window).
-        openPuzzle(type, diff, { ...opts, spectator: true });
-      },
-    }, { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }],
-  });
-  dialog.addEventListener('render', () => {
-    const root = dialog.element;
-    if (!root || root.dataset.lpmWired) return;
-    root.dataset.lpmWired = '1';
-    const f = root.querySelector('form').elements;
-    // The window keeps its height unless asked; the cipher fields would push the buttons out.
-    const refit = () => dialog.setPosition({ height: 'auto' });
-    f.ptype.addEventListener('change', () => {
-      root.querySelector('.lpm-cipher-opts').hidden = f.ptype.value !== 'cipher';
-      refit();
-    });
-    // Explain the checkbox in terms of what the players will actually get.
-    const syncShared = () => {
-      const group = f.ptarget.value === 'all' && players.length > 1;
-      f.pshared.disabled = !group;
-      root.querySelector('.lpm-shared-group').classList.toggle('lpm-disabled', !group);
-      root.querySelector('.lpm-shared-hint').textContent = !group
-        ? 'Only matters when several players get the puzzle.'
-        : f.pshared.checked
-          ? 'ONE shared puzzle: everyone sees and moves the same pieces, and one solve opens it for all.'
-          : 'Each player gets their OWN copy of the same puzzle and solves it alone.';
-    };
-    for (const el of [f.ptarget, f.pshared]) el.addEventListener('change', () => { syncShared(); refit(); });
-    syncShared();
-    // Typing must not reach core hotkeys (Enter / Escape still work).
-    root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => {
-      if (e.key !== 'Enter' && e.key !== 'Escape') e.stopPropagation();
-    }));
-  });
-  dialog.render({ force: true });
 }

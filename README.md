@@ -20,12 +20,13 @@ then enable it in **Game Settings → Manage Modules**.
 Nothing is tied to doors or tiles: the GM asks a specific character for a
 challenge whenever the story needs it.
 
-1. **VTools → Request a Challenge** — choose the challenge (the lock or one of
-   the Arcana workings), the character (the selected token's character is first
-   in the list), the **DC** and, optionally, **what it is on** ("Iron-bound
-   chest", "Sealed vault door"). Tick **Secret** to keep the DC from the
-   players: it is left off the card, the roll and the game, and only the GM's
-   copy of the card shows it.
+1. **VTools → Puzzles & Challenges** (the module's only button) — under
+   **What**, pick a rolled challenge (the lock or one of the Arcana workings),
+   then the character (the selected token's character is first in the list),
+   the **DC** and, optionally, **what it is on** ("Iron-bound chest", "Sealed
+   vault door"). Tick **Secret** to keep the DC from the players: it is left
+   off the card, the roll and the game, and only the GM's copy of the card
+   shows it. (The same menu sends puzzles — see *Puzzles*.)
 2. A **request card** appears in chat. Only that character's owner (and the GM)
    gets the button (**Roll & pick the lock**, **Roll Arcana & unweave**, …);
    everyone else sees "Waiting for …". If several players own the character,
@@ -33,6 +34,10 @@ challenge whenever the story needs it.
 3. The card follows the attempt: *picking…* → *Picked by …* or *The lock held*
    (*Unwoven by …* / *The ward held* and so on for Arcana). After a failure the
    GM can **Allow another try**.
+
+The cards have no colours of their own: they sit on your chat's message card
+and take its theme (core, the game system, Carolingian UI and its colour
+scheme), with the outcome shown by the icon's colour.
 
 Once the check is rolled, the attempt counts. Closing the game before the end is
 giving up (*… gave up*), so a bad roll cannot be re-rolled by walking away; the
@@ -49,7 +54,7 @@ const actor = canvas.tokens.controlled[0]?.actor;
 api.requestLockpick({ actor, dc: 17, label: 'Iron-bound chest' });
 api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true });
 //                     kind: 'lock' | 'ward' | 'resonance' | 'sigil'
-api.openRequestDialog('sigil');   // the toolbar dialog, with a challenge preselected
+api.openMenu('sigil');            // the menu, with a challenge or a puzzle ('sudoku', …) preselected
 ```
 
 ### The roll
@@ -135,44 +140,46 @@ edge and that ring's gate pulses amber: turn the ring until the gate meets the
 light.
 
 **Drag** a ring to turn it (a click turns it one step clockwise, a right-click
-one step back, the mouse wheel works too). Every step costs **Focus**; when it
-runs out, the ward holds. A **golden link** means turning one ring turns
-another as well (crossed: the other way). Hovering a ring outlines every ring
-that will move with it. Nothing is hidden: every gate and link is on the board
-from the start.
+one step back, the mouse wheel works too). Turning is free. A **golden link**
+means turning one ring turns another as well (crossed: the other way).
+Hovering a ring outlines every ring that will move with it. Nothing is hidden:
+every gate and link is on the board from the start.
+
+**How you lose:** the ward knits itself back together. A violet seam stitches
+its way round the rim from the top, clockwise; when it closes the circle, the
+ward holds. The footer counts the seconds down too (*Re-forms in*).
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
 | Rings | 3 | 4 | 5 |
 | Golden links | 0 | 1 | 2 |
+| Time before it re-forms | 50 s | 70 s | 90 s |
 
-From DC 15 there are two crystals instead of one. **The roll** sets the spare
-Focus on top of the fewest turns that solve the ward: +10 on a natural 20, +8
-when it beats the DC by 10, +6 by 5, +4 when it just makes it, +3 when it misses
-by up to 4, +2 below that and +1 on a natural 1. Beating the DC by 5 (or a
-natural 20) adds a dotted trace from the amber gate to the light: which way to
-turn and how far.
+From DC 15 there are two crystals instead of one. **The roll** adds or takes
+3 s per point above or below the DC (from 60 % to 160 % of the base time;
+×1.8 on a natural 20, ×0.5 on a natural 1). Beating the DC by 5 (or a natural
+20) adds a dotted trace from the amber gate to the light: which way to turn and
+how far.
 
 ### Attune the Resonance
 
-An arcane hum (the violet wave) runs through the scope. Shape your own wave
-(cyan) with three dials — **frequency, amplitude, phase**. Each dial has a
-light: **green** when that dial matches the hum, amber when it is close. With
-all three green you are **in tune**: both waves turn gold and the attunement
-bar fills; out of tune it drains at half that speed. Fill it before your
-**Concentration** runs out. The hum breathes slowly around its note, so keep an
-eye on the lights while you hold it. The mouse wheel fine-tunes a dial (Shift
-for finer steps). With sound on, you hear both tones.
+The working's resonance is a **wandering light** in a dark scrying pool ringed
+with nine runes. Your **focus** is a ring of light that glides after the mouse.
+Keep the light inside it: the ring turns gold, the runes around the pool wake
+one by one and a clean fifth sounds over the hum. Outside the ring the
+attunement slowly fades (at 40 % of the speed it grows). Wake all nine runes
+before your **Concentration** runs out.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
-| How exact (frequency / amplitude / phase) | ±0.12 / ±10% / ±24° | ±0.09 / ±8% / ±19° | ±0.065 / ±6% / ±15° |
-| Time to hold it | 3 s | 4 s | 5 s |
+| Time inside the focus to attune | 6 s | 8 s | 10 s |
+| How restless the light is | calm | lively | quick, with sudden swerves |
 
-**The roll** sets Concentration: 45 s ± 2 s per point above or below the DC,
-between 30 and 70 s (80 s on a natural 20, 30 s on a natural 1). The better the
-roll, the less the hum moves. Beating the DC by 5 marks the hum's true
-frequency on its dial; a natural 20 marks all three.
+**The roll** sets how wide your focus is (wider the more it beats the DC, a
+natural 20 widest) and Concentration: 40 s ± 2 s per point, between 30 and
+65 s (75 s on a natural 20, 30 s on a natural 1). Even at its quickest the
+light never darts further in a quarter of a second than your focus is wide, so
+a hand that keeps up never loses it.
 
 ### Trace the Sigil
 
@@ -195,8 +202,8 @@ again for 4 s of mana; tracing waits until it is over); a natural 20 gives two.
 
 ## Puzzles (GM)
 
-Open **VTools → Open Puzzle**: Sudoku, Sliding tiles, Cipher or Rune sequence,
-each in three difficulties.
+Open **VTools → Puzzles & Challenges** and pick a puzzle under **What**:
+Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 
 - **Send to** — all connected players, one player, or **Only me** (the GM solves
   it; also used automatically when no player is connected).
@@ -206,6 +213,9 @@ each in three difficulties.
 - The GM gets a spectator window with a roster of the players and their status.
   With own copies, click a name to see that player's board; **Join in / Solve a
   copy** lets the GM play too.
+- Watching a sudoku, the GM can tick **Show the answers**: the players' right
+  digits turn green, wrong ones red, and every empty cell shows its answer
+  faintly. Only the GM's window shows it; the tick is remembered.
 
 ---
 
@@ -214,8 +224,8 @@ each in three difficulties.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Tool needed to pick a lock | **Nothing** | Nothing / Thieves' Tools / Lockpicks / Either — see *Tools* |
-| Default DC | 15 | Pre-filled in the request dialog |
-| Keep the DC secret by default | Off | Pre-ticks **Secret** in the request dialog |
+| Default DC | 15 | Pre-filled in the Puzzles & Challenges menu |
+| Keep the DC secret by default | Off | Pre-ticks **Secret** in the menu |
 | Show challenges live to the GM | **On** | Spectator window for the GM while a player picks a lock or works an Arcana challenge |
 | Show challenges live to other players | Off | The same window for everyone else |
 
@@ -226,7 +236,7 @@ each in three difficulties.
 - Foundry VTT **v12 – v14** (verified on v14)
 - dnd5e system **v3.0+**
 - Level Up Advanced 5e (a5e) system
-- No dependencies. VTools adds the toolbar buttons; without it use the macro API.
+- No dependencies. VTools adds the toolbar button; without it use the macro API (`api.openMenu()`).
 
 ### Foundry versions
 

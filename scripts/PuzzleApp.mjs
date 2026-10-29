@@ -500,16 +500,28 @@ class SudokuPuzzle extends PuzzleBase {
         <button type="button" class="wide" data-num="0">Clear</button>
       </div>`;
     const hint = this._spectator
-      ? (this.shared ? 'Read-only — the party’s board. Green = correct, red = wrong.'
-                     : 'Read-only — click a name to see their board. Green = correct, red = wrong.')
+      ? (this.shared ? 'Read-only — the party’s board.' : 'Read-only — click a name to see their board.')
       : (this.shared ? 'One board for everyone — click a cell, then 1–9 or the pad.'
                      : 'Click a cell → type 1–9 or use the pad (Delete / 0 clears)');
+    // The GM watching may turn the answers on: right digits green, wrong red, missing ones faint.
+    const answers = this._spectator && game.user.isGM
+      ? `<label class="lpm-answers-toggle" title="Green: right · red: wrong · faint: what belongs in an empty cell">
+           <input type="checkbox" class="lpm-answers" ${this._answers ? 'checked' : ''}> Show the answers</label>` : '';
     return `<div class="lpm-sudoku-wrap">
       ${this._headerHTML()}
       <div class="lpm-sudoku-grid"></div>
       ${pad}
+      ${answers}
       <div class="lpm-puzzle-hint">${hint}</div>
     </div>`;
+  }
+
+  /** The GM's choice to see the answers while watching, remembered on this client. */
+  get _answers() {
+    if (this._answersOn === undefined) {
+      try { this._answersOn = !!game.settings.get(MODULE_ID, 'sudokuAnswers'); } catch (e) { this._answersOn = false; }
+    }
+    return this._answersOn && this._spectator && game.user.isGM;
   }
 
   _afterRender(root) {
@@ -543,6 +555,11 @@ class SudokuPuzzle extends PuzzleBase {
       this._keyHandler = this._onKey.bind(this);
       document.addEventListener('keydown', this._keyHandler, true);
     }
+    root.querySelector('.lpm-answers')?.addEventListener('change', ev => {
+      this._answersOn = ev.currentTarget.checked;
+      game.settings.set(MODULE_ID, 'sudokuAnswers', this._answersOn).catch(() => {});
+      this._paint();
+    });
     this._paint();
   }
 
@@ -552,7 +569,7 @@ class SudokuPuzzle extends PuzzleBase {
   }
 
   _paint() {
-    const reveal = this._spectator;
+    const reveal = this._answers;
     const sel    = this.selected;
     const selV   = sel !== null ? this.board[sel] : 0;
     const sr = sel !== null ? Math.floor(sel / 9) : -9, sc = sel !== null ? sel % 9 : -9;
@@ -568,6 +585,8 @@ class SudokuPuzzle extends PuzzleBase {
       cell.classList.toggle('same',     !!selV && i !== sel && v === selV);
       cell.classList.toggle('error',    reveal && !given && !!v && v !== this.solution[i]);
       cell.classList.toggle('correct',  reveal && !given && !!v && v === this.solution[i]);
+      cell.classList.toggle('answer',   reveal && !v);
+      cell.dataset.answer = reveal && !v ? this.solution[i] : '';
     });
   }
 

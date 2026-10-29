@@ -3,9 +3,9 @@
  * pick a lock or one of the Arcana workings (unweave a ward, attune a
  * resonance, trace a sigil).
  *
- *   1. GM: "Request a Challenge" (VTools, or the API from a macro) → challenge,
- *      character, DC (shown or secret), optionally what it is on → a request
- *      card in chat.
+ *   1. GM: "Puzzles & Challenges" (VTools, menu.mjs, or the API from a macro)
+ *      → challenge, character, DC (shown or secret), optionally what it is on
+ *      → a request card in chat.
  *   2. The character's owner presses the card's button → the check is rolled
  *      the system's own way (rolls.mjs; the roll decides how hard the game
  *      is) → the game opens.
@@ -20,7 +20,6 @@
  */
 
 import { docFromUuid } from './compat.mjs';
-import { dialogContent } from './app-window.mjs';
 import { resolveTool } from './tools.mjs';
 import { rollArcana, rollLockpicking } from './rolls.mjs';
 import { resultCard, requestCard, esc } from './cards.mjs';
@@ -39,13 +38,13 @@ const setting = (key, fallback) => {
   try { return game.settings.get(MODULE_ID, key) ?? fallback; } catch (e) { return fallback; }
 };
 
-/** Players (not GMs) who own the actor — shown next to the name in the dialog. */
-const ownerNames = actor =>
+/** Players (not GMs) who own the actor — shown next to the name in the menu. */
+export const ownerNames = actor =>
   game.users.filter(u => !u.isGM && actor.testUserPermission?.(u, 'OWNER')).map(u => u.name);
 
 /** Characters the GM can ask: the selected tokens' actors first, then every player-owned actor. */
-function candidates() {
-  const picked = (canvas?.tokens?.controlled ?? []).map(t => t.actor).filter(Boolean);
+export function candidates() {
+  const picked = (globalThis.canvas?.tokens?.controlled ?? []).map(t => t.actor).filter(Boolean);
   const owned  = (game.actors?.filter(a => a.hasPlayerOwner) ?? []).sort((a, b) => a.name.localeCompare(b.name));
   const seen = new Set();
   return [...picked, ...owned].filter(a => !seen.has(a.uuid) && seen.add(a.uuid));
@@ -63,91 +62,6 @@ export async function arcanaAppClass(kind) {
 const resultSub = (label, check, dc, hideDC) => [label, check, hideDC ? '' : `DC ${dc}`].filter(Boolean).join(' · ');
 
 // ─── GM side ─────────────────────────────────────────────────────────────────
-
-/** @param {string} [kind] challenge preselected in the dialog ('lock', 'ward', …). */
-export function openRequestDialog(kind = 'lock') {
-  if (!game.user.isGM) return ui.notifications.warn('Only the GM can request a challenge.');
-  const list = candidates();
-  if (!list.length) return ui.notifications.warn('There are no player-owned characters to ask.');
-  if (!isChallenge(kind)) kind = 'lock';
-
-  const actorOpts = list.map((a, i) => {
-    const owners = ownerNames(a);
-    return `<option value="${esc(a.uuid)}" ${i ? '' : 'selected'}>`
-      + `${esc(a.name)}${owners.length ? ` — ${esc(owners.join(', '))}` : ''}</option>`;
-  }).join('');
-  const groups = {};
-  for (const [k, c] of Object.entries(CHALLENGES)) (groups[c.group] ??= []).push(
-    `<option value="${k}" ${k === kind ? 'selected' : ''}>${esc(c.title)}</option>`);
-  const challengeOpts = Object.entries(groups)
-    .map(([g, opts]) => `<optgroup label="${esc(g)}">${opts.join('')}</optgroup>`).join('');
-
-  const content = `<div class="lpm-request-form">
-      <div class="form-group">
-        <label>Challenge</label>
-        <div class="form-fields"><select name="kind">${challengeOpts}</select></div>
-      </div>
-      <p class="hint lpm-request-blurb"></p>
-      <div class="form-group">
-        <label>Character</label>
-        <div class="form-fields"><select name="actor">${actorOpts}</select></div>
-      </div>
-      <div class="form-group">
-        <label>DC</label>
-        <div class="form-fields lpm-dc-fields">
-          <input type="number" name="dc" value="${Number(setting('defaultDC', 15))}" min="5" max="30" step="1">
-          <label class="checkbox lpm-hide-dc"><input type="checkbox" name="hideDC" ${setting('hideDC', false) ? 'checked' : ''}> Secret</label>
-        </div>
-        <p class="hint">A secret DC is never shown to the players: not on the card, the roll or in the game.</p>
-      </div>
-      <div class="form-group">
-        <label>What is it on</label>
-        <div class="form-fields"><input type="text" name="label" autocomplete="off"></div>
-      </div>
-      <p class="hint">The player gets a card in chat. Their roll decides how hard the challenge is.</p>
-    </div>`;
-
-  const { DialogV2 } = foundry.applications.api;
-  const dialog = new DialogV2({
-    window  : { title: 'Request a Challenge', icon: 'fa-solid fa-dice-d20' },
-    classes : ['lpm-request-dialog'],
-    position: { width: 440 },
-    content : dialogContent(content),
-    buttons : [{
-      action: 'send', label: 'Send to chat', icon: 'fa-solid fa-paper-plane', default: true,
-      callback: (event, button) => {
-        const f = button.form.elements;
-        return requestChallenge({
-          kind  : f.kind.value,
-          actor : docFromUuid(f.actor.value),
-          dc    : f.dc.value,
-          hideDC: f.hideDC.checked,
-          label : String(f.label.value ?? '').trim(),
-        });
-      },
-    }, { action: 'cancel', label: 'Cancel', icon: 'fa-solid fa-xmark' }],
-  });
-  dialog.addEventListener('render', () => {
-    const root = dialog.element;
-    if (!root || root.dataset.lpmWired) return;
-    root.dataset.lpmWired = '1';
-    // Typing must not reach core hotkeys (Enter / Escape still work).
-    root.querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => {
-      if (e.key !== 'Enter' && e.key !== 'Escape') e.stopPropagation();
-    }));
-    const kindEl = root.querySelector('[name="kind"]');
-    const sync = () => {
-      const c = CHALLENGES[kindEl.value] ?? CHALLENGES.lock;
-      root.querySelector('.lpm-request-blurb').textContent = c.blurb;
-      root.querySelector('[name="label"]').placeholder = `Optional — ${c.placeholder}`;
-      dialog.setPosition({ height: 'auto' });
-    };
-    kindEl.addEventListener('change', sync);
-    sync();
-  });
-  dialog.render({ force: true });
-  return dialog;
-}
 
 /**
  * Post a request card. Also usable from a macro:

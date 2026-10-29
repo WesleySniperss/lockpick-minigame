@@ -2,8 +2,10 @@
  * cards.mjs — one look for everything the module posts to chat: the request
  * card the GM sends, the check flavour, "lock picked", "lock holds" and
  * "puzzle solved".
- * Dark iron card with a coloured edge, Modesto Condensed title, Signika body
- * (both ship with core). Styles live in styles/lockpick.css (.lpm-card).
+ * A header (round icon in the outcome's colour, title, subtitle) over plain
+ * text, with no background of its own: it sits on the chat's message card and
+ * takes its colours from the chat's theme variables, so it matches the
+ * system and the user's colour scheme. Styles: styles/lockpick.css (.lpm-card).
  */
 
 import { CHALLENGES } from './challenges.mjs';

@@ -1,30 +1,34 @@
 /**
- * ResonanceApp.mjs — "Attune the Resonance": match an arcane hum and hold it.
+ * ResonanceApp.mjs — "Attune the Resonance": hold your focus on a wandering
+ * light in a scrying pool.
  *
- * The violet wave is the working's hum; the cyan wave is yours, shaped by
- * three dials. Each dial has a light that turns green when that dial matches
- * the hum (amber when close), so the player always knows which one is off.
- * With all three green the waves turn gold and the attunement bar fills;
- * hold it there before concentration runs out. Two quiet tones follow the
- * waves and fall into harmony as they meet.
+ * The working's resonance is a wisp drifting through a dark pool ringed with
+ * runes. The caster's focus is a ring of light that glides after the pointer.
+ * While the wisp is inside it, the focus turns gold, the runes around the pool
+ * wake one by one and a quiet fifth sounds over the hum; outside it the
+ * attunement slowly fades. Wake every rune before concentration runs out.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
-import { generateResonance, ResonanceGame, RANGES, DIALS, waveAt } from './resonance-logic.mjs';
-import { ARC, TAU, layer, blit, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { generateResonance, ResonanceGame, RUNE_COUNT } from './resonance-logic.mjs';
+import { ARC, TAU, RUNES, layer, blit, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
+import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
 
-const W = 520, H = 300;
-const SCOPE = { x: 22, y: 20, w: 476, h: 196 };
-const METER = { x: 22, y: 246, w: 476, h: 16 };
-const DIAL = {
-  freq : { label: 'Frequency', step: 0.01,         fmt: v => v.toFixed(2) },
-  amp  : { label: 'Amplitude', step: 0.01,         fmt: v => `${Math.round(v * 100)}%` },
-  phase: { label: 'Phase',     step: Math.PI / 180, fmt: v => `${Math.round(v / TAU * 360)}°` },
-};
-const STATUS = { ok: 'Matches the hum', near: 'Close', off: 'Off' };
-const toHz = f => 220 * Math.pow(2, (f - RANGES.freq[0]) / 1.85);
+const W = 520, H = 440, CX = 260, CY = 218;
+const POOL = 158, RIM_IN = 160, RIM_OUT = 200, RUNE_R = 180;
+const TRAIL = 22;
+const runeAngle = i => -Math.PI / 2 + i * TAU / RUNE_COUNT;
+
+/** A rune as a path only (glow() strokes it in several passes). */
+function runePath(ctx, idx, x, y, size, rot) {
+  const segs = RUNES[((idx % RUNES.length) + RUNES.length) % RUNES.length];
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const P = (u, v) => [x + (u * c - v * s) * size, y + (u * s + v * c) * size];
+  ctx.beginPath();
+  for (const [x1, y1, x2, y2] of segs) { ctx.moveTo(...P(x1, y1)); ctx.lineTo(...P(x2, y2)); }
+}
 
 export class ResonanceApp extends MiniGameApp {
   static KIND   = 'resonance';
@@ -34,25 +38,11 @@ export class ResonanceApp extends MiniGameApp {
   buildGame(init) {
     this.res = generateResonance(init);
     this.game = new ResonanceGame(this.res);
-    this.endDelay = 1.2;
+    this.endDelay = 1.3;
     this.audio = null;
-  }
-
-  controlsHTML() {
-    return `<div class="lpm-arcana-controls lpm-res-controls">${DIALS.map(key => {
-      const d = DIAL[key], [lo, hi] = RANGES[key];
-      return `<label class="lpm-dial" data-dial="${key}">
-        <span class="lpm-dial__label">
-          <span class="lpm-dial__name"><i class="lpm-dial__light" title="${STATUS.off}"></i>${d.label}</span>
-          <b class="lpm-dial__value"></b>
-        </span>
-        <span class="lpm-dial__track">
-          <input type="range" min="${lo}" max="${hi}" step="${d.step}" value="${this.game.player[key]}"
-                 ${this._spectator ? 'disabled' : ''} aria-label="${d.label}">
-          <i class="lpm-dial__ghost"></i>
-        </span>
-      </label>`;
-    }).join('')}</div>`;
+    this.trail = [];
+    this.runeIds = Array.from({ length: RUNE_COUNT }, (_, i) => (this.res.seed + i * 7) % RUNES.length);
+    this.woke = 0;                         // runes already announced with a chime
   }
 
   meterHTML() {
@@ -62,77 +52,52 @@ export class ResonanceApp extends MiniGameApp {
   }
 
   hintHTML() {
-    return 'Turn each dial until its light is <span class="lpm-hint-green">green</span>'
-      + ' &middot; <strong>hold</strong> <span class="lpm-hint-cyan">your wave</span> on <span class="lpm-hint-violet">the hum</span>';
+    return 'Move your <span class="lpm-hint-cyan">focus</span> with the mouse'
+      + ' &middot; keep the <span class="lpm-hint-violet">wandering light</span> inside it'
+      + ' &middot; wake every <span class="lpm-hint-amber">rune</span>';
   }
 
-  bindInput(canvas, root) {
-    for (const el of root.querySelectorAll('.lpm-dial')) {
-      const key = el.dataset.dial, input = el.querySelector('input');
-      const set = v => { this.game.setDial(key, v); this.startTones(); this.refreshDials(); };
-      input.addEventListener('input', () => set(input.value));
-      input.addEventListener('keydown', e => e.stopPropagation());       // arrows must not pan the canvas
-      el.addEventListener('wheel', e => {
-        e.preventDefault();
-        const [lo, hi] = RANGES[key];
-        const step = (hi - lo) / (e.shiftKey ? 600 : 160);
-        set(Number(input.value) + (e.deltaY < 0 ? step : -step));
-        input.value = this.game.player[key];
-      }, { passive: false });
-    }
-    this.refreshDials();
+  // ── input ─────────────────────────────────────────────────────────────
+
+  bindInput(canvas) {
+    const aim = ev => {
+      const b = canvas.getBoundingClientRect();
+      const x = (ev.clientX - b.left) * (W / b.width), y = (ev.clientY - b.top) * (H / b.height);
+      const inPool = Math.hypot(x - CX, y - CY) <= POOL;
+      canvas.style.cursor = inPool && !this._over ? 'none' : 'default';
+      if (this._over) return;
+      this.game.aimAt((x - CX) / POOL, (y - CY) / POOL);
+      this.startTones();
+    };
+    canvas.addEventListener('pointermove', aim);
+    canvas.addEventListener('pointerdown', aim);
   }
 
-  /** Values, the per-dial lights and the insight marks. */
-  refreshDials() {
-    const root = this.root;
-    if (!root) return;
-    const t = this.game.target(), m = this.game.match;
-    for (const key of DIALS) {
-      const el = root.querySelector(`.lpm-dial[data-dial="${key}"]`);
-      if (!el) continue;
-      const v = this.game.player[key];
-      el.querySelector('.lpm-dial__value').textContent = DIAL[key].fmt(v);
-      if (this._spectator) el.querySelector('input').value = v;
-      const state = m[key].ok ? 'ok' : m[key].near ? 'near' : 'off';
-      el.classList.toggle('is-ok', state === 'ok');
-      el.classList.toggle('is-near', state === 'near');
-      el.querySelector('.lpm-dial__light').title = STATUS[state];
-      // Insight: a mark where the true value lies
-      const ghost = el.querySelector('.lpm-dial__ghost');
-      const show = this.res.params.ghost === 'all' || (this.res.params.ghost === 'freq' && key === 'freq');
-      ghost.classList.toggle('is-on', show && !this._over);
-      if (show) {
-        const [lo, hi] = RANGES[key];
-        ghost.style.left = `${((t[key] - lo) / (hi - lo)) * 100}%`;
-      }
-    }
-  }
-
-  // ── sound: two quiet tones that meet in harmony ────────────────────────
+  // ── sound: the hum, and your fifth that falls into tune over it ────────
 
   startTones() {
     if (this.audio || this._spectator) return;
     const io = Sfx.audio();
     if (!io) return;
     const { ac, out } = io;
-    const mk = (type, gain) => {
+    const mk = (type, freq, gain) => {
       const o = ac.createOscillator(), g = ac.createGain();
-      o.type = type; g.gain.value = 0; o.connect(g); g.connect(out); o.start();
-      g.gain.linearRampToValueAtTime(gain, ac.currentTime + 0.6);
+      o.type = type; o.frequency.value = freq; g.gain.value = 0; o.connect(g); g.connect(out); o.start();
+      g.gain.linearRampToValueAtTime(gain, ac.currentTime + 0.8);
       return { o, g, gain };
     };
-    this.audio = { ac, hum: mk('sine', 0.035), you: mk('triangle', 0.022), fifth: mk('sine', 0) };
+    const f = this.res.tone;
+    this.audio = { ac, hum: mk('sine', f, 0.03), voice: mk('triangle', f * 1.5, 0.016), shimmer: mk('sine', f * 2, 0) };
   }
 
   updateTones() {
     const a = this.audio;
     if (!a) return;
-    const now = a.ac.currentTime, t = this.game.target();
-    a.hum.o.frequency.setTargetAtTime(toHz(t.freq), now, 0.08);
-    a.you.o.frequency.setTargetAtTime(toHz(this.game.player.freq), now, 0.05);
-    a.fifth.o.frequency.setTargetAtTime(toHz(t.freq) * 1.5, now, 0.08);
-    a.fifth.g.gain.setTargetAtTime(0.03 * this.game.meter, now, 0.15);
+    const now = a.ac.currentTime, f = this.res.tone, g = this.game;
+    const w = g.wisp(), d = Math.hypot(w.x - g.focus.x, w.y - g.focus.y) / this.res.params.focus;
+    // In the ring: a clean fifth. Further out: it drifts sharp and beats against the hum.
+    a.voice.o.frequency.setTargetAtTime(f * 1.5 * (g.inside ? 1 : 1 + 0.025 * Math.min(3, d)), now, 0.08);
+    a.shimmer.g.gain.setTargetAtTime(g.inside ? 0.012 + 0.02 * g.attune : 0, now, 0.2);
   }
 
   teardown() {
@@ -140,7 +105,7 @@ export class ResonanceApp extends MiniGameApp {
     if (!a) return;
     this.audio = null;
     const now = a.ac.currentTime;
-    for (const n of [a.hum, a.you, a.fifth]) {
+    for (const n of [a.hum, a.voice, a.shimmer]) {
       try { n.g.gain.setTargetAtTime(0, now, 0.08); n.o.stop(now + 0.5); } catch (e) {}
     }
   }
@@ -149,138 +114,164 @@ export class ResonanceApp extends MiniGameApp {
 
   update(dt) {
     if (this._over) return null;
-    const wasInTune = this.game.match.inTune;
     const out = this._spectator ? null : this.game.update(dt);
-    if (this._spectator) this.game.advance(dt);         // keep the hum moving between syncs
-    if (!this._spectator && this.game.match.inTune && !wasInTune) Sfx.channel(2);
+    if (this._spectator) this.game.advance(dt);            // the wisp moves on between syncs
+    const w = this.game.wisp();
+    this.trail.push({ x: CX + w.x * POOL, y: CY + w.y * POOL });
+    if (this.trail.length > TRAIL) this.trail.shift();
+    const runes = this.game.runes();
+    if (runes > this.woke) { this.woke = runes; if (!this._spectator) Sfx.node(runes); }
+    else if (runes < this.woke) this.woke = runes;
     this.updateTones();
     this._meterAcc = (this._meterAcc ?? 0) + dt;
-    if (this._meterAcc > 0.2) { this._meterAcc = 0; this.refreshMeter(); this.refreshDials(); }
+    if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); }
     if (out === 'won') Sfx.unweave();
     if (out === 'lost') Sfx.fail();
     return out;
   }
 
   syncState() { return this.game.snapshot(); }
-  applySync(s) { this.game.apply(s); this.refreshDials(); }
+  applySync(s) { this.game.apply(s); }
 
   draw(ctx) {
     if (!this._static) this._static = this.buildStatic();
     blit(ctx, this._static);
-    const g = this.game, t = g.target(), m = g.match;
-    const S = SCOPE, midY = S.y + S.h / 2, amp = S.h * 0.42;
-    const px = i => S.x + 6 + i * (S.w - 12) / 120;
-    const wavePath = w => () => {
-      ctx.beginPath();
-      for (let i = 0; i <= 120; i++) {
-        const y = midY - waveAt(w, i / 120) * amp;
-        i ? ctx.lineTo(px(i), y) : ctx.moveTo(px(i), y);
+    const g = this.game, t = this._t, p = this.res.params;
+    const w = g.wisp(), wx = CX + w.x * POOL, wy = CY + w.y * POOL;
+    const fx = CX + g.focus.x * POOL, fy = CY + g.focus.y * POOL, fr = p.focus * POOL;
+
+    // the wisp lights the water around it
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.clip();
+    spark(ctx, wx, wy, 110, g.inside ? ARC.gold : ARC.violet, 0.22);
+    // its trail, fading
+    ctx.globalCompositeOperation = 'lighter';
+    this.trail.forEach((q, i) => {
+      const k = (i + 1) / this.trail.length;
+      ctx.fillStyle = hexA(g.inside ? ARC.gold : '#c9b3ff', 0.22 * k);
+      ctx.beginPath(); ctx.arc(q.x, q.y, 1.5 + 4 * k, 0, TAU); ctx.fill();
+    });
+    ctx.restore();
+
+    // runes: awake ones glow gold, the one waking flickers in
+    const awake = g.runes(), frac = g.attune * RUNE_COUNT - awake;
+    for (let i = 0; i < RUNE_COUNT; i++) {
+      const lit = i < awake ? 1 : i === awake ? frac * (0.6 + 0.4 * Math.sin(t * 12)) : 0;
+      if (lit <= 0.02) continue;
+      const a = runeAngle(i), x = CX + Math.cos(a) * RUNE_R, y = CY + Math.sin(a) * RUNE_R;
+      glow(ctx, () => runePath(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2), { color: ARC.gold, width: 1.8, intensity: 0.4 + 0.6 * lit });
+    }
+    // the attunement, also as an arc round the pool's edge
+    if (g.attune > 0) glow(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, POOL + 1, -Math.PI / 2, -Math.PI / 2 + TAU * g.attune); },
+      { color: ARC.gold, width: 1.6, intensity: 0.8, core: false });
+
+    // the wisp
+    spark(ctx, wx, wy, 20, g.inside ? ARC.gold : ARC.violet, 0.95);
+    spark(ctx, wx, wy, 7, '#ffffff', 1);
+
+    // your focus: a ring of light with three motes running round it
+    if (!this._over) {
+      const col = g.inside ? ARC.gold : ARC.energy;
+      if (g.inside) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = hexA(ARC.gold, 0.07); ctx.beginPath(); ctx.arc(fx, fy, fr, 0, TAU); ctx.fill();
+        ctx.restore();
       }
-    };
-    ctx.save();
-    ctx.beginPath(); ctx.rect(S.x + 2, S.y + 2, S.w - 4, S.h - 4); ctx.clip();
-    // In tune: both waves turn gold and the glass glows.
-    const hum = m.inTune ? ARC.gold : ARC.violet, you = m.inTune ? ARC.gold : ARC.energy;
-    glow(ctx, wavePath(t), { color: hum, width: 2.4, intensity: 0.85, core: m.inTune });
-    glow(ctx, wavePath(g.player), { color: you, width: 2.2, intensity: 0.95 });
-    if (m.inTune) {
-      const pulse = 0.5 + 0.5 * Math.sin(this._t * 9);
-      ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const bloom = ctx.createLinearGradient(0, S.y, 0, S.y + S.h);
-      bloom.addColorStop(0, 'rgba(242,214,142,0)'); bloom.addColorStop(0.5, `rgba(242,214,142,${0.10 + 0.06 * pulse})`); bloom.addColorStop(1, 'rgba(242,214,142,0)');
-      ctx.fillStyle = bloom; ctx.fillRect(S.x, S.y, S.w, S.h);
-      ctx.restore();
+      glow(ctx, () => { ctx.beginPath(); ctx.arc(fx, fy, fr, 0, TAU); }, { color: col, width: g.inside ? 1.8 : 1.2, intensity: g.inside ? 0.95 : 0.6, core: g.inside });
+      for (let k = 0; k < 3; k++) {
+        const a = t * (g.inside ? 2.4 : 1.2) + k * TAU / 3;
+        spark(ctx, fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, 6, col, 0.9);
+      }
     }
-    ctx.restore();
 
-    // legend in the glass, top-left
+    this.drawGoal(ctx, awake);
+  }
+
+  /** Top-left: what to do, and how many runes are awake. */
+  drawGoal(ctx, awake) {
     ctx.save();
     ctx.font = '700 10px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.5px';
-    const key = (x, col, label) => {
-      ctx.fillStyle = hexA(col, 0.95); ctx.fillRect(x, S.y + 12, 14, 3);
-      ctx.fillStyle = 'rgba(200,210,235,0.75)'; ctx.fillText(label, x + 20, S.y + 17);
-    };
-    key(S.x + 10, ARC.violet, 'THE HUM');
-    key(S.x + 96, ARC.energy, 'YOUR WAVE');
-    ctx.restore();
-
-    // status, engraved under the glass
-    const okCount = DIALS.filter(k => m[k].ok).length;
-    ctx.save();
-    ctx.font = '700 10px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = m.inTune ? hexA(ARC.gold, 0.95) : 'rgba(170,185,220,0.7)';
-    ctx.fillText(m.inTune ? 'IN TUNE — HOLD IT' : `DIALS MATCHED ${okCount} / 3`, S.x + S.w - 8, S.y + S.h + 17);
-    ctx.restore();
-
-    // attunement bar
-    const M = METER, fillW = (M.w - 4) * g.meter;
-    ctx.fillStyle = '#0a0b10'; ctx.fillRect(M.x, M.y, M.w, M.h);
-    if (fillW > 0) {
-      const mg = ctx.createLinearGradient(0, M.y, 0, M.y + M.h);
-      mg.addColorStop(0, '#fff3cf'); mg.addColorStop(0.5, ARC.gold); mg.addColorStop(1, '#8a6424');
-      ctx.fillStyle = mg; ctx.fillRect(M.x + 2, M.y + 2, fillW, M.h - 4);
-      spark(ctx, M.x + 2 + fillW, M.y + M.h / 2, 14, ARC.gold, 0.6 + 0.4 * g.meter);
-    }
-    for (let i = 1; i < 10; i++) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(M.x + i * M.w / 10, M.y + 2, 1, M.h - 4); }
-    ctx.save();
-    ctx.font = '700 9px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-    ctx.fillStyle = 'rgba(170,185,220,0.6)';
-    ctx.fillText('ATTUNEMENT', M.x, M.y + M.h + 13);
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
+    ctx.fillStyle = 'rgba(200,212,240,0.78)';
+    ctx.fillText('KEEP THE LIGHT', 14, 22);
+    ctx.fillText('IN YOUR FOCUS', 14, 36);
+    ctx.font = '700 12px "Signika", sans-serif';
+    ctx.fillStyle = awake ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
+    ctx.fillText(`${awake} / ${RUNE_COUNT} RUNES AWAKE`, 14, 56);
     ctx.restore();
   }
 
   renderEnding(ctx, t, success) {
     const k = Math.min(1, t / this.endDelay);
-    const S = SCOPE;
     if (success) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createRadialGradient(W / 2, S.y + S.h / 2, 10, W / 2, S.y + S.h / 2, 320);
-      g.addColorStop(0, `rgba(255,240,200,${0.6 * Math.sin(k * Math.PI)})`); g.addColorStop(1, 'rgba(255,240,200,0)');
+      const g = ctx.createRadialGradient(CX, CY, 10, CX, CY, 260);
+      g.addColorStop(0, `rgba(255,236,190,${0.6 * Math.sin(k * Math.PI)})`); g.addColorStop(1, 'rgba(255,236,190,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       ctx.restore();
     } else {
-      ctx.fillStyle = `rgba(40,6,4,${0.55 * k})`; ctx.fillRect(0, 0, W, H);
+      // the light sinks into the deep
+      ctx.save();
+      ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.clip();
+      ctx.fillStyle = `rgba(2,3,10,${0.7 * k})`; ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      ctx.fillStyle = `rgba(40,6,4,${0.35 * k})`; ctx.fillRect(0, 0, W, H);
     }
   }
 
   endScreen(success) {
     return success
-      ? { title: 'Resonance Attuned', sub: 'The hum falls silent — it answers to you', icon: (c, x, y, tone) => ARCANE_ICONS.wave(c, x, y, tone, true) }
-      : { title: 'The Resonance Slips', sub: 'The note climbs out of reach', icon: (c, x, y, tone) => ARCANE_ICONS.wave(c, x, y, tone, false) };
+      ? { title: 'Resonance Attuned', sub: 'The hum falls silent — it answers to you', icon: (c, x, y, tone) => ARCANE_ICONS.wisp(c, x, y, tone, true) }
+      : { title: 'The Resonance Slips', sub: 'The light sinks back into the deep', icon: (c, x, y, tone) => ARCANE_ICONS.wisp(c, x, y, tone, false) };
   }
 
+  /** Backdrop, the stone basin with its rune sockets, the dark water and its stars. */
   buildStatic() {
     const c = layer(W, H, this._dpr);
     const ctx = c.getContext('2d');
-    blit(ctx, backdrop(W, H, this._dpr, { cx: W / 2, cy: H / 2, r: 380 }));
-    const S = SCOPE;
-    // dark glass with an etched grid
-    const glass = ctx.createLinearGradient(0, S.y, 0, S.y + S.h);
-    glass.addColorStop(0, '#0d1220'); glass.addColorStop(1, '#070a12');
-    ctx.fillStyle = glass; ctx.fillRect(S.x, S.y, S.w, S.h);
-    ctx.strokeStyle = 'rgba(120,150,210,0.10)'; ctx.lineWidth = 1;
-    for (let i = 1; i < 12; i++) { const x = S.x + i * S.w / 12 + 0.5; ctx.beginPath(); ctx.moveTo(x, S.y); ctx.lineTo(x, S.y + S.h); ctx.stroke(); }
-    for (let i = 1; i < 6; i++) { const y = S.y + i * S.h / 6 + 0.5; ctx.beginPath(); ctx.moveTo(S.x, y); ctx.lineTo(S.x + S.w, y); ctx.stroke(); }
-    ctx.strokeStyle = 'rgba(150,180,240,0.22)';
-    ctx.beginPath(); ctx.moveTo(S.x, S.y + S.h / 2 + 0.5); ctx.lineTo(S.x + S.w, S.y + S.h / 2 + 0.5); ctx.stroke();
-    // the middle line the phase is read at
-    ctx.strokeStyle = 'rgba(150,180,240,0.16)'; ctx.setLineDash([3, 5]);
-    ctx.beginPath(); ctx.moveTo(S.x + S.w / 2 + 0.5, S.y); ctx.lineTo(S.x + S.w / 2 + 0.5, S.y + S.h); ctx.stroke();
-    ctx.setLineDash([]);
-    // glass sheen
-    const sheen = ctx.createLinearGradient(S.x, S.y, S.x + S.w * 0.6, S.y + S.h);
-    sheen.addColorStop(0, 'rgba(200,220,255,0.07)'); sheen.addColorStop(0.4, 'rgba(200,220,255,0)');
-    ctx.fillStyle = sheen; ctx.fillRect(S.x, S.y, S.w, S.h);
-    // brass bezel
-    const bz = ctx.createLinearGradient(S.x, S.y, S.x + S.w, S.y + S.h);
-    bz.addColorStop(0, '#d9b66a'); bz.addColorStop(0.5, '#8a6a32'); bz.addColorStop(1, '#4a3716');
-    ctx.strokeStyle = bz; ctx.lineWidth = 3; ctx.strokeRect(S.x - 1.5, S.y - 1.5, S.w + 3, S.h + 3);
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1; ctx.strokeRect(S.x + 0.5, S.y + 0.5, S.w - 1, S.h - 1);
-    engrave(ctx, () => { ctx.beginPath(); ctx.rect(METER.x - 1, METER.y - 1, METER.w + 2, METER.h + 2); }, 1.2, 1);
+    blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: 212 }));
+    // stone basin
+    const rim = () => { ctx.beginPath(); ctx.arc(CX, CY, RIM_OUT, 0, TAU); ctx.arc(CX, CY, RIM_IN, 0, TAU, true); };
+    const stone = ctx.createRadialGradient(CX, CY, RIM_IN, CX, CY, RIM_OUT);
+    stone.addColorStop(0, '#2b2f3b'); stone.addColorStop(0.5, '#323745'); stone.addColorStop(1, '#22252f');
+    rim(); ctx.fillStyle = stone; ctx.fill();
+    const light = ctx.createLinearGradient(CX - RIM_OUT, CY - RIM_OUT, CX + RIM_OUT, CY + RIM_OUT);
+    light.addColorStop(0, 'rgba(210,225,255,0.10)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
+    rim(); ctx.fillStyle = light; ctx.fill();
+    for (const rr of [RIM_OUT, RIM_IN]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, rr, 0, TAU); }, 1.4, 1);
+    // rune sockets, carved and dark until they wake
+    for (let i = 0; i < RUNE_COUNT; i++) {
+      const a = runeAngle(i), x = CX + Math.cos(a) * RUNE_R, y = CY + Math.sin(a) * RUNE_R;
+      ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
+      engrave(ctx, () => { ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); }, 1, 0.8);
+      ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(190,205,240,0.10)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2); ctx.restore();
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2);
+    }
+    // the water: deep, with a drift of stars and two faint clouds
+    const water = ctx.createRadialGradient(CX - 30, CY - 40, 10, CX, CY, POOL);
+    water.addColorStop(0, '#141a3a'); water.addColorStop(0.6, '#0a0d22'); water.addColorStop(1, '#04050c');
+    ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.fillStyle = water; ctx.fill();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.clip();
+    const R = rng(this.res.seed + 99);
+    for (const [col, n] of [['rgba(150,110,255,', 2], ['rgba(90,200,255,', 2]]) {
+      for (let i = 0; i < n; i++) {
+        const x = CX + (R() - 0.5) * POOL * 1.4, y = CY + (R() - 0.5) * POOL * 1.4, r = 50 + R() * 70;
+        const cloud = ctx.createRadialGradient(x, y, 0, x, y, r);
+        cloud.addColorStop(0, col + '0.10)'); cloud.addColorStop(1, col + '0)');
+        ctx.fillStyle = cloud; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+    }
+    for (let i = 0; i < 140; i++) {
+      const a = R() * TAU, rr = Math.sqrt(R()) * POOL, s = R();
+      ctx.fillStyle = `rgba(220,230,255,${0.15 + 0.5 * s * s})`;
+      ctx.fillRect(CX + Math.cos(a) * rr, CY + Math.sin(a) * rr, s > 0.92 ? 1.6 : 1, s > 0.92 ? 1.6 : 1);
+    }
+    // the edge of the water sinks into shadow
+    const edge = ctx.createRadialGradient(CX, CY, POOL * 0.7, CX, CY, POOL);
+    edge.addColorStop(0, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = edge; ctx.fillRect(CX - POOL, CY - POOL, POOL * 2, POOL * 2);
+    ctx.restore();
     return c;
   }
 }
