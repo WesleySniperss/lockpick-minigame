@@ -3,19 +3,20 @@
  *
  * Systems rarely carry "lockpicks" as an item: dnd5e and a5e ship Thieves'
  * Tools. The world setting `toolMode` decides what is required:
+ *   none      — nothing (the default): carried Thieves' Tools add proficiency,
+ *               without them it is a plain Dexterity check;
  *   thieves   — Thieves' Tools; never used up, a failed attempt just fails;
  *   lockpicks — Lockpicks; consumable, a failed attempt snaps one;
- *   either    — Thieves' Tools if carried, otherwise Lockpicks;
- *   none      — nothing required (carried Thieves' Tools still add proficiency).
+ *   either    — Thieves' Tools if carried, otherwise Lockpicks.
  *
  * No Foundry globals at module scope, so the logic can be tested on its own.
  */
 
 export const TOOL_MODES = {
-  thieves:   "Thieves' Tools — never break",
-  lockpicks: 'Lockpicks — one snaps on a failed attempt',
+  none:      "Nothing — anyone can try; Thieves' Tools add proficiency",
+  thieves:   "Thieves' Tools required — they never break",
+  lockpicks: 'Lockpicks required — one snaps on a failed attempt',
   either:    "Either — Thieves' Tools first, otherwise Lockpicks",
-  none:      'Nothing — anyone can try',
 };
 
 const THIEVES_RE = /thie(?:f|ve)s?['’`]?\s*tools?|злодійськ|інструменти\s+злодія|воровск/i;
@@ -41,7 +42,7 @@ const quantity = item => Number(item?.system?.quantity ?? 1);
  * @returns {{kind:'thieves'|'lockpicks'|'none', item:object|null, label:string, consumable:boolean}
  *          | {error:string}}
  */
-export function resolveTool(actor, mode = 'thieves') {
+export function resolveTool(actor, mode = 'none') {
   const tools = findThievesTools(actor);
   const picks = findLockpicks(actor);
   const name  = actor?.name ?? 'This character';

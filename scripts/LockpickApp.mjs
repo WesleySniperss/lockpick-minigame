@@ -9,8 +9,8 @@
  *     (відмичка ламається лише якщо інструмент витратний — див. tools.mjs)
  */
 
-import { AppV1 } from './compat.mjs';
-import { rollBadge } from './MiniGameApp.mjs';
+import { GameWindow } from './app-window.mjs';
+import { rollBadge, dcHiddenHere } from './MiniGameApp.mjs';
 import { LockController, TRACK_W } from './LockController.mjs';
 import { LockRenderer, CANVAS_W, CANVAS_H, TRACK_X, KEYWAY_CY, SHEAR_Y } from './LockRenderer.mjs';
 
@@ -20,7 +20,9 @@ const DRIFT_START    = 55;    // px/сек — початкова швидкіс
 const DRIFT_ACCEL    = 720;   // px/сек² — прискорення дрейфу (набирає хід)
 const DRIFT_MAX      = 620;   // px/сек — стеля швидкості дрейфу
 
-export class LockpickApp extends AppV1 {
+export class LockpickApp extends GameWindow {
+
+  static DEFAULT_OPTIONS = { classes: ['lpm-lock'], position: { width: CANVAS_W } };
 
   /**
    * @param {object} opts
@@ -32,8 +34,8 @@ export class LockpickApp extends AppV1 {
     const sessionId = opts.sessionId ?? foundry.utils.randomID();
     const what = opts.label ? ` — ${opts.label}` : '';
     super({
-      id   : `lpm-lock-${sessionId}${spectator ? '-watch' : ''}`,
-      title: spectator ? `${opts.playerName ?? 'Player'} — Picking the Lock${what}` : `Pick the Lock${what}`,
+      id    : `lpm-lock-${sessionId}${spectator ? '-watch' : ''}`,
+      window: { title: spectator ? `${opts.playerName ?? 'Player'} — Picking the Lock${what}` : `Pick the Lock${what}` },
     });
 
     this._spectator  = spectator;
@@ -43,6 +45,7 @@ export class LockpickApp extends AppV1 {
     this.sessionId   = sessionId;
     this.dc          = opts.dc          ?? 15;
     this.rollResult  = opts.rollResult  ?? { total: 10, d20: 10, dc: 15, margin: -5 };
+    this.hideDC      = !!opts.hideDC;
     this.onSuccess   = opts.onSuccess   ?? (() => {});
     this.onFailure   = opts.onFailure   ?? (() => {});
     this.onClose     = opts.onClose     ?? (() => {});
@@ -116,49 +119,37 @@ export class LockpickApp extends AppV1 {
     return id;
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      title    : 'Pick the Lock',
-      width    : CANVAS_W,
-      height   : 'auto',
-      // theme-dark stops v14 forcing 'themed theme-light' onto every V1 app
-      classes  : ['lockpick-minigame', 'lpm-lock', 'themed', 'theme-dark'],
-      resizable: false,
-    });
-  }
-
-  async _renderInner() {
+  contentHTML() {
     const banner = this._spectator
       ? `<div class="lpm-spectator-banner"><i class="fa-solid fa-eye"></i> Spectating — ${foundry.utils.escapeHTML?.(this._playerName) ?? this._playerName}</div>`
       : '';
-    return $(`<div class="lpm-root">
+    return `<div class="lpm-root">
       ${banner}
       <canvas class="lpm-canvas" width="${CANVAS_W}" height="${CANVAS_H}" ${this._spectator ? 'style="pointer-events:none;"' : ''}></canvas>
       <div class="lpm-footer">
         <div class="lpm-footer-top">
-          <div class="lpm-roll-result" id="lpm-roll-display"></div>
-          <div class="lpm-attempts" id="lpm-attempts-display"></div>
+          <div class="lpm-roll-result"></div>
+          <div class="lpm-attempts"></div>
         </div>
         <div class="lpm-footer-bottom">
           <div class="lpm-hint"><strong>Hold</strong> to slide &middot; <strong>release on <span class="lpm-hint-green">green</span></strong> &middot; avoid <span class="lpm-hint-red">red</span></div>
-          <button id="lpm-leave-btn" class="lpm-leave-btn">Leave</button>
+          <button type="button" class="lpm-leave-btn">Leave</button>
         </div>
       </div>
-    </div>`);
+    </div>`;
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
-    const canvas = html.find('.lpm-canvas')[0];
+  onReady(root) {
+    const canvas = root.querySelector('.lpm-canvas');
     this.renderer    = new LockRenderer(canvas);
-    this._attemptsEl = html.find('#lpm-attempts-display')[0];
+    this._attemptsEl = root.querySelector('.lpm-attempts');
 
     if (!this._spectator) {
       canvas.addEventListener('mousedown', this._onDown.bind(this));
       window.addEventListener('mouseup', this._boundWindowUp);
     }
 
-    rollBadge(html.find('#lpm-roll-display')[0], this.rollResult);
+    rollBadge(root.querySelector('.lpm-roll-result'), this.rollResult, { hidden: dcHiddenHere(this.hideDC) });
     this._refreshAttempts();
 
     // Спостерігач слухає стан того, хто зламує
@@ -183,7 +174,7 @@ export class LockpickApp extends AppV1 {
       });
     }
 
-    html.find('#lpm-leave-btn').on('click', () => this.close());
+    root.querySelector('.lpm-leave-btn').addEventListener('click', () => this.close());
 
     this._lastT = performance.now();
     this._raf = requestAnimationFrame(this._boundTick);

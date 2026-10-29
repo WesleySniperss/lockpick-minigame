@@ -16,7 +16,8 @@
  * because socket.emit never echoes back to the sender's own client.
  */
 
-import { AppV1, oocChatData } from './compat.mjs';
+import { oocChatData } from './compat.mjs';
+import { GameWindow } from './app-window.mjs';
 import { resultCard } from './cards.mjs';
 import { Sfx } from './Sfx.mjs';
 
@@ -116,26 +117,36 @@ const STATUS = {
 // BASE
 // ═════════════════════════════════════════════════════════════════════════════
 
-class PuzzleBase extends AppV1 {
+class PuzzleBase extends GameWindow {
   /** Key used in sync messages and window ids. */
   static KEY  = 'puzzle';
   /** Human name for chat messages. */
   static NAME = 'Puzzle';
   /** Font Awesome icon of the result medal and chat card. */
   static ICON = 'fa-puzzle-piece';
+  /** Window title and width. */
+  static TITLE = 'Puzzle';
+  static WIDTH = 420;
+
+  static DEFAULT_OPTIONS = { classes: ['lpm-puzzle'] };
 
   constructor(difficulty, opts = {}) {
     const session   = opts.session ?? foundry.utils.randomID();
     const spectator = !!opts.spectator;
-    // One id per session and role. The old fixed ids ('lpm-sudoku') made V1
-    // render a second window of the same type INTO the first one, because it
-    // looks the element up by id — e.g. a playable puzzle landing inside the
-    // GM's read-only spectator frame, where nothing reacts to clicks.
-    super({ id: `lpm-${new.target.KEY}-${session}${spectator ? '-watch' : ''}` });
+    const shared    = !!opts.shared;
+    const title     = new.target.TITLE + (spectator ? ` — ${shared ? 'Party view' : 'Spectating'}` : shared ? ' — Together' : '');
+    // One id per session and role: a second window of the same type with a
+    // fixed id ('lpm-sudoku') used to land inside the first one, e.g. a
+    // playable puzzle inside the GM's read-only spectator frame.
+    super({
+      id      : `lpm-${new.target.KEY}-${session}${spectator ? '-watch' : ''}`,
+      window  : { title },
+      position: { width: new.target.WIDTH },
+    });
 
     this.difficulty = difficulty;
     this.session    = session;
-    this.shared     = !!opts.shared;
+    this.shared     = shared;
     this._opts      = opts;
     this._spectator = spectator;
     /** GM solving alone ("Only me", or nobody connected). */
@@ -145,24 +156,10 @@ class PuzzleBase extends AppV1 {
     this._ended     = false;
     this._joined    = false;
     this._timers    = [];
-    this._html      = null;
 
     for (const r of opts.recipients ?? []) {
       this._peers.set(r.id, { name: r.name, status: 'waiting', state: null });
     }
-
-    if (spectator)        this.options.title = `${this.options.title} — ${this.shared ? 'Party view' : 'Spectating'}`;
-    else if (this.shared) this.options.title = `${this.options.title} — Together`;
-  }
-
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      // theme-dark stops v14 forcing 'themed theme-light' onto every V1 app
-      classes  : ['lockpick-minigame', 'lpm-puzzle', 'themed', 'theme-dark'],
-      width    : 420,
-      height   : 'auto',
-      resizable: false,
-    });
   }
 
   // ── Rendering helpers ────────────────────────────────────────────────────
@@ -185,7 +182,7 @@ class PuzzleBase extends AppV1 {
   _canJoin() { return this._spectator && !this._joined && game.user.isGM; }
 
   _renderRoster(pulseId = null) {
-    const el = this._html?.[0]?.querySelector('.lpm-roster');
+    const el = this.root?.querySelector('.lpm-roster');
     if (!el) return;
     const pickable = this._spectator && !this.shared;
     const chips = [...this._peers].map(([id, p]) => {
@@ -204,26 +201,26 @@ class PuzzleBase extends AppV1 {
 
   /** Grow the window when its content grew (the height is 'auto', set once in px). */
   _fit() {
-    const c = this.element?.[0]?.querySelector('.window-content');
+    const c = this.root;
     if (c && c.scrollHeight > c.clientHeight + 1) this.setPosition({ height: 'auto' });
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
-    this._html = html;
+  onReady(root) {
     OPEN.add(this);
-    html.find('.lpm-join').on('click', ev => { ev.preventDefault(); this._joinAsPlayer(); });
-    html.find('.lpm-roster').on('click', '.lpm-chip.pickable', ev => {
-      this._watch = ev.currentTarget.dataset.user;
+    root.querySelector('.lpm-join')?.addEventListener('click', ev => { ev.preventDefault(); this._joinAsPlayer(); });
+    root.querySelector('.lpm-roster')?.addEventListener('click', ev => {
+      const chip = ev.target.closest('.lpm-chip.pickable');
+      if (!chip) return;
+      this._watch = chip.dataset.user;
       this._renderRoster();
       this._showPeer(this._peers.get(this._watch), null);
     });
     this._renderRoster();
-    this._afterRender(html);
+    this._afterRender(root);
   }
 
   /** Subclass hook: wire the puzzle's own DOM. */
-  _afterRender(html) {}
+  _afterRender(root) {}
 
   // ── Sync ─────────────────────────────────────────────────────────────────
 
@@ -268,7 +265,7 @@ class PuzzleBase extends AppV1 {
     // Individual mode: players never see each other's boards.
     if (!this._spectator && !this.shared) return;
     const peer = this._track(data);
-    if (!this._html || this._ended) return;
+    if (!this.root || this._ended) return;
     this._onPeerUpdate(peer, data);
     if (this._spectator && !this.shared) {
       this._watch ??= data.from;                  // follow the first player who acts
@@ -290,7 +287,7 @@ class PuzzleBase extends AppV1 {
 
   _joinAsPlayer() {
     this._joined = true;
-    this._html?.find('.lpm-join').remove();
+    this.root?.querySelector('.lpm-join')?.remove();
     openPuzzle(this.constructor.KEY, this.difficulty, {
       ...this._opts,
       spectator   : false,
@@ -308,7 +305,7 @@ class PuzzleBase extends AppV1 {
     if (this._ended) return;
     this._ended = true;
     if (post) this._postSuccess();
-    const content = this.element?.[0]?.querySelector('.window-content');
+    const content = this.root;
     if (content) {
       const icon = ok ? this.constructor.ICON : 'fa-xmark';
       content.innerHTML = `<div class="lpm-result lpm-result--${ok ? 'win' : 'fail'}">`
@@ -349,7 +346,7 @@ class PuzzleBase extends AppV1 {
 
   async close(options = {}) {
     // A player who walks away mid-puzzle shows up as such in the GM's roster.
-    if (!this._spectator && !this._ended && this._html) {
+    if (!this._spectator && !this._ended && this.root) {
       this._ended = true;
       this._emit('leave');
     }
@@ -494,31 +491,41 @@ class SudokuPuzzle extends PuzzleBase {
     this._cells   = [];
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Sudoku', width: 420 });
-  }
+  static TITLE = 'Sudoku';
 
-  async _renderInner() {
+  contentHTML() {
     const pad = this._spectator ? '' : `
       <div class="lpm-sudoku-pad">
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" data-num="${n}">${n}</button>`).join('')}
         <button type="button" class="wide" data-num="0">Clear</button>
       </div>`;
     const hint = this._spectator
-      ? (this.shared ? 'Read-only — the party’s board. Green = correct, red = wrong.'
-                     : 'Read-only — click a name to see their board. Green = correct, red = wrong.')
+      ? (this.shared ? 'Read-only — the party’s board.' : 'Read-only — click a name to see their board.')
       : (this.shared ? 'One board for everyone — click a cell, then 1–9 or the pad.'
                      : 'Click a cell → type 1–9 or use the pad (Delete / 0 clears)');
-    return $(`<div class="lpm-sudoku-wrap">
+    // The GM watching may turn the answers on: right digits green, wrong red, missing ones faint.
+    const answers = this._spectator && game.user.isGM
+      ? `<label class="lpm-answers-toggle" title="Green: right · red: wrong · faint: what belongs in an empty cell">
+           <input type="checkbox" class="lpm-answers" ${this._answers ? 'checked' : ''}> Show the answers</label>` : '';
+    return `<div class="lpm-sudoku-wrap">
       ${this._headerHTML()}
       <div class="lpm-sudoku-grid"></div>
       ${pad}
+      ${answers}
       <div class="lpm-puzzle-hint">${hint}</div>
-    </div>`);
+    </div>`;
   }
 
-  _afterRender(html) {
-    const grid = html.find('.lpm-sudoku-grid')[0];
+  /** The GM's choice to see the answers while watching, remembered on this client. */
+  get _answers() {
+    if (this._answersOn === undefined) {
+      try { this._answersOn = !!game.settings.get(MODULE_ID, 'sudokuAnswers'); } catch (e) { this._answersOn = false; }
+    }
+    return this._answersOn && this._spectator && game.user.isGM;
+  }
+
+  _afterRender(root) {
+    const grid = root.querySelector('.lpm-sudoku-grid');
     grid.innerHTML = Array.from({ length: 81 }, (_, i) => {
       const r = Math.floor(i / 9), c = i % 9;
       const b = [r % 3 === 0 && 'border-top', c % 3 === 0 && 'border-left',
@@ -536,9 +543,11 @@ class SudokuPuzzle extends PuzzleBase {
         this._paint();
       });
       // Number pad — makes the puzzle fully playable with the mouse alone.
-      html.find('.lpm-sudoku-pad').on('click', 'button[data-num]', ev => {
+      root.querySelector('.lpm-sudoku-pad')?.addEventListener('click', ev => {
+        const btn = ev.target.closest('button[data-num]');
+        if (!btn) return;
         ev.preventDefault();
-        this._setDigit(Number(ev.currentTarget.dataset.num));
+        this._setDigit(Number(btn.dataset.num));
       });
       // Keyboard: document CAPTURE phase. A listener on the app element never
       // fires reliably (focus sits on the window frame), and without capture +
@@ -546,6 +555,11 @@ class SudokuPuzzle extends PuzzleBase {
       this._keyHandler = this._onKey.bind(this);
       document.addEventListener('keydown', this._keyHandler, true);
     }
+    root.querySelector('.lpm-answers')?.addEventListener('change', ev => {
+      this._answersOn = ev.currentTarget.checked;
+      game.settings.set(MODULE_ID, 'sudokuAnswers', this._answersOn).catch(() => {});
+      this._paint();
+    });
     this._paint();
   }
 
@@ -555,7 +569,7 @@ class SudokuPuzzle extends PuzzleBase {
   }
 
   _paint() {
-    const reveal = this._spectator;
+    const reveal = this._answers;
     const sel    = this.selected;
     const selV   = sel !== null ? this.board[sel] : 0;
     const sr = sel !== null ? Math.floor(sel / 9) : -9, sc = sel !== null ? sel % 9 : -9;
@@ -571,6 +585,8 @@ class SudokuPuzzle extends PuzzleBase {
       cell.classList.toggle('same',     !!selV && i !== sel && v === selV);
       cell.classList.toggle('error',    reveal && !given && !!v && v !== this.solution[i]);
       cell.classList.toggle('correct',  reveal && !given && !!v && v === this.solution[i]);
+      cell.classList.toggle('answer',   reveal && !v);
+      cell.dataset.answer = reveal && !v ? this.solution[i] : '';
     });
   }
 
@@ -585,7 +601,7 @@ class SudokuPuzzle extends PuzzleBase {
 
   /** True when this window should receive keyboard input. */
   _ownsKeyboard() {
-    const el = this.element?.[0];
+    const el = this.element;
     if (!el || this._spectator || this._ended) return false;
     const ae = document.activeElement;
     if (ae && ae !== document.body && !el.contains(ae)
@@ -703,25 +719,24 @@ class SlidingPuzzle extends PuzzleBase {
     this._by = init?.by ?? '';
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Sliding Tiles', width: 440 });
-  }
+  static TITLE = 'Sliding Tiles';
+  static WIDTH = 440;
 
-  async _renderInner() {
+  contentHTML() {
     const hint = this._spectator
       ? (this.shared ? 'Read-only — the party’s board' : 'Read-only — click a name to see their board')
       : (this.shared ? 'One board for everyone — click a tile next to the gap'
                      : 'Click a tile next to the gap to slide it. Restore the picture 1 → ' + (this.size * this.size - 1));
-    return $(`<div class="lpm-sliding-wrap">
+    return `<div class="lpm-sliding-wrap">
       ${this._headerHTML()}
       <div class="lpm-sliding-moves">Moves: <span class="lpm-moves">0</span></div>
       <div class="lpm-sliding-grid" style="--sz:${this.size}"></div>
       <div class="lpm-puzzle-hint">${hint}</div>
-    </div>`);
+    </div>`;
   }
 
-  _afterRender(html) {
-    this._grid = html.find('.lpm-sliding-grid')[0];
+  _afterRender(root) {
+    this._grid = root.querySelector('.lpm-sliding-grid');
     if (!this._spectator) {
       this._grid.addEventListener('click', ev => {
         const tile = ev.target.closest('.lpm-tile[data-idx]');
@@ -753,7 +768,7 @@ class SlidingPuzzle extends PuzzleBase {
            + `background-position:0 0,${px.toFixed(2)}% ${py.toFixed(2)}%">`
            + `<span class="lpm-tile-num">${val}</span></div>`;
     }).join('');
-    const m = this._html?.[0]?.querySelector('.lpm-moves');
+    const m = this.root?.querySelector('.lpm-moves');
     if (m) m.textContent = this.moves;
   }
 
@@ -886,18 +901,18 @@ class CipherPuzzle extends PuzzleBase {
       : String.fromCharCode(((ch.charCodeAt(0) - 65 + shift) % 26) + 65)).join('');
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Cipher', width: 540, resizable: true });
-  }
+  static TITLE = 'Cipher';
+  static WIDTH = 540;
+  static DEFAULT_OPTIONS = { window: { resizable: true } };
 
-  async _renderInner() {
+  contentHTML() {
     const table = Object.entries(this.langData.map).map(([fan, eng]) =>
       `<div class="lpm-cipher-pair"><span class="lpm-coded">${fan}</span><span class="lpm-plain">${eng}</span></div>`
     ).join('');
     const encoded = `<div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>`;
 
     if (this._spectator) {
-      return $(`<div class="lpm-cipher-wrap">
+      return `<div class="lpm-cipher-wrap">
         ${this._headerHTML()}
         <div class="lpm-cipher-step">
           <div class="lpm-cipher-step-label"><i class="fa-solid fa-key"></i> Answer (GM only) · shift ${this.shift}</div>
@@ -911,11 +926,11 @@ class CipherPuzzle extends PuzzleBase {
           <div class="lpm-cipher-step-label">${this.shared ? 'The party is typing' : 'Players are typing'}</div>
           <div class="lpm-cipher-live"><div class="lpm-cipher-row lpm-dim">— waiting —</div></div>
         </div>
-      </div>`);
+      </div>`;
     }
 
     const showTable = this.difficulty !== 'hard';
-    return $(`<div class="lpm-cipher-wrap">
+    return `<div class="lpm-cipher-wrap">
       ${this._headerHTML()}
       <div class="lpm-cipher-step">
         <div class="lpm-cipher-step-label">Step 1 — Decode the ${this.langData.name} alphabet</div>
@@ -941,13 +956,13 @@ class CipherPuzzle extends PuzzleBase {
         <button type="button" class="lpm-cipher-check"><i class="fa-solid fa-check"></i> Check</button>
       </div>
       <div class="lpm-cipher-feedback"></div>
-    </div>`);
+    </div>`;
   }
 
-  _afterRender(html) {
+  _afterRender(root) {
     if (this._spectator) return;
-    const input = html.find('.lpm-cipher-input')[0];
-    const check = html.find('.lpm-cipher-check')[0];
+    const input = root.querySelector('.lpm-cipher-input');
+    const check = root.querySelector('.lpm-cipher-check');
     const text  = () => input.innerText.toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
 
     input.addEventListener('input', () => {
@@ -986,9 +1001,9 @@ class CipherPuzzle extends PuzzleBase {
     }
     Sfx.fail();
     this._emit('attempt', { guess });
-    const fb = this._html?.[0]?.querySelector('.lpm-cipher-feedback');
+    const fb = this.root?.querySelector('.lpm-cipher-feedback');
     if (fb) fb.textContent = `“${guess}” is not it — try again.`;
-    const box = this._html?.[0]?.querySelector('.lpm-cipher-answer-box');
+    const box = this.root?.querySelector('.lpm-cipher-answer-box');
     if (box) { box.classList.remove('lpm-shake'); void box.offsetWidth; box.classList.add('lpm-shake'); }
   }
 
@@ -1001,7 +1016,7 @@ class CipherPuzzle extends PuzzleBase {
   }
 
   _renderLive() {
-    const box = this._html?.[0]?.querySelector('.lpm-cipher-live');
+    const box = this.root?.querySelector('.lpm-cipher-live');
     if (!box) return;
     const rows = [...this._guesses].filter(([id]) => this._spectator || id !== game.user.id).map(([id, g]) => {
       const p = this._peers.get(id);
@@ -1073,14 +1088,12 @@ class SimonPuzzle extends PuzzleBase {
     this._playback = [];
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, { title: 'Rune Sequence', width: 420 });
-  }
+  static TITLE = 'Rune Sequence';
 
   // Joining a shared ritual only makes sense before it starts.
   _canJoin() { return super._canJoin() && (!this.shared || this.phase === 'ready'); }
 
-  async _renderInner() {
+  contentHTML() {
     const grid = SIMON_COLORS.map(c => `
       <div class="lpm-simon-btn" data-id="${c.id}" style="background:${c.dark};border-color:${c.border}">
         <canvas class="lpm-rune-canvas" data-id="${c.id}" width="120" height="110"
@@ -1093,28 +1106,28 @@ class SimonPuzzle extends PuzzleBase {
       ? (this.shared ? 'Read-only — the party’s runes in real time' : 'Read-only — click a name to follow that player')
       : (this.shared ? 'One ritual for the party — anyone may press the next rune'
                      : 'Memorize the sequence → repeat the runes in the same order');
-    return $(`<div class="lpm-simon-wrap">
+    return `<div class="lpm-simon-wrap">
       ${this._headerHTML()}
       <div class="lpm-simon-status">${status}</div>
       <div class="lpm-simon-progress"></div>
       <div class="lpm-simon-grid${this._spectator ? ' is-readonly' : ''}">${grid}</div>
       ${this._spectator ? '' : `<button type="button" class="lpm-simon-ready-btn">ᚱ&nbsp;&nbsp;${this.shared ? 'Begin the ritual' : 'Ready — begin!'}&nbsp;&nbsp;ᚱ</button>`}
       <div class="lpm-puzzle-hint">${hint}</div>
-    </div>`);
+    </div>`;
   }
 
-  _afterRender(html) {
+  _afterRender(root) {
     requestAnimationFrame(() => this._drawAllRunes());
     this._updateProgress();
     if (this._spectator) return;
 
-    html.find('.lpm-simon-btn').on('click', ev => {
+    root.querySelectorAll('.lpm-simon-btn').forEach(btn => btn.addEventListener('click', ev => {
       if (this.phase !== 'input' || this._ended) return;
       const id = Number(ev.currentTarget.dataset.id);
       this._flash(id, 220);
       this._press(id, true);
-    });
-    html.find('.lpm-simon-ready-btn').on('click', () => {
+    }));
+    root.querySelector('.lpm-simon-ready-btn')?.addEventListener('click', () => {
       Sfx.unlock();   // create the AudioContext inside a user gesture
       if (this.phase !== 'ready') return;
       this._emit('ready', { state: { step: 0, phase: 'watch' } });
@@ -1125,7 +1138,7 @@ class SimonPuzzle extends PuzzleBase {
   _startSequence(by = null) {
     this.phase = 'watch';
     this.step  = 0;
-    this._html?.find('.lpm-simon-ready-btn, .lpm-join').remove();
+    this.root?.querySelectorAll('.lpm-simon-ready-btn, .lpm-join').forEach(el => el.remove());
     this._setStatus(by ? `<i class="fa-solid fa-eye"></i> ${_esc(by)} began the ritual — memorize the sequence…` : '<i class="fa-solid fa-eye"></i> Memorize the sequence…');
     this._updateProgress();
 
@@ -1230,7 +1243,7 @@ class SimonPuzzle extends PuzzleBase {
   }
 
   _flash(colorId, duration, { emit = true, quiet = false } = {}) {
-    const btn = this._html?.[0]?.querySelector(`.lpm-simon-btn[data-id="${colorId}"]`);
+    const btn = this.root?.querySelector(`.lpm-simon-btn[data-id="${colorId}"]`);
     if (!btn) return;
     // Each rune has its own pitch — that is what makes the sequence memorable.
     if (!quiet) Sfx.simonRune(colorId, Math.min(0.5, (duration ?? 300) / 1000));
@@ -1252,12 +1265,12 @@ class SimonPuzzle extends PuzzleBase {
   }
 
   _flashRune(colorId, lit) {
-    const c = this._html?.[0]?.querySelector(`.lpm-rune-canvas[data-id="${colorId}"]`);
+    const c = this.root?.querySelector(`.lpm-rune-canvas[data-id="${colorId}"]`);
     if (c) this._drawRune(c, colorId, lit);
   }
 
   _drawAllRunes() {
-    this._html?.[0]?.querySelectorAll('.lpm-rune-canvas').forEach(c => this._drawRune(c, Number(c.dataset.id), false));
+    this.root?.querySelectorAll('.lpm-rune-canvas').forEach(c => this._drawRune(c, Number(c.dataset.id), false));
   }
 
   _drawRune(canvas, id, lit) {
@@ -1330,12 +1343,12 @@ class SimonPuzzle extends PuzzleBase {
   }
 
   _setStatus(msg) {
-    const el = this._html?.[0]?.querySelector('.lpm-simon-status');
+    const el = this.root?.querySelector('.lpm-simon-status');
     if (el) el.innerHTML = msg;
   }
 
   _updateProgress() {
-    const el = this._html?.[0]?.querySelector('.lpm-simon-progress');
+    const el = this.root?.querySelector('.lpm-simon-progress');
     if (!el) return;
     el.innerHTML = this.sequence.map((_, i) =>
       `<span class="lpm-simon-dot${i < this.step ? ' done' : ''}">${i < this.step ? '●' : '○'}</span>`).join('');

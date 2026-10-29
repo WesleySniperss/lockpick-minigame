@@ -1,27 +1,17 @@
 /**
  * compat.mjs — cross-version Foundry API shims (v12 → v14).
  *
- * What changed in v14 (verified against Foundry 14 build 365):
- *   • globalThis.Application / globalThis.Dialog were REMOVED — they are not in
- *     v14's backwards-compatibility global mapping, so referencing the bare
- *     globals throws ReferenceError. The V1 classes still exist, namespaced
- *     under foundry.appv1.api.* and deprecated until v16.
- *   • CONST.CHAT_MESSAGE_TYPES was removed → CONST.CHAT_MESSAGE_STYLES, and the
- *     ChatMessage `type` field is now the document subtype (a string); the
- *     OOC/IC value lives in the `style` field.
+ * Every window is an ApplicationV2 (app-window.mjs), so the V1 Application and
+ * Dialog that v14 deprecates (and v16 removes) are no longer used anywhere.
  *
- * Every lookup falls back to the old global, so v12/v13 keep working.
+ * What still differs between versions:
+ *   • CONST.CHAT_MESSAGE_TYPES is gone in v14 → CONST.CHAT_MESSAGE_STYLES,
+ *     and the ChatMessage `type` field is now the document subtype (a string);
+ *     the OOC/IC value lives in the `style` field.
+ *   • fromUuidSync moved to foundry.utils in v13.
+ *
+ * Every lookup falls back to the old global, so v12 keeps working.
  */
-
-/**
- * V1 Application base class. Resolved at module-evaluation time because it is
- * needed for `class X extends AppV1`. Safe: foundry.* is fully populated before
- * module ESModules are imported.
- */
-export const AppV1 = foundry?.appv1?.api?.Application ?? globalThis.Application;
-
-/** V1 Dialog class (v14: foundry.appv1.api.Dialog). */
-export const DialogV1 = foundry?.appv1?.api?.Dialog ?? globalThis.Dialog;
 
 /**
  * Synchronous document lookup by UUID (v13+: foundry.utils.fromUuidSync; v12: global).

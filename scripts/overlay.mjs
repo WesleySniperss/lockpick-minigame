@@ -115,6 +115,19 @@ export const ARCANE_ICONS = {
     draw(0, metalOf(ctx, x, y, tone));
     ctx.restore();
   },
+  /** A wisp in a focus ring; slipped out through a broken ring when it failed. */
+  wisp(ctx, x, y, tone, caught = false) {
+    ctx.save();
+    ctx.strokeStyle = metalOf(ctx, x, y, tone);
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (caught) ctx.arc(x, y, 13, 0, TAU);
+    else ctx.arc(x - 3, y + 3, 11, -0.2, TAU - 1.3);
+    ctx.stroke();
+    ctx.fillStyle = caught ? tone.hi : tone.accent;
+    ctx.beginPath(); ctx.arc(caught ? x : x + 9, caught ? y : y - 9, 4.5, 0, TAU); ctx.fill();
+    ctx.restore();
+  },
   /** A five-point sigil star; cracked when the trace failed. */
   sigil(ctx, x, y, tone, cracked = false) {
     ctx.save();
