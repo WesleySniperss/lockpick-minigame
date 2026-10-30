@@ -24,20 +24,21 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /**
  * DC: how long the attunement takes and how restless the wisp is; the Arcana
- * roll: how wide the focus is and how long the caster can concentrate.
+ * roll: how wide the focus is, how sharply it answers the hand (a low roll
+ * drags, a high one snaps to the pointer) and how long the caster can concentrate.
  */
 export function resonanceParams(dc = 15, roll = {}) {
   const margin = Number(roll.margin ?? 0), d20 = Number(roll.d20 ?? 10);
   const nat20 = d20 === 20, nat1 = d20 === 1;
   return {
-    hold : dc <= 12 ? 6 : dc <= 17 ? 8 : 10,                 // seconds inside the focus to attune
-    speed: dc <= 12 ? 0.6 : dc <= 17 ? 0.8 : 0.95,           // how fast the wisp wanders
+    hold  : dc <= 12 ? 6 : dc <= 17 ? 8 : 10,                // seconds inside the focus to attune
+    speed : dc <= 12 ? 1.5 : dc <= 17 ? 2.0 : 2.4,           // how fast the wisp wanders
     swerve: dc <= 12 ? 0.08 : dc <= 17 ? 0.12 : 0.16,        // how far its quick swerves reach
-    // The focus is never narrower than the wisp's quickest quarter-second dash
-    // (0.235 at DC 18+), so a hand that keeps up never loses it.
-    focus: nat20 ? 0.38 : nat1 ? 0.24 : clamp(0.28 + margin * 0.012, 0.24, 0.36),  // focus radius
-    time : nat20 ? 75 : nat1 ? 30 : clamp(40 + margin * 2, 30, 65),
-    fade : 0.4,                                              // fades at 40 % of the speed it grows
+    focus : nat20 ? 0.38 : nat1 ? 0.24 : clamp(0.28 + margin * 0.012, 0.24, 0.36),  // focus radius
+    follow: nat20 ? 20 : nat1 ? 4 : clamp(9 + margin * 0.6, 5, 16),                 // how fast it closes on the pointer, per second
+    reach : nat20 ? 7 : nat1 ? 1.6 : clamp(3 + margin * 0.2, 1.9, 5.5),             // its top speed, pool radii per second
+    time  : nat20 ? 75 : nat1 ? 30 : clamp(40 + margin * 2, 30, 65),
+    fade  : 0.4,                                             // fades at 40 % of the speed it grows
   };
 }
 
@@ -81,6 +82,17 @@ export class ResonanceGame {
     this.aim = { x: x * f, y: y * f };
   }
 
+  /** The focus closes on the pointer as sharply as the roll allows, up to its top speed. */
+  moveFocus(dt) {
+    const { follow, reach } = this.res.params;
+    const k = 1 - Math.exp(-dt * follow), max = reach * dt;
+    let dx = (this.aim.x - this.focus.x) * k, dy = (this.aim.y - this.focus.y) * k;
+    const len = Math.hypot(dx, dy);
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    this.focus.x += dx;
+    this.focus.y += dy;
+  }
+
   /** Is the wisp inside the focus ring? */
   check() {
     const w = this.wisp();
@@ -93,9 +105,7 @@ export class ResonanceGame {
     if (this.state !== 'playing') return null;
     this.t += dt;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
-    const ease = 1 - Math.exp(-dt * 10);
-    this.focus.x += (this.aim.x - this.focus.x) * ease;
-    this.focus.y += (this.aim.y - this.focus.y) * ease;
+    this.moveFocus(dt);
     const { hold, fade } = this.res.params;
     if (this.check()) this.attune = Math.min(1, this.attune + dt / hold);
     else this.attune = Math.max(0, this.attune - dt * fade / hold);
@@ -104,8 +114,14 @@ export class ResonanceGame {
     return null;
   }
 
-  /** Spectators: the wisp moves on between syncs. */
-  advance(dt) { this.t += dt; this.check(); }
+  /** Spectators: the wisp moves on between syncs, and the focus glides to where it was last seen. */
+  advance(dt) {
+    this.t += dt;
+    const ease = 1 - Math.exp(-dt * 25);
+    this.focus.x += (this.aim.x - this.focus.x) * ease;
+    this.focus.y += (this.aim.y - this.focus.y) * ease;
+    this.check();
+  }
 
   /** How many runes are awake. */
   runes() { return Math.floor(this.attune * RUNE_COUNT + 1e-6); }
@@ -116,7 +132,7 @@ export class ResonanceGame {
 
   apply(s) {
     if (!s) return;
-    this.t = s.t; this.focus = { ...s.focus }; this.aim = { ...s.focus };
+    this.t = s.t; this.aim = { ...s.focus };
     this.attune = s.attune; this.timeLeft = s.timeLeft; this.state = s.state;
     this.check();
   }

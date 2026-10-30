@@ -5,7 +5,9 @@
  * games keep live canvases and listeners in it, so a later render() must not
  * replace it. The window is always dark (the games are painted for it) and is
  * never popped out into a separate browser window (v14 "detach"), because the
- * games listen for pointer events and frames on this one.
+ * games listen for pointer events and frames on this one. Its width is 'auto':
+ * it fits its content whatever frame a theme gives it (a fixed width counts the
+ * border too, which cut 2 px off the games' canvases and pushed them off centre).
  *
  * Subclasses provide:
  *   contentHTML()   — the inner HTML of the window

@@ -2,7 +2,7 @@
   "id": "lockpick-minigame",
   "title": "Lockpick Minigame",
   "description": "Mini-games the GM requests for a character from a chat card: lockpicking and three Arcana challenges (Unweave the Ward, Attune the Resonance, Trace the Sigil). The check is rolled the system's own way (dnd5e, a5e) and sets the difficulty; the DC can stay secret; live spectating. Plus puzzles (Sudoku, Sliding, Cipher, Rune Sequence) for Foundry VTT.",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "compatibility": {
     "minimum": "12",
     "verified": "14"

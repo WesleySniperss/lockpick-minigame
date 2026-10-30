@@ -26,7 +26,9 @@ challenge whenever the story needs it.
    the **DC** and, optionally, **what it is on** ("Iron-bound chest", "Sealed
    vault door"). Tick **Secret** to keep the DC from the players: it is left
    off the card, the roll and the game, and only the GM's copy of the card
-   shows it. (The same menu sends puzzles — see *Puzzles*.)
+   shows it. Tick **Others can watch** to give the other players a read-only
+   window of the attempt, so they can follow every move live. (The same menu
+   sends puzzles — see *Puzzles*.)
 2. A **request card** appears in chat. Only that character's owner (and the GM)
    gets the button (**Roll & pick the lock**, **Roll Arcana & unweave**, …);
    everyone else sees "Waiting for …". If several players own the character,
@@ -52,7 +54,7 @@ From a macro:
 const api = game.modules.get('lockpick-minigame').api;
 const actor = canvas.tokens.controlled[0]?.actor;
 api.requestLockpick({ actor, dc: 17, label: 'Iron-bound chest' });
-api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true });
+api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true, watch: true });
 //                     kind: 'lock' | 'ward' | 'resonance' | 'sigil'
 api.openMenu('sigil');            // the menu, with a challenge or a puzzle ('sudoku', …) preselected
 ```
@@ -87,8 +89,8 @@ With Dice So Nice the game opens once the die has landed.
    **Thieves' Tools** nothing breaks — the pins drop back and the lock stays
    shut; with **Lockpicks** one pick snaps and is removed from the inventory.
 
-Optionally the GM and/or the other players can watch the attempt live (see
-settings).
+The GM watches the attempt live, and so do the other players when **Others can
+watch** is ticked on the request (see *Module Settings*).
 
 ### Difficulty
 
@@ -132,54 +134,56 @@ generated from a seed, so spectators see exactly the same board.
 
 ### Unweave the Ward
 
-The goal is written on the board: **lead the light from the core to every
-crystal on the rim**. Between them sit rune rings, each with a channel that has
-a **gate** on its inner edge and one on its outer edge. The light runs outward
-as far as the gates line up. Where it stops, it glows at the next ring's inner
-edge and that ring's gate pulses amber: turn the ring until the gate meets the
-light.
+The goal is written on the board: **line up the gaps to light the crystal**. The
+core at the centre shoots a straight beam at a crystal on the rim. Between them
+sit rune rings, each a solid wall with one **gap** in it, and the beam stops at
+the first ring whose gap is off its line; that gap pulses amber. Turn the ring
+until its gap is on the beam and the light runs on to the next ring. When every
+gap is on the line, the crystal lights and the ward comes apart.
 
 **Drag** a ring to turn it (a click turns it one step clockwise, a right-click
 one step back, the mouse wheel works too). Turning is free. A **golden link**
-means turning one ring turns another as well (crossed: the other way).
-Hovering a ring outlines every ring that will move with it. Nothing is hidden:
-every gate and link is on the board from the start.
+means turning the ring at its knot also turns the ring at its arrow (crossed:
+the other way). Hovering a ring outlines every ring that will move with it.
+Nothing is hidden: every gap and link is on the board from the start.
 
 **How you lose:** the ward knits itself back together. A violet seam stitches
 its way round the rim from the top, clockwise; when it closes the circle, the
-ward holds. The footer counts the seconds down too (*Re-forms in*).
+ward holds. The seconds count down in the corner of the board and in the footer
+(*Rim closes in*).
 
-| DC | ≤ 12 | 13–17 | 18+ |
-|----|------|-------|-----|
-| Rings | 3 | 4 | 5 |
-| Golden links | 0 | 1 | 2 |
-| Time before it re-forms | 50 s | 70 s | 90 s |
+| DC | ≤ 12 | 13–17 | 18–21 | 22+ |
+|----|------|-------|-------|-----|
+| Rings | 3 | 4 | 5 | 5 |
+| Golden links | 0 | 1 | 2 | 3 |
+| Time before the rim closes | 40 s | 50 s | 60 s | 60 s |
 
-From DC 15 there are two crystals instead of one. **The roll** adds or takes
-3 s per point above or below the DC (from 60 % to 160 % of the base time;
-×1.8 on a natural 20, ×0.5 on a natural 1). Beating the DC by 5 (or a natural
-20) adds a dotted trace from the amber gate to the light: which way to turn and
-how far.
+**The roll** adds or takes 2 s per point above or below the DC (from 60 % to
+160 % of the base time; ×1.8 on a natural 20, ×0.6 on a natural 1). Beating the
+DC by 5 (or a natural 20) adds a dotted trace from the amber gap to the beam:
+which way to turn and how far.
 
 ### Attune the Resonance
 
 The working's resonance is a **wandering light** in a dark scrying pool ringed
-with nine runes. Your **focus** is a ring of light that glides after the mouse.
-Keep the light inside it: the ring turns gold, the runes around the pool wake
-one by one and a clean fifth sounds over the hum. Outside the ring the
-attunement slowly fades (at 40 % of the speed it grows). Wake all nine runes
-before your **Concentration** runs out.
+with nine runes. Your **focus** is a ring of light that chases the mouse. Keep
+the light inside it: the ring turns gold, the runes around the pool wake one by
+one and a clean fifth sounds over the hum. Outside the ring the attunement
+slowly fades (at 40 % of the speed it grows). Wake all nine runes before your
+**Concentration** runs out.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
 | Time inside the focus to attune | 6 s | 8 s | 10 s |
-| How restless the light is | calm | lively | quick, with sudden swerves |
+| How restless the light is | quick | fast | very fast, with sudden swerves |
 
-**The roll** sets how wide your focus is (wider the more it beats the DC, a
-natural 20 widest) and Concentration: 40 s ± 2 s per point, between 30 and
-65 s (75 s on a natural 20, 30 s on a natural 1). Even at its quickest the
-light never darts further in a quarter of a second than your focus is wide, so
-a hand that keeps up never loses it.
+**The roll** decides how well your focus obeys you. The better it beats the DC,
+the wider the ring, the sharper it answers the mouse and the faster it can move
+at all; a low roll leaves it narrow and dragging behind your hand, and at a high
+DC the light can outrun it for a moment, so you have to lead it. A natural 20 is
+the widest and sharpest, a natural 1 the narrowest and slowest. Concentration:
+40 s ± 2 s per point, between 30 and 65 s (75 s on a natural 20, 30 s on a
+natural 1).
 
 ### Trace the Sigil
 
@@ -210,6 +214,9 @@ Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 - **Solve together** (checkbox) — *checked*: one shared puzzle, every move by
   anyone appears for everyone and one solve ends it for all; *unchecked*: each
   player gets their own copy of the same puzzle.
+- **Others can watch** (checkbox) — when the puzzle goes to one player, or the GM
+  solves it alone, everyone else online gets a read-only window and can follow it
+  live. Only the GM sees a cipher's answer, and only the GM can join in.
 - The GM gets a spectator window with a roster of the players and their status.
   With own copies, click a name to see that player's board; **Join in / Solve a
   copy** lets the GM play too.
@@ -227,7 +234,7 @@ Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 | Default DC | 15 | Pre-filled in the Puzzles & Challenges menu |
 | Keep the DC secret by default | Off | Pre-ticks **Secret** in the menu |
 | Show challenges live to the GM | **On** | Spectator window for the GM while a player picks a lock or works an Arcana challenge |
-| Show challenges live to other players | Off | The same window for everyone else |
+| Others can watch by default | Off | Pre-ticks **Others can watch** in the menu |
 
 ---
 

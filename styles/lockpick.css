@@ -536,8 +536,7 @@
 .lpm-menu-dialog input[name="dc"] { flex:1 1 0; min-width:0; }
 .lpm-menu-dialog .lpm-menu-none { opacity:.7; font-style:italic; }
 .lpm-menu-form > div[hidden], .lpm-menu-form .lpm-cipher-opts[hidden] { display:none; }
-.lpm-shared-group.lpm-disabled label { opacity: .55; }
-.lpm-shared-group .hint { flex: 0 0 100%; margin: 2px 0 0; font-size: 11px; }
+.lpm-shared-group.lpm-disabled label, .lpm-watch-group.lpm-disabled label { opacity: .55; }
 
 /* ── GM results panel ─────────────────────────────────────── */
 .lpm-simon-results {

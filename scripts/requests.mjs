@@ -65,9 +65,10 @@ const resultSub = (label, check, dc, hideDC) => [label, check, hideDC ? '' : `DC
 
 /**
  * Post a request card. Also usable from a macro:
- *   game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door', hideDC: true })
+ *   game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door', hideDC: true, watch: true })
+ * `watch`: the other players get a read-only window of the attempt (by default, as the world setting says).
  */
-export async function requestChallenge({ kind = 'lock', actor, dc, label = '', hideDC = false } = {}) {
+export async function requestChallenge({ kind = 'lock', actor, dc, label = '', hideDC = false, watch = setting('spectatePlayers', false) } = {}) {
   if (!game.user.isGM) return ui.notifications.warn('Only the GM can request a challenge.');
   if (!isChallenge(kind)) return ui.notifications.warn(`Unknown challenge: ${kind}`);
   if (typeof actor === 'string') actor = docFromUuid(actor) ?? game.actors.get(actor);
@@ -76,7 +77,7 @@ export async function requestChallenge({ kind = 'lock', actor, dc, label = '', h
   hideDC = !!hideDC;
   return ChatMessage.create({
     content: requestCard({ kind, name: actor.name, dc, label, hideDC }),
-    flags  : { [MODULE_ID]: { [FLAG]: { kind, actorUuid: actor.uuid, actorName: actor.name, dc, hideDC, label, state: 'open' } } },
+    flags  : { [MODULE_ID]: { [FLAG]: { kind, actorUuid: actor.uuid, actorName: actor.name, dc, hideDC, watch: !!watch, label, state: 'open' } } },
   });
 }
 
@@ -251,7 +252,7 @@ async function startFromRequest(message) {
   _busy = true;
   if (!(await claim(message))) { _busy = false; return; }
   const onSettled = outcome => setState(message.id, outcome ?? { state: 'open' });
-  const opts = { actor, dc: req.dc, hideDC: !!req.hideDC, label: req.label, onSettled };
+  const opts = { actor, dc: req.dc, hideDC: !!req.hideDC, watch: req.watch, label: req.label, onSettled };
   try {
     if (kind === 'lock') await startLockpick({ ...opts, tool });
     else                 await startArcana({ ...opts, kind });
@@ -269,7 +270,7 @@ async function startFromRequest(message) {
  * `onSettled({state, by, snapped, quit})` fires once: success, failed (also
  * when the window is closed before the end), or null when nothing was rolled.
  */
-export async function startLockpick({ actor, tool, dc, hideDC = false, label = '', onSettled = () => {} }) {
+export async function startLockpick({ actor, tool, dc, hideDC = false, watch, label = '', onSettled = () => {} }) {
   const rolled = await rollLockpicking(actor, tool, { dc, hideDC });
   if (!rolled) { _busy = false; onSettled(null); return; }
   const rollResult = { total: rolled.total, d20: rolled.d20, dc, margin: rolled.total - dc };
@@ -335,7 +336,7 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, label = '
   // Announce to everyone; each client decides from its own settings whether to watch.
   game.socket.emit(CHANNEL, {
     action: 'lockpickSpectate',
-    sessionId, dc, hideDC, rollResult, label,
+    sessionId, dc, hideDC, watch, rollResult, label,
     tool: toolInfo,
     playerName: actor.name,
     userId: game.user.id,
@@ -350,7 +351,7 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, label = '
  * Roll Arcana, open the chosen working and announce it to spectators. The
  * game is generated from a seed, so spectators rebuild exactly the same one.
  */
-export async function startArcana({ kind, actor, dc, hideDC = false, label = '', onSettled = () => {} }) {
+export async function startArcana({ kind, actor, dc, hideDC = false, watch, label = '', onSettled = () => {} }) {
   const c = CHALLENGES[kind];
   const rolled = await rollArcana(actor, { dc, hideDC, icon: c.icon });
   if (!rolled) { _busy = false; onSettled(null); return; }
@@ -386,7 +387,7 @@ export async function startArcana({ kind, actor, dc, hideDC = false, label = '',
   await app.render({ force: true });
 
   game.socket.emit(CHANNEL, {
-    action: 'gameSpectate', kind, sessionId, init, dc, hideDC, rollResult, label,
+    action: 'gameSpectate', kind, sessionId, init, dc, hideDC, watch, rollResult, label,
     playerName: actor.name, userId: game.user.id,
   });
   return app;
