@@ -117,6 +117,12 @@ export async function openMenu(what) {
           <p class="hint lpm-shared-hint"></p>
         </div>
       </div>
+
+      <div class="form-group lpm-watch-group">
+        <label>Others can watch</label>
+        <div class="form-fields"><input type="checkbox" name="watch" ${setting('spectatePlayers', false) ? 'checked' : ''}></div>
+        <p class="hint lpm-watch-hint"></p>
+      </div>
     </div>`;
 
   const { DialogV2 } = foundry.applications.api;
@@ -166,6 +172,13 @@ function wire(dialog, players) {
       : f.pshared.checked
         ? 'ONE shared puzzle: everyone sees and moves the same pieces, and one solve opens it for all.'
         : 'Each player gets their OWN copy of the same puzzle and solves it alone.';
+    // Watching needs someone left over to watch: not when every player gets the puzzle.
+    const nobodyLeft = !challenge && f.ptarget.value === 'all';
+    f.watch.disabled = nobodyLeft;
+    root.querySelector('.lpm-watch-group').classList.toggle('lpm-disabled', nobodyLeft);
+    root.querySelector('.lpm-watch-hint').textContent = nobodyLeft
+      ? 'Every player is solving it, so nobody is left to watch.'
+      : 'The other players get a read-only window and can follow every move live.';
     dialog.setPosition({ height: 'auto' });
   };
   for (const el of [f.what, f.ptarget, f.pshared]) el.addEventListener('change', sync);
@@ -181,6 +194,7 @@ async function submit(f) {
       actor : docFromUuid(f.actor?.value),
       dc    : f.dc.value,
       hideDC: f.hideDC.checked,
+      watch : f.watch.checked,
       label : String(f.label.value ?? '').trim(),
     });
   }
@@ -193,6 +207,9 @@ async function submit(f) {
     : target === 'all' ? game.users.filter(u => u.active && !u.isGM)
     : game.users.filter(u => u.id === target && u.active);
   const shared = recipients.length > 1 && f.pshared.checked;
+  // Whoever is online and not solving it can watch (in a read-only window).
+  const watcherIds = f.watch.checked && !f.watch.disabled
+    ? game.users.filter(u => u.active && u.id !== game.user.id && !recipients.includes(u)).map(u => u.id) : [];
   // Everything random is rolled here, so the GM and every player get the same puzzle.
   const opts = generatePuzzleOpts(what, diff, {
     lang      : f.plang.value || undefined,
@@ -206,10 +223,14 @@ async function submit(f) {
     if (!solo) ui.notifications.warn(target === 'all'
       ? 'No players are connected — opening the puzzle for you to solve.'
       : 'That player is not connected — opening the puzzle for you to solve.');
+    if (watcherIds.length) {                // the watchers' roster names the GM, who is the one solving
+      game.socket.emit(`module.${MODULE_ID}`, { action: 'openPuzzle', type: what, difficulty: diff, userIds: [], watcherIds,
+        opts: { ...opts, recipients: [{ id: game.user.id, name: game.user.name }] } });
+    }
     openPuzzle(what, diff, opts);
     return;
   }
-  game.socket.emit(`module.${MODULE_ID}`, { action: 'openPuzzle', type: what, difficulty: diff, userIds: recipients.map(u => u.id), opts });
+  game.socket.emit(`module.${MODULE_ID}`, { action: 'openPuzzle', type: what, difficulty: diff, userIds: recipients.map(u => u.id), watcherIds, opts });
   ui.notifications.info(`${shared ? 'Shared puzzle' : 'Puzzle'} sent to ${recipients.map(u => u.name).join(', ')}.`);
   openPuzzle(what, diff, { ...opts, spectator: true });   // the GM watches (and can join from there)
 }

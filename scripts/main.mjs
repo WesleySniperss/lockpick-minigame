@@ -46,14 +46,14 @@ Hooks.once('init', () => {
     scope: 'world', config: true, type: Boolean, default: true
   });
   game.settings.register(MODULE_ID, 'spectatePlayers', {
-    name: 'Show challenges live to other players',
-    hint: 'Opens the same spectator window for everyone else at the table.',
+    name: 'Others can watch by default',
+    hint: 'Pre-ticks "Others can watch" in the Puzzles & Challenges menu: everyone else at the table gets a read-only window and can follow every move live.',
     scope: 'world', config: true, type: Boolean, default: false
   });
   // The GM's "Show the answers" tick in a watched sudoku, remembered on this client.
   game.settings.register(MODULE_ID, 'sudokuAnswers', { scope: 'client', config: false, type: Boolean, default: false });
 
-  // For macros: game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door' })
+  // For macros: game.modules.get('lockpick-minigame').api.requestChallenge({ kind: 'ward', actor, dc: 15, label: 'Vault door', watch: true })
   // openRequestDialog / openPuzzleDialog are kept for macros written against 3.0: both open the one menu.
   const mod = game.modules.get(MODULE_ID);
   if (mod) mod.api = {
@@ -98,11 +98,14 @@ function _registerSocket() {
     const { action, type, difficulty, userId } = data;
 
     if (action === 'openPuzzle') {
+      // watcherIds = the GM ticked "Others can watch": a read-only window for them.
+      const watching = data.watcherIds?.includes(game.user.id);
       // userIds = exact recipients. Never open a playable copy for a GM that was
       // not picked, or an assistant GM would get one on every broadcast.
       const ids = data.userIds ?? (userId ? [userId] : null);
-      if (ids ? !ids.includes(game.user.id) : game.user.isGM) return;
-      import('./PuzzleApp.mjs').then(m => m.openPuzzle(type, difficulty, data.opts)).catch(console.error);
+      if (!watching && (ids ? !ids.includes(game.user.id) : game.user.isGM)) return;
+      const opts = watching ? { ...data.opts, spectator: true } : data.opts;
+      import('./PuzzleApp.mjs').then(m => m.openPuzzle(type, difficulty, opts)).catch(console.error);
       return;
     }
 
@@ -113,7 +116,7 @@ function _registerSocket() {
 
     if (action === 'gameSpectate') {
       if (data.userId === game.user.id) return;
-      if (!_wantsToWatch()) return;
+      if (!_wantsToWatch(data)) return;
       const App = await arcanaAppClass(data.kind);
       if (!App) return;
       new App({
@@ -133,7 +136,7 @@ function _registerSocket() {
     if (action === 'lockpickSpectate') {
       // Хто саме дивиться — вирішують налаштування, а не жорстке «тільки GM».
       if (data.userId === game.user.id) return;          // сам гравець уже грає
-      if (!_wantsToWatch()) return;
+      if (!_wantsToWatch(data)) return;
       const { LockpickApp } = await import('./LockpickApp.mjs');
       new LockpickApp({
         sessionId  : data.sessionId,
@@ -152,8 +155,12 @@ function _registerSocket() {
   console.log(`${MODULE_ID} | socket registered for user: ${game.user.name} (isGM: ${game.user.isGM})`);
 }
 
-/** Does this client watch other players' challenges (per the world settings)? */
-function _wantsToWatch() {
+/**
+ * Does this client watch another player's challenge? Players: as ticked on this
+ * request ("Others can watch"). The GM: per the world setting.
+ */
+function _wantsToWatch(data) {
+  if (!game.user.isGM && typeof data.watch === 'boolean') return data.watch;
   const key = game.user.isGM ? 'spectateGM' : 'spectatePlayers';
   try { return !!game.settings.get(MODULE_ID, key); } catch (e) { return game.user.isGM; }
 }

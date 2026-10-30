@@ -22,7 +22,7 @@ const DRIFT_MAX      = 620;   // px/сек — стеля швидкості д�
 
 export class LockpickApp extends GameWindow {
 
-  static DEFAULT_OPTIONS = { classes: ['lpm-lock'], position: { width: CANVAS_W } };
+  static DEFAULT_OPTIONS = { classes: ['lpm-lock'] };
 
   /**
    * @param {object} opts
@@ -123,7 +123,7 @@ export class LockpickApp extends GameWindow {
     const banner = this._spectator
       ? `<div class="lpm-spectator-banner"><i class="fa-solid fa-eye"></i> Spectating — ${foundry.utils.escapeHTML?.(this._playerName) ?? this._playerName}</div>`
       : '';
-    return `<div class="lpm-root">
+    return `<div class="lpm-root" style="width:${CANVAS_W}px">
       ${banner}
       <canvas class="lpm-canvas" width="${CANVAS_W}" height="${CANVAS_H}" ${this._spectator ? 'style="pointer-events:none;"' : ''}></canvas>
       <div class="lpm-footer">

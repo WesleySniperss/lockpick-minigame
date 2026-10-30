@@ -15,7 +15,7 @@ export const CHALLENGES = {
     group: 'Arcana', title: 'Unweave the Ward', icon: 'fa-circle-nodes',
     ask: 'is asked to unweave', on: 'the ward on', none: 'a ward',
     button: 'Roll Arcana &amp; unweave', busy: 'is unweaving the ward…', done: 'Unwoven by', failed: 'The ward held',
-    blurb: 'Turn rune rings so the light runs from the core to every crystal, before the ward re-forms.',
+    blurb: 'Turn rune rings until their gaps line up and the light reaches the crystal, before the ward re-forms.',
     placeholder: 'e.g. Sealed vault door',
     win : { title: 'Ward Unwoven', body: '{who} reads the weave and turns the last ring — the ward comes apart in a sigh of light.' },
     lose: { title: 'The Ward Holds', body: '{who} is too slow: the rim closes and the ward knits itself whole again.' },

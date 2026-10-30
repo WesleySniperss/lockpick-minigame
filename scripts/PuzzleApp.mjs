@@ -912,12 +912,13 @@ class CipherPuzzle extends PuzzleBase {
     const encoded = `<div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>`;
 
     if (this._spectator) {
+      // Players may watch too ("Others can watch"): the answer stays with the GM.
       return `<div class="lpm-cipher-wrap">
         ${this._headerHTML()}
-        <div class="lpm-cipher-step">
+        ${game.user.isGM ? `<div class="lpm-cipher-step">
           <div class="lpm-cipher-step-label"><i class="fa-solid fa-key"></i> Answer (GM only) · shift ${this.shift}</div>
           <div class="lpm-cipher-encoded lpm-cipher-answer">${_esc(this.answer)}</div>
-        </div>
+        </div>` : ''}
         <div class="lpm-cipher-step">
           <div class="lpm-cipher-step-label">Encoded text</div>
           ${encoded}

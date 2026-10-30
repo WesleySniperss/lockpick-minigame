@@ -1,20 +1,21 @@
 /**
  * ward-logic.mjs — rules of "Unweave the Ward" (no DOM, no Foundry).
  *
- * A ward is a stack of concentric rune rings around a core. Each ring has a
- * gate on its inner edge (the inlet) and one or two on its outer edge (the
- * outlets), joined by a channel carved through the stone. Light leaves the
- * core at one sector; a ring carries it when its inlet faces an incoming
- * sector and passes it on from its outlets. The ward unravels when the light
- * reaches every anchor crystal on the rim. Rings turn one sector (of 8) at a
- * time, freely. The ward fights back by knitting itself together again: the
- * caster has until the rim closes (a time limit set by the roll). Some rings
- * are bound by a golden link: turning one turns another as well (one way, not
- * chained). Nothing is hidden: every gate and link is on the board.
+ * A ward is a stack of concentric rune rings around a core, with a crystal on
+ * the rim. The core shoots a straight beam at the crystal. Every ring is a
+ * solid wall with one gap in it, and the beam stops at the first ring whose
+ * gap is not on its line. Line up all the gaps and the light reaches the
+ * crystal: the ward comes apart.
  *
- * The geometry is built aligned (all rotations 0 = solved) and then scrambled
- * with real moves, so a solution always exists. One BFS from every winning
- * position over all ring positions (at most 8^5 = 32768) gives the exact
+ * Rings turn one sector (of 8) at a time, freely. The ward fights back by
+ * knitting itself together again: the caster has until the rim closes (a time
+ * limit set by the roll). Some rings are bound by a golden link: turning one
+ * turns another as well (one way, not chained). Nothing is hidden: every gap
+ * and link is on the board from the start.
+ *
+ * A ring's rotation counts from its solved position: rot[i] = 0 means its gap
+ * is on the beam. The start is scrambled with real moves, and one BFS from the
+ * solved position over all ring positions (at most 8^5 = 32768) gives the exact
  * minimum number of turns from anywhere.
  */
 
@@ -46,22 +47,21 @@ export function shuffle(arr, R) {
 }
 
 /**
- * Difficulty. The DC shapes the ward (rings, anchors, links); the Arcana roll
- * shapes how well the caster reads it: the time before the ward re-forms
- * (3 s per point above or below the DC), and with insight (beat the DC by 5,
- * or a natural 20) a trace showing which way the next ring turns.
+ * Difficulty. The DC shapes the ward (rings, links); the Arcana roll shapes how
+ * well the caster reads it: the time before the ward re-forms (2 s per point
+ * above or below the DC), and with insight (beat the DC by 5, or a natural 20)
+ * a trace showing which way the next ring turns.
  */
 export function wardParams(dc = 15, roll = {}) {
   const margin = Number(roll.margin ?? 0), d20 = Number(roll.d20 ?? 10);
   const nat20 = d20 === 20, nat1 = d20 === 1;
   const rings = dc <= 12 ? 3 : dc <= 17 ? 4 : 5;
-  const base = { 3: 50, 4: 70, 5: 90 }[rings];
+  const base = { 3: 40, 4: 50, 5: 60 }[rings];
   return {
     rings,
-    anchors : dc >= 15 ? 2 : 1,
-    bindings: dc <= 12 ? 0 : dc <= 17 ? 1 : 2,
-    time    : nat20 ? Math.round(base * 1.8) : nat1 ? Math.round(base * 0.5)
-            : Math.max(Math.round(base * 0.6), Math.min(Math.round(base * 1.6), base + margin * 3)),
+    bindings: dc <= 12 ? 0 : dc <= 17 ? 1 : dc <= 21 ? 2 : 3,
+    time    : nat20 ? Math.round(base * 1.8) : nat1 ? Math.round(base * 0.6)
+            : Math.max(Math.round(base * 0.6), Math.min(Math.round(base * 1.6), base + margin * 2)),
     insight : nat20 || margin >= 5,
   };
 }
@@ -80,56 +80,29 @@ export function applyTurn(ward, rot, k, d) {
 }
 
 /**
- * Where the energy goes for given rotations.
- * powered[i] — ring i carries energy; boundary[i] — sectors entering ring i
- * (boundary[0] is the core); fed — rim sectors reached; blockedAt — first ring
- * that does not carry (or -1 when the energy reaches the rim).
+ * How far the beam gets for given rotations. powered[i] — the light passes
+ * through ring i; blockedAt — the first ring whose gap is off the line (-1 when
+ * the light reaches the crystal); win — it does.
  */
 export function flow(ward, rot) {
   const n = ward.rings.length;
   const powered = new Array(n).fill(false);
-  const boundary = [[ward.core]];
-  let incoming = [ward.core], blockedAt = -1;
+  let blockedAt = -1;
   for (let i = 0; i < n; i++) {
-    const r = ward.rings[i];
-    if (!incoming.includes(mod(r.inlet + rot[i]))) { blockedAt = i; break; }
+    if (mod(rot[i]) !== 0) { blockedAt = i; break; }
     powered[i] = true;
-    incoming = r.outlets.map(o => mod(o + rot[i]));
-    boundary.push(incoming);
   }
-  const fed = blockedAt === -1 ? incoming : [];
-  return { powered, boundary, blockedAt, fed, win: ward.anchors.every(a => fed.includes(a)) };
+  return { powered, blockedAt, win: blockedAt === -1 };
 }
 
 /** All ring rotations as one number: ring i's rotation is digit i in base 8. */
-export const encodeRot = rot => rot.reduce((acc, v, i) => acc + v * SECTORS ** i, 0);
+export const encodeRot = rot => rot.reduce((acc, v, i) => acc + mod(v) * SECTORS ** i, 0);
 
 /**
- * Every winning position, as codes. There are few: a ring only carries when
- * its inlet faces an outlet of the ring inside it, which pins its rotation to
- * one value per incoming sector. (The same rule as flow(), walked outward.)
- */
-export function winningCodes(ward) {
-  const n = ward.rings.length, out = [];
-  const walk = (i, incoming, code) => {
-    const r = ward.rings[i];
-    for (let rot = 0; rot < SECTORS; rot++) {
-      if (!incoming.includes(mod(r.inlet + rot))) continue;
-      const outs = r.outlets.map(o => mod(o + rot));
-      const c = code + rot * SECTORS ** i;
-      if (i < n - 1) walk(i + 1, outs, c);
-      else if (ward.anchors.every(a => outs.includes(a))) out.push(c);
-    }
-  };
-  walk(0, [ward.core], 0);
-  return out;
-}
-
-/**
- * Turns from every position to the nearest win, indexed by encodeRot (-1 =
+ * Turns from every position to the solved one, indexed by encodeRot (-1 =
  * unreachable). A turn is undone by the opposite turn, so one BFS outward from
- * all winning positions at once gives the exact distance for every start.
- * With 8 sectors a ring is 3 bits of the code, so the search is bit arithmetic.
+ * the solved position gives the exact distance for every start. With 8 sectors
+ * a ring is 3 bits of the code, so the search is bit arithmetic.
  */
 export function turnDistances(ward) {
   const n = ward.rings.length, size = 1 << (3 * n);
@@ -144,7 +117,7 @@ export function turnDistances(ward) {
   const dist = new Int8Array(size).fill(-1);
   const queue = new Int32Array(size);
   let tail = 0;
-  for (const c of winningCodes(ward)) { dist[c] = 0; queue[tail++] = c; }
+  dist[0] = 0; queue[tail++] = 0;
   for (let head = 0; head < tail; head++) {
     const c = queue[head], next = dist[c] + 1;
     for (const step of moves) {
@@ -156,7 +129,7 @@ export function turnDistances(ward) {
   return dist;
 }
 
-/** Exact minimum number of turns from `rot` to any winning position. */
+/** Exact minimum number of turns from `rot` to the solved position. */
 export function minTurns(ward, rot) {
   const d = turnDistances(ward)[encodeRot(rot)];
   return d < 0 ? Infinity : d;
@@ -171,53 +144,35 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
   const p = wardParams(dc, roll);
   const n = p.rings;
   const randInt = m => Math.floor(R() * m);
-  const offsetFrom = s => mod(s + (1 + randInt(3)) * (R() < 0.5 ? 1 : -1));   // 1..3 sectors away
+  const beam = randInt(SECTORS);                     // the sector the crystal sits in
+  const rings = Array.from({ length: n }, () => ({ rune: randInt(22) }));
 
-  const core = randInt(SECTORS);
-  const rings = [];
-  let inSector = core;
-  for (let i = 0; i < n; i++) {
-    const inlet = inSector;
-    const main = offsetFrom(inlet);
-    rings.push({ inlet, outlets: [main] });
-    inSector = main;
-  }
-
-  // Anchors sit where the outer ring's outlets point when solved.
-  const outer = rings[n - 1];
-  const anchors = [outer.outlets[0]];
-  if (p.anchors === 2) {
-    let second;
-    do { second = randInt(SECTORS); } while (second === outer.outlets[0] || second === outer.inlet);
-    outer.outlets.push(second);
-    anchors.push(second);
-  }
-
-  // Bindings: distinct ordered pairs, turning `from` drags `to` the same or the opposite way.
-  const bindings = [];
+  // Links join neighbouring rings where they can (short links read best), and
+  // never form a loop: turning `from` turns `to` the same or the opposite way.
   const pairs = [];
   for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (a !== b) pairs.push([a, b]);
   shuffle(pairs, R);
+  pairs.sort((x, y) => Math.abs(x[0] - x[1]) - Math.abs(y[0] - y[1]));
+  const bindings = [];
+  const reaches = (from, to) => from === to || bindings.some(b => b.from === from && reaches(b.to, to));
   for (const [from, to] of pairs) {
     if (bindings.length >= p.bindings) break;
-    if (bindings.some(b => b.from === to && b.to === from)) continue;    // no mutual pairs
+    if (reaches(to, from) || bindings.some(b => b.from === from || b.to === to)) continue;
     bindings.push({ from, to, dir: R() < 0.5 ? 1 : -1 });
   }
 
-  const ward = { core, rings, anchors, bindings, params: p, seed, dc };
+  const ward = { beam, rings, bindings, params: p, seed, dc };
 
-  // Scramble with real turns until the start is unsolved and takes at least n turns.
-  // Scrambled positions are reachable from the solved one, so their distance is known.
+  // Scramble with real turns until no gap starts on the line and it takes at least n turns.
   const dist = turnDistances(ward);
-  let rot, best = 0;
-  for (let attempt = 0; attempt < 40; attempt++) {
+  let rot, best = -1;
+  for (let attempt = 0; attempt < 60; attempt++) {
     let r = new Array(n).fill(0);
-    const moves = 2 * n + randInt(n + 2);
+    const moves = 3 * n + randInt(n + 2);
     for (let m = 0; m < moves; m++) r = applyTurn(ward, r, randInt(n), R() < 0.5 ? 1 : -1).rot;
-    if (flow(ward, r).win) continue;
     const need = dist[encodeRot(r)];
-    if (need >= n) { rot = r; best = need; break; }
-    if (need > best) { rot = r; best = need; }
+    if (r.every(v => v !== 0) && need >= n) { rot = r; best = need; break; }
+    if (!flow(ward, r).win && need > best) { rot = r; best = need; }
   }
   if (!rot) {                                             // practically unreachable; still guarantee a puzzle
     rot = applyTurn(ward, applyTurn(ward, new Array(n).fill(0), 0, 1).rot, 0, 1).rot;
@@ -229,19 +184,11 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
 }
 
 /**
- * The shortest way to line ring `i`'s inlet up with the light waiting at its
- * inner edge: { from, steps } in sectors (steps signed, + = clockwise), or
- * null when the light does not reach ring i. Ignores links — it is a hint.
+ * The shortest way to bring ring `i`'s gap onto the beam, in sectors (signed,
+ * + = clockwise). Ignores links — it is a hint.
  */
-export function nextGate(ward, rot, f, i) {
-  if (i < 0 || i >= ward.rings.length || !f.boundary[i]) return null;
-  const inlet = mod(ward.rings[i].inlet + rot[i]);
-  let best = null;
-  for (const s of f.boundary[i]) {
-    const steps = ((s - inlet) % SECTORS + SECTORS + SECTORS / 2) % SECTORS - SECTORS / 2;
-    if (!best || Math.abs(steps) < Math.abs(best.steps)) best = { from: inlet, to: s, steps };
-  }
-  return best;
+export function nextGate(rot, i) {
+  return ((-rot[i] % SECTORS) + SECTORS + SECTORS / 2) % SECTORS - SECTORS / 2;
 }
 
 /**

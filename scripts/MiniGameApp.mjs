@@ -68,9 +68,8 @@ export class MiniGameApp extends GameWindow {
     const sessionId = opts.sessionId ?? foundry.utils.randomID();
     const what = opts.label ? ` — ${opts.label}` : '';
     super({
-      id      : `lpm-${new.target.KIND}-${sessionId}${spectator ? '-watch' : ''}`,
-      window  : { title: spectator ? `${opts.playerName ?? 'Player'} — ${new.target.TITLE}${what}` : `${new.target.TITLE}${what}` },
-      position: { width: new.target.CANVAS.w },
+      id    : `lpm-${new.target.KIND}-${sessionId}${spectator ? '-watch' : ''}`,
+      window: { title: spectator ? `${opts.playerName ?? 'Player'} — ${new.target.TITLE}${what}` : `${new.target.TITLE}${what}` },
     });
     this.sessionId  = sessionId;
     this._spectator = spectator;
@@ -125,7 +124,7 @@ export class MiniGameApp extends GameWindow {
     const { w, h } = this.constructor.CANVAS;
     const banner = this._spectator
       ? `<div class="lpm-spectator-banner"><i class="fa-solid fa-eye"></i> Spectating — ${esc(this.playerName)}</div>` : '';
-    return `<div class="lpm-root lpm-arcana-root">
+    return `<div class="lpm-root lpm-arcana-root" style="width:${w}px">
       ${banner}
       <canvas class="lpm-canvas lpm-arcana-canvas" width="${w}" height="${h}"
               style="width:${w}px;height:${h}px;${this._spectator ? 'pointer-events:none;' : ''}"></canvas>
