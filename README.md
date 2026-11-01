@@ -142,9 +142,9 @@ until its gap is on the beam and the light runs on to the next ring. When every
 gap is on the line, the crystal lights and the ward comes apart.
 
 **Drag** a ring to turn it (a click turns it one step clockwise, a right-click
-one step back, the mouse wheel works too). Turning is free. A **golden link**
-means turning the ring at its knot also turns the ring at its arrow (crossed:
-the other way). Hovering a ring outlines every ring that will move with it.
+one step back, the mouse wheel works too). Turning is free. A **link** means
+turning the ring at its dot also turns the ring at its arrow: gold the same way,
+red the other way. Hovering a ring outlines every ring that will move with it.
 Nothing is hidden: every gap and link is on the board from the start.
 
 **How you lose:** the ward knits itself back together. A violet seam stitches
@@ -155,7 +155,7 @@ ward holds. The seconds count down in the corner of the board and in the footer
 | DC | ≤ 12 | 13–17 | 18–21 | 22+ |
 |----|------|-------|-------|-----|
 | Rings | 3 | 4 | 5 | 5 |
-| Golden links | 0 | 1 | 2 | 3 |
+| Links | 0 | 1 | 2 | 3 |
 | Time before the rim closes | 40 s | 50 s | 60 s | 60 s |
 
 **The roll** adds or takes 2 s per point above or below the DC (from 60 % to
@@ -169,13 +169,20 @@ The working's resonance is a **wandering light** in a dark scrying pool ringed
 with nine runes. Your **focus** is a ring of light that chases the mouse. Keep
 the light inside it: the ring turns gold, the runes around the pool wake one by
 one and a clean fifth sounds over the hum. Outside the ring the attunement
-slowly fades (at 40 % of the speed it grows). Wake all nine runes before your
-**Concentration** runs out.
+fades. Wake all nine runes before your **Concentration** runs out.
+
+Two things fight back. **The ring tightens** with every rune that wakes (a faint
+circle shows where it began). And **the light surges**: an amber ring closes on
+it, it flares, then it darts away for 0.7 s. The wave round the water shows how
+you are doing: wild while the light is outside, calm as it attunes.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
 | Time inside the focus to attune | 6 s | 8 s | 10 s |
 | How restless the light is | quick | fast | very fast, with sudden swerves |
+| A surge every | 7 s | 5.5 s | 4.5 s |
+| The ring tightens by | 20 % | 30 % | 40 % |
+| Attunement fades at, of the speed it grows | 60 % | 80 % | 100 % |
 
 **The roll** decides how well your focus obeys you. The better it beats the DC,
 the wider the ring, the sharper it answers the mouse and the faster it can move

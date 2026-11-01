@@ -5,8 +5,9 @@
  * wall with one gap in it, and the beam stops at the first ring whose gap is
  * off the line; that gap pulses amber. Drag a ring to turn it (a click turns it
  * clockwise, a right-click back); turning is free. Line up every gap and the
- * light reaches the crystal. A golden link means turning one ring turns another
- * too; hovering a ring outlines every ring that will move with it. Meanwhile
+ * light reaches the crystal. A link means turning the ring at its dot turns the
+ * ring at its arrow too: gold the same way, red the other way; hovering a ring
+ * outlines every ring that will move with it. Meanwhile
  * the ward knits itself back together: a violet seam creeps around the rim, and
  * when it closes the circle the ward holds.
  */
@@ -22,6 +23,7 @@ const CORE_R = 24, RINGS_IN = 34, RINGS_OUT = 172, RIM_IN = 180, RIM_OUT = 204, 
 const SLOT = 20;                 // width of a ring's gap, in pixels: the same on every ring
 const STEP = TAU / SECTORS;
 const AMBER = '#f0b45a';
+const AGAINST = '#ff7a6b';       // a link that turns its ring the other way
 const sectorAngle = s => -Math.PI / 2 + s * STEP;
 const shortest = d => ((d % SECTORS) + SECTORS + SECTORS / 2) % SECTORS - SECTORS / 2;
 const polar = (r, a) => ({ x: CX + Math.cos(a) * r, y: CY + Math.sin(a) * r });
@@ -302,7 +304,7 @@ export class WardApp extends MiniGameApp {
     return { r: RIM_R, home: true };
   }
 
-  /** The goal top-left, the clock top-right, and what a golden link does bottom-left. */
+  /** The goal top-left, the clock top-right, and what the links do bottom-left. */
   drawNotes(ctx, f) {
     const open = f.powered.filter(Boolean).length, all = this.ward.rings.length;
     const left = this.game.timeLeft, late = left / this.ward.params.time < 0.25;
@@ -325,15 +327,17 @@ export class WardApp extends MiniGameApp {
     ctx.fillStyle = late ? '#ff8aa2' : 'rgba(225,232,250,0.92)';
     ctx.fillText(`${Math.ceil(left)} s`, W - 14, 42);
 
-    if (this.ward.bindings.length) {
+    // What the links on this board do; only the kinds it has.
+    const links = this.ward.bindings;
+    if (links.length) {
       ctx.textAlign = 'left';
       ctx.font = '700 9px "Signika", sans-serif';
       letters('1px');
-      ctx.fillStyle = hexA(ARC.gold, 0.9);
-      ctx.fillText('GOLDEN LINK', 14, 398);
+      let y = 424;
+      if (links.some(b => b.dir < 0)) { ctx.fillStyle = hexA(AGAINST, 0.95); ctx.fillText('RED: IT TURNS BACKWARD', 14, y); y -= 13; }
+      if (links.some(b => b.dir > 0)) { ctx.fillStyle = hexA(ARC.gold, 0.95); ctx.fillText('GOLD: IT TURNS ALONG', 14, y); y -= 13; }
       ctx.fillStyle = 'rgba(200,212,240,0.72)';
-      ctx.fillText('TURN THE RING AT THE KNOT:', 14, 411);
-      ctx.fillText('THE ARROW’S RING TURNS TOO', 14, 424);
+      ctx.fillText('LINKS: TURN THE DOT’S RING', 14, y);
     }
     ctx.restore();
   }
@@ -365,7 +369,8 @@ export class WardApp extends MiniGameApp {
   /** The gap that has to come next pulses amber; with insight, a trace shows which way and how far. */
   drawNextGap(ctx, i, beat) {
     const ang = this.disp[i] * STEP;
-    glow(ctx, () => this.slotSides(ctx, i, ang), { color: AMBER, width: 2.6, intensity: 0.6 + 0.4 * beat, core: false });
+    this.slotFill(ctx, i, ang, AMBER, 0.14 + 0.2 * beat);
+    glow(ctx, () => this.slotSides(ctx, i, ang), { color: AMBER, width: 2.2, intensity: 0.6 + 0.4 * beat, core: false });
     if (!this.ward.params.insight || this.drag) return;
     const steps = nextGate(this.game.rot, i);
     if (!steps) return;
@@ -398,13 +403,13 @@ export class WardApp extends MiniGameApp {
     const at = this.hoverAt ? Math.atan2(this.hoverAt.y - CY, this.hoverAt.x - CX) : -Math.PI / 2;
     // turn arrows either side of the pointer
     if (this.hoverAt && !this.drag) for (const side of [1, -1]) this.drawArrow(ctx, g.rm, at + side * 0.32, side, 'rgba(200,240,255,0.85)');
-    // linked rings: gold outline and the way they will turn
+    // linked rings: outlined in the link's colour, with the way they will turn
     this.ward.bindings.forEach(b => {
       if (b.from !== k) return;
-      const h = this.geo[b.to];
-      ctx.save(); outline(h, hexA(ARC.gold, 0.7)); ctx.restore();
-      this.drawArrow(ctx, h.rm, at + 0.32, b.dir, hexA(ARC.gold, 0.9));
-      this.drawArrow(ctx, h.rm, at - 0.32, -b.dir, hexA(ARC.gold, 0.9));
+      const h = this.geo[b.to], col = b.dir > 0 ? ARC.gold : AGAINST;
+      ctx.save(); outline(h, hexA(col, 0.7)); ctx.restore();
+      this.drawArrow(ctx, h.rm, at + 0.32, b.dir, hexA(col, 0.9));
+      this.drawArrow(ctx, h.rm, at - 0.32, -b.dir, hexA(col, 0.9));
     });
   }
 
@@ -431,11 +436,26 @@ export class WardApp extends MiniGameApp {
     }
   }
 
-  /** Ring i's gap: bright when the light runs through it, otherwise a clear violet frame. */
+  /** The inside of ring i's gap, as one window of colour. */
+  slotFill(ctx, i, ang, color, alpha) {
+    const g = this.geo[i], a = this.beamA + ang, c = Math.cos(a), s = Math.sin(a), hw = SLOT / 2;
+    const near = Math.sqrt(g.r0 * g.r0 - hw * hw), far = Math.sqrt(g.r1 * g.r1 - hw * hw);
+    ctx.beginPath();
+    ctx.moveTo(CX + c * near + s * hw, CY + s * near - c * hw);
+    ctx.lineTo(CX + c * far + s * hw, CY + s * far - c * hw);
+    ctx.lineTo(CX + c * far - s * hw, CY + s * far + c * hw);
+    ctx.lineTo(CX + c * near - s * hw, CY + s * near + c * hw);
+    ctx.closePath();
+    ctx.fillStyle = hexA(color, alpha);
+    ctx.fill();
+  }
+
+  /** Ring i's gap: a window, lit when the light runs through it. */
   gapGlow(ctx, i, ang, powered) {
-    const sides = () => this.slotSides(ctx, i, ang);
-    if (powered) glow(ctx, sides, { width: 2.4, intensity: 0.95 });
-    else glow(ctx, sides, { color: ARC.violet, width: 1.9, intensity: 0.8, core: false });
+    this.slotFill(ctx, i, ang, powered ? ARC.energy : ARC.violet, powered ? 0.32 : 0.2);
+    if (powered) { glow(ctx, () => this.slotSides(ctx, i, ang), { width: 1.6, intensity: 0.8, core: false }); return; }
+    this.slotSides(ctx, i, ang);
+    ctx.strokeStyle = hexA(ARC.violet, 0.8); ctx.lineWidth = 1.2; ctx.stroke();
   }
 
   /**
@@ -528,15 +548,15 @@ export class WardApp extends MiniGameApp {
     }
     ctx.beginPath(); ctx.arc(CX, CY, g.r1 - 1.5, 0, TAU); ctx.strokeStyle = 'rgba(200,215,245,0.07)'; ctx.lineWidth = 1; ctx.stroke();
 
-    // sector ticks and faint runes, except around the gap
+    // carved runes, except where the gap is
     for (let s = 0; s < SECTORS; s++) {
-      const b = sectorAngle(s) + STEP / 2;
-      engrave(ctx, () => { const p = polar(g.r0 + 2, b), q = polar(g.r1 - 2, b); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }, 1, 0.7);
       if (s === beam) continue;
       const p = polar(g.rm, sectorAngle(s));
-      const size2 = Math.min(13, (g.r1 - g.r0) * 0.6);
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1.3;
-      drawRune(ctx, ring.rune + s * 3 + i * 5, p.x, p.y, size2, sectorAngle(s) + Math.PI / 2);
+      const size2 = Math.min(13, (g.r1 - g.r0) * 0.6), rot = sectorAngle(s) + Math.PI / 2, rune = ring.rune + s * 3 + i * 5;
+      ctx.strokeStyle = 'rgba(190,205,240,0.09)'; ctx.lineWidth = 1.3;
+      drawRune(ctx, rune, p.x, p.y + 0.7, size2, rot);
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      drawRune(ctx, rune, p.x, p.y, size2, rot);
     }
 
     // the gap, cut clean through the stone
@@ -563,10 +583,6 @@ export class WardApp extends MiniGameApp {
     rg.addColorStop(0, '#1b1e27'); rg.addColorStop(1, '#14161d');
     rim(); ctx.fillStyle = rg; ctx.fill();
     for (const rr of [RIM_IN, RIM_OUT]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, rr, 0, TAU); }, 1.3, 0.9);
-    for (let s = 0; s < SECTORS; s++) {
-      const b = sectorAngle(s) + STEP / 2;
-      engrave(ctx, () => { const p = polar(RIM_IN + 3, b), q = polar(RIM_OUT - 3, b); ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }, 1, 0.8);
-    }
     // the gap the rings sit in
     ctx.beginPath(); ctx.arc(CX, CY, RINGS_OUT + 3, 0, TAU); ctx.arc(CX, CY, RINGS_IN - 3, 0, TAU, true);
     ctx.fillStyle = '#07080b'; ctx.fill();
@@ -595,35 +611,26 @@ export class WardApp extends MiniGameApp {
     ctx.restore();
   }
 
-  /** Golden link from ring `from` (knot) to ring `to` (arrow); crossed when it turns it the other way. */
+  /** A link: a dot on the ring you turn, an arrow on the ring that follows. Gold: the same way; red: the other way. */
   drawBinding(ctx, b, i, flashV) {
     const a = sectorAngle(this.ward.beam + [3, 5, 2][i % 3]) + STEP / 2;     // well away from the beam
-    const g1 = this.geo[b.from], g2 = this.geo[b.to];
-    const p1 = polar(g1.rm, a), p2 = polar(g2.rm, a);
-    const nx = -Math.sin(a), ny = Math.cos(a);                 // across the link
-    const col = ARC.gold;
-    const intensity = 0.8 + 0.6 * flashV;
-    const strand = (side) => () => {
-      ctx.beginPath();
-      if (b.dir > 0) {
-        ctx.moveTo(p1.x + nx * 2.2 * side, p1.y + ny * 2.2 * side);
-        ctx.lineTo(p2.x + nx * 2.2 * side, p2.y + ny * 2.2 * side);
-      } else {                                                 // crossed strands
-        const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-        ctx.moveTo(p1.x + nx * 3 * side, p1.y + ny * 3 * side);
-        ctx.quadraticCurveTo(mx, my, p2.x - nx * 3 * side, p2.y - ny * 3 * side);
-      }
-    };
-    glow(ctx, strand(1), { color: col, width: 1.3, intensity, core: false });
-    glow(ctx, strand(-1), { color: col, width: 1.3, intensity, core: false });
-    // knot at the driving ring, arrow at the driven ring
-    spark(ctx, p1.x, p1.y, 7 + 6 * flashV, col, 0.9);
+    const p1 = polar(this.geo[b.from].rm, a), p2 = polar(this.geo[b.to].rm, a);
+    const col = b.dir > 0 ? ARC.gold : AGAINST;
+    const out = b.to > b.from ? 1 : -1, tip = polar(this.geo[b.to].rm + out * 2, a);
+    const line = () => { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); };
     ctx.save();
-    ctx.translate(p2.x, p2.y);
-    ctx.rotate(Math.atan2(p2.y - p1.y, p2.x - p1.x));
-    ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(-4, -4); ctx.lineTo(-2, 0); ctx.lineTo(-4, 4); ctx.closePath();
-    ctx.fillStyle = hexA(col, 0.95); ctx.fill();
+    ctx.lineCap = 'round';
+    line(); ctx.strokeStyle = 'rgba(5,6,10,0.75)'; ctx.lineWidth = 5; ctx.stroke();
+    if (flashV > 0) { line(); ctx.strokeStyle = hexA(col, 0.5 * flashV); ctx.lineWidth = 8; ctx.stroke(); }
+    line(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+    // the dot
+    ctx.beginPath(); ctx.arc(p1.x, p1.y, 5, 0, TAU); ctx.fillStyle = 'rgba(5,6,10,0.85)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(p1.x, p1.y, 3.4, 0, TAU); ctx.fillStyle = col; ctx.fill();
+    // the arrow
+    ctx.translate(tip.x, tip.y); ctx.rotate(a + (out > 0 ? 0 : Math.PI));
+    const head = () => { ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-5, -5.5); ctx.lineTo(-5, 5.5); ctx.closePath(); };
+    head(); ctx.strokeStyle = 'rgba(5,6,10,0.8)'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+    head(); ctx.fillStyle = col; ctx.fill();
     ctx.restore();
-    if (flashV > 0) spark(ctx, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2, 24 * flashV, col, flashV);
   }
 }

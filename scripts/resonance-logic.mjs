@@ -5,8 +5,9 @@
  * caster holds a focus over it: a ring that follows the pointer (gently, so
  * it glides rather than jumps). While the wisp is inside the ring the
  * attunement grows and the runes around the pool wake one by one; outside
- * it, the attunement slowly fades. Wake every rune before concentration
- * (time) runs out.
+ * it, the attunement fades. Two things fight back: the ring tightens with every
+ * rune that wakes, and every few seconds the light flares and then surges away.
+ * Wake every rune before concentration (time) runs out.
  *
  * Positions are in pool radii: (0, 0) is the centre, 1 the edge. The wisp's
  * path is a fixed sum of sines from a seed, so a spectator given {seed, t}
@@ -19,11 +20,14 @@ const TAU = Math.PI * 2;
 export const RUNE_COUNT = 9;
 export const WISP_EDGE = 0.8;          // the wisp keeps this far from the centre at most
 export const FOCUS_EDGE = 0.92;        // and the focus this far
+export const SURGE_TIME = 0.7;         // how long a surge lasts, seconds
+export const SURGE_WARNING = 0.9;      // how long the wisp flares before it, seconds
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 /**
- * DC: how long the attunement takes and how restless the wisp is; the Arcana
+ * DC: how long the attunement takes, how restless the wisp is, how often it
+ * surges, how far the ring tightens and how fast attunement fades; the Arcana
  * roll: how wide the focus is, how sharply it answers the hand (a low roll
  * drags, a high one snaps to the pointer) and how long the caster can concentrate.
  */
@@ -38,14 +42,32 @@ export function resonanceParams(dc = 15, roll = {}) {
     follow: nat20 ? 20 : nat1 ? 4 : clamp(9 + margin * 0.6, 5, 16),                 // how fast it closes on the pointer, per second
     reach : nat20 ? 7 : nat1 ? 1.6 : clamp(3 + margin * 0.2, 1.9, 5.5),             // its top speed, pool radii per second
     time  : nat20 ? 75 : nat1 ? 30 : clamp(40 + margin * 2, 30, 65),
-    fade  : 0.4,                                             // fades at 40 % of the speed it grows
+    fade  : dc <= 12 ? 0.6 : dc <= 17 ? 0.8 : 1,             // share of the speed it grows at
+    tighten: dc <= 12 ? 0.2 : dc <= 17 ? 0.3 : 0.4,          // how much of the ring is gone at full attunement
+    surgeEvery: dc <= 12 ? 7 : dc <= 17 ? 5.5 : 4.5,         // seconds between surges
+    surgeGain : dc <= 12 ? 1.2 : dc <= 17 ? 1.6 : 2,         // seconds of wandering a surge packs into SURGE_TIME
   };
+}
+
+/** Seconds until the next surge begins, and whether one is running at time t. */
+export function surgeAt(res, t) {
+  const P = res.params.surgeEvery, since = t - res.surgeOffset;
+  const n = Math.floor(since / P), into = since - n * P;
+  return { n, into, next: since < 0 ? -since : P - into, active: since >= 0 && into < SURGE_TIME };
+}
+
+/** The wisp's own clock: t, plus a smooth jump during each surge. */
+function wanderClock(res, t) {
+  const { n, into } = surgeAt(res, t);
+  if (t < res.surgeOffset) return t;
+  const u = Math.min(1, into / SURGE_TIME);
+  return t + res.params.surgeGain * (n + u * u * (3 - 2 * u));
 }
 
 /** Where the wisp is at time t (seconds). */
 export function wispAt(res, t) {
   const { k, params } = res;
-  const s = t * params.speed;
+  const s = wanderClock(res, t) * params.speed;
   let x = 0.52 * Math.sin(s * 0.37 + k[0]) + 0.28 * Math.sin(s * 0.83 + k[1]) + params.swerve * Math.sin(s * 1.6 + k[2]);
   let y = 0.52 * Math.sin(s * 0.31 + k[3]) + 0.28 * Math.sin(s * 0.97 + k[4]) + params.swerve * Math.sin(s * 1.75 + k[5]);
   // A soft wall: the further out, the harder it is pushed back in.
@@ -58,7 +80,8 @@ export function generateResonance({ dc = 15, roll = {}, seed = 1 } = {}) {
   const R = rng(seed);
   const params = resonanceParams(dc, roll);
   const k = Array.from({ length: 6 }, () => R() * TAU);
-  return { seed, dc, params, k, tone: 196 * Math.pow(2, Math.floor(R() * 5) / 12) };   // the hum's note
+  const tone = 196 * Math.pow(2, Math.floor(R() * 5) / 12);    // the hum's note
+  return { seed, dc, params, k, tone, surgeOffset: params.surgeEvery * (0.6 + 0.4 * R()) };
 }
 
 /** Live game state: the focus, the attunement and the clock. */
@@ -93,10 +116,19 @@ export class ResonanceGame {
     this.focus.y += dy;
   }
 
+  /** The ring's radius now: it tightens as the attunement grows. */
+  focusR() { return this.res.params.focus * (1 - this.res.params.tighten * this.attune); }
+
+  /** 0…1 while the wisp flares before a surge; 1 during the surge. */
+  surgeWarning() {
+    const s = surgeAt(this.res, this.t);
+    return s.active ? 1 : Math.max(0, 1 - s.next / SURGE_WARNING);
+  }
+
   /** Is the wisp inside the focus ring? */
   check() {
     const w = this.wisp();
-    this.inside = Math.hypot(w.x - this.focus.x, w.y - this.focus.y) <= this.res.params.focus;
+    this.inside = Math.hypot(w.x - this.focus.x, w.y - this.focus.y) <= this.focusR();
     return this.inside;
   }
 

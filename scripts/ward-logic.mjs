@@ -9,8 +9,8 @@
  *
  * Rings turn one sector (of 8) at a time, freely. The ward fights back by
  * knitting itself together again: the caster has until the rim closes (a time
- * limit set by the roll). Some rings are bound by a golden link: turning one
- * turns another as well (one way, not chained). Nothing is hidden: every gap
+ * limit set by the roll). Some rings are bound by a link: turning one turns
+ * another as well (one way, not chained). Nothing is hidden: every gap
  * and link is on the board from the start.
  *
  * A ring's rotation counts from its solved position: rot[i] = 0 means its gap
