@@ -101,6 +101,7 @@ export class LockpickApp extends GameWindow {
     this._broadcast = opts.broadcast ?? false;
     this._minGap = frameGap(spectator);
     this._syncAcc = 0;
+    this._syncAge = 0;           // seconds since the last message
     this._syncHandler = null;
 
     this._boundWindowUp = this._onWindowUp.bind(this);
@@ -375,6 +376,7 @@ export class LockpickApp extends GameWindow {
     // Трансляція глядачам ~12 разів на секунду
     if (this._broadcast) {
       this._syncAcc += dt;
+      this._syncAge += dt;
       if (this._syncAcc >= 0.08) { this._syncAcc = 0; this._emitSync(); }
     }
 
@@ -392,10 +394,11 @@ export class LockpickApp extends GameWindow {
   _emitSync(force = false, ended = undefined) {
     if (!this._broadcast) return;
     const c = this.controller, pickIn = this._pickIn || this._withdrawing, set = c.pins.map(p => p.set);
-    // A pick at rest has nothing to say.
+    // A pick at rest has nothing new to say: once a second, for a window that opened late.
     const key = `${c.pickX}|${this._zone}|${pickIn}|${c.attemptsLeft}|${c.dead}|${set}`;
-    if (!force && key === this._syncKey) return;
+    if (!force && key === this._syncKey && this._syncAge < 1) return;
     this._syncKey = key;
+    this._syncAge = 0;
     game.socket.emit('module.' + LPM_ID, {
       action: 'lockpickSync',
       sessionId: this.sessionId,
