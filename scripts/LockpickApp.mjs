@@ -9,7 +9,7 @@
  *     (відмичка ламається лише якщо інструмент витратний — див. tools.mjs)
  */
 
-import { GameWindow } from './app-window.mjs';
+import { GameWindow, frameGap } from './app-window.mjs';
 import { rollBadge, dcHiddenHere } from './MiniGameApp.mjs';
 import { LockController, TRACK_W } from './LockController.mjs';
 import { LockRenderer, CANVAS_W, CANVAS_H, TRACK_X, KEYWAY_CY, SHEAR_Y } from './LockRenderer.mjs';
@@ -99,6 +99,7 @@ export class LockpickApp extends GameWindow {
 
     // Трансляція глядачам: хто грає — шле стан, спостерігачі його застосовують.
     this._broadcast = opts.broadcast ?? false;
+    this._minGap = frameGap(spectator);
     this._syncAcc = 0;
     this._syncHandler = null;
 
@@ -264,11 +265,13 @@ export class LockpickApp extends GameWindow {
 
   _tick(t) {
     if (this._dead) return;
-    const dt = Math.max(0, Math.min(0.05, (t - this._lastT) / 1000 || 0.016));   // rAF time can precede _lastT
+    const gap = t - this._lastT;
+    if (gap > 0 && gap < this._minGap) { this._raf = requestAnimationFrame(this._boundTick); return; }
+    const dt = Math.max(0, Math.min(0.05, gap / 1000 || 0.016));   // rAF time can precede _lastT
     this._lastT = t;
 
     this._update(dt);
-    this._draw();
+    if (!this.minimized) this._draw(dt);                            // folded away: the game goes on, undrawn
 
     this._raf = requestAnimationFrame(this._boundTick);
   }
@@ -388,21 +391,25 @@ export class LockpickApp extends GameWindow {
   /** Стан для глядачів. Тротлінг: 60 emit/с забив би сокет. */
   _emitSync(force = false, ended = undefined) {
     if (!this._broadcast) return;
+    const c = this.controller, pickIn = this._pickIn || this._withdrawing, set = c.pins.map(p => p.set);
+    // A pick at rest has nothing to say.
+    const key = `${c.pickX}|${this._zone}|${pickIn}|${c.attemptsLeft}|${c.dead}|${set}`;
+    if (!force && key === this._syncKey) return;
+    this._syncKey = key;
     game.socket.emit('module.' + LPM_ID, {
       action: 'lockpickSync',
       sessionId: this.sessionId,
-      pickX: this.controller.pickX,
+      pickX: c.pickX,
       zone: this._zone,
-      pickIn: this._pickIn || this._withdrawing,
-      attemptsLeft: this.controller.attemptsLeft,
-      dead: this.controller.dead,
-      set: this.controller.pins.map(p => p.set),
+      pickIn,
+      attemptsLeft: c.attemptsLeft,
+      dead: c.dead,
+      set,
       ended,
     });
   }
 
-  _draw() {
-
+  _draw(dt = 1 / 60) {
     this.renderer.draw(
       {
         pins        : this.controller.pins,
@@ -412,6 +419,7 @@ export class LockpickApp extends GameWindow {
         attemptsLeft: this.controller.attemptsLeft,
       },
       {
+        dt,
         deflect   : this._resistance,
         vibrate   : this._held ? this._resistance : 0,
         shake     : this._shake,
@@ -663,6 +671,8 @@ export class LockpickApp extends GameWindow {
   _refreshAttempts() {
     if (!this._attemptsEl) return;
     const left = this.controller.attemptsLeft;
+    if (left === this._attemptsShown) return;      // spectators are told 12 times a second
+    this._attemptsShown = left;
     const snaps = this.tool.consumable;
     const pips = Array.from({ length: 3 }, (_, i) =>
       `<span class="lpm-pip${i < left ? '' : ' used'}"></span>`).join('');

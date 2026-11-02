@@ -14,7 +14,7 @@
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateWard, WardGame, SECTORS, nextGate, mod } from './ward-logic.mjs';
-import { ARC, TAU, layer, blit, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, layer, blit, ringCells, blitCells, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
@@ -166,6 +166,9 @@ export class WardApp extends MiniGameApp {
 
   syncState() { return this.game.snapshot(); }
 
+  /** Only a turn needs sending at once: spectators run the clock themselves. */
+  syncKey() { return `${this.game.rot}|${this.game.state}`; }
+
   applySync(s) {
     if (!s) return;
     s.rot.forEach((v, i) => { this.tgt[i] += shortest(v - this.game.rot[i]); });
@@ -304,10 +307,8 @@ export class WardApp extends MiniGameApp {
     return { r: RIM_R, home: true };
   }
 
-  /** The goal top-left, the clock top-right, and what the links do bottom-left. */
-  drawNotes(ctx, f) {
-    const open = f.powered.filter(Boolean).length, all = this.ward.rings.length;
-    const left = this.game.timeLeft, late = left / this.ward.params.time < 0.25;
+  /** What never changes: the goal top-left, what the links do bottom-left. Part of the static layer. */
+  drawFixedNotes(ctx) {
     const letters = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px; };
     ctx.save();
     ctx.font = '700 10px "Signika", sans-serif';
@@ -315,6 +316,27 @@ export class WardApp extends MiniGameApp {
     ctx.fillStyle = 'rgba(200,212,240,0.8)';
     ctx.fillText('LINE UP THE GAPS', 14, 22);
     ctx.fillText('TO LIGHT THE CRYSTAL', 14, 36);
+    // What the links on this board do; only the kinds it has.
+    const links = this.ward.bindings;
+    if (links.length) {
+      ctx.font = '700 9px "Signika", sans-serif';
+      letters('1px');
+      let y = 424;
+      if (links.some(b => b.dir < 0)) { ctx.fillStyle = hexA(AGAINST, 0.95); ctx.fillText('RED: IT TURNS BACKWARD', 14, y); y -= 13; }
+      if (links.some(b => b.dir > 0)) { ctx.fillStyle = hexA(ARC.gold, 0.95); ctx.fillText('GOLD: IT TURNS ALONG', 14, y); y -= 13; }
+      ctx.fillStyle = 'rgba(200,212,240,0.72)';
+      ctx.fillText('LINKS: TURN THE DOT’S RING', 14, y);
+    }
+    ctx.restore();
+  }
+
+  /** What changes: how many rings are open, and the clock top-right. */
+  drawNotes(ctx, f) {
+    const open = f.powered.filter(Boolean).length, all = this.ward.rings.length;
+    const left = this.game.timeLeft, late = left / this.ward.params.time < 0.25;
+    const letters = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px; };
+    ctx.save();
+    letters('1.6px');
     ctx.font = '700 12px "Signika", sans-serif';
     ctx.fillStyle = open ? hexA(ARC.energy, 0.95) : 'rgba(200,212,240,0.85)';
     ctx.fillText(`${open} / ${all} RINGS OPEN`, 14, 55);
@@ -326,19 +348,6 @@ export class WardApp extends MiniGameApp {
     ctx.font = '700 18px "Signika", sans-serif';
     ctx.fillStyle = late ? '#ff8aa2' : 'rgba(225,232,250,0.92)';
     ctx.fillText(`${Math.ceil(left)} s`, W - 14, 42);
-
-    // What the links on this board do; only the kinds it has.
-    const links = this.ward.bindings;
-    if (links.length) {
-      ctx.textAlign = 'left';
-      ctx.font = '700 9px "Signika", sans-serif';
-      letters('1px');
-      let y = 424;
-      if (links.some(b => b.dir < 0)) { ctx.fillStyle = hexA(AGAINST, 0.95); ctx.fillText('RED: IT TURNS BACKWARD', 14, y); y -= 13; }
-      if (links.some(b => b.dir > 0)) { ctx.fillStyle = hexA(ARC.gold, 0.95); ctx.fillText('GOLD: IT TURNS ALONG', 14, y); y -= 13; }
-      ctx.fillStyle = 'rgba(200,212,240,0.72)';
-      ctx.fillText('LINKS: TURN THE DOT’S RING', 14, y);
-    }
     ctx.restore();
   }
 
@@ -384,22 +393,34 @@ export class WardApp extends MiniGameApp {
   }
 
   /**
-   * Highlight ring k, arrows along it at the pointer, and outline the rings
-   * linked to it. Plain strokes: a glow around whole rings costs ~3 ms a frame
-   * on a software canvas, and the pointer is over a ring all through play.
+   * Ring i outlined (and tinted, for the ring under the pointer), once per ring
+   * and colour: the pointer is over a ring all through play, and even plain
+   * strokes around whole rings cost over a millisecond a frame without a GPU.
    */
+  ringOutline(i, color, tint = null) {
+    const key = `${i}|${color}`;
+    this._outlines ??= new Map();
+    let o = this._outlines.get(key);
+    if (o) return o;
+    const g = this.geo[i], size = Math.ceil(g.r1 * 2 + 6);
+    const c = layer(size, size, this._dpr), ctx = c.getContext('2d'), m = c.width / this._dpr / 2;
+    if (tint) {
+      ctx.beginPath(); ctx.arc(m, m, g.r1, 0, TAU); ctx.arc(m, m, g.r0, 0, TAU, true);
+      ctx.fillStyle = tint; ctx.fill();
+    }
+    ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(m, m, g.r1 + 0.5, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.arc(m, m, g.r0 - 0.5, 0, TAU); ctx.stroke();
+    o = { c, cells: ringCells(c, g.r0 - 2, g.r1 + 2) };
+    this._outlines.set(key, o);
+    return o;
+  }
+
+  /** Highlight ring k, arrows along it at the pointer, and outline the rings linked to it. */
   drawHover(ctx, k) {
     const g = this.geo[k];
-    const outline = (h, color) => {
-      ctx.strokeStyle = color; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(CX, CY, h.r1 + 0.5, 0, TAU); ctx.stroke();
-      ctx.beginPath(); ctx.arc(CX, CY, h.r0 - 0.5, 0, TAU); ctx.stroke();
-    };
-    ctx.save();
-    ctx.beginPath(); ctx.arc(CX, CY, g.r1, 0, TAU); ctx.arc(CX, CY, g.r0, 0, TAU, true);
-    ctx.fillStyle = 'rgba(134,236,255,0.07)'; ctx.fill();
-    outline(g, 'rgba(134,236,255,0.55)');
-    ctx.restore();
+    const self = this.ringOutline(k, 'rgba(134,236,255,0.55)', 'rgba(134,236,255,0.07)');
+    blitCells(ctx, self.c, self.cells, CX, CY);
     const at = this.hoverAt ? Math.atan2(this.hoverAt.y - CY, this.hoverAt.x - CX) : -Math.PI / 2;
     // turn arrows either side of the pointer
     if (this.hoverAt && !this.drag) for (const side of [1, -1]) this.drawArrow(ctx, g.rm, at + side * 0.32, side, 'rgba(200,240,255,0.85)');
@@ -407,7 +428,8 @@ export class WardApp extends MiniGameApp {
     this.ward.bindings.forEach(b => {
       if (b.from !== k) return;
       const h = this.geo[b.to], col = b.dir > 0 ? ARC.gold : AGAINST;
-      ctx.save(); outline(h, hexA(col, 0.7)); ctx.restore();
+      const other = this.ringOutline(b.to, hexA(col, 0.7));
+      blitCells(ctx, other.c, other.cells, CX, CY);
       this.drawArrow(ctx, h.rm, at + 0.32, b.dir, hexA(col, 0.9));
       this.drawArrow(ctx, h.rm, at - 0.32, -b.dir, hexA(col, 0.9));
     });
@@ -471,17 +493,29 @@ export class WardApp extends MiniGameApp {
       blit(ctx, c, CX - c.width / c._dpr / 2, CY - c.height / c._dpr / 2);
       return;
     }
-    const spr = this.ringSprite(i), g = this.geo[i];
+    // One rotated image: cut into small rects the ring costs twice as much without a GPU.
+    const spr = this.ringSprite(i), lit = this.ringLit(i);
     const w = spr.width / spr._dpr, h = spr.height / spr._dpr;
     ctx.save();
     ctx.translate(CX, CY);
     ctx.rotate(ang);
     blit(ctx, spr, -w / 2, -h / 2);
     ctx.restore();
-    ctx.save();
-    ctx.strokeStyle = ringLight(ctx); ctx.lineWidth = g.r1 - g.r0;
-    ctx.beginPath(); ctx.arc(CX, CY, g.rm, 0, TAU); ctx.stroke();
-    ctx.restore();
+    // The light, though, is copied pixel for pixel: a quarter of the cost of stroking it.
+    blitCells(ctx, lit.c, lit.cells, CX, CY);
+  }
+
+  /** The fixed light on ring i as a layer. Built once. */
+  ringLit(i) {
+    this._lit ??= [];
+    if (this._lit[i]) return this._lit[i];
+    const g = this.geo[i], spr = this.ringSprite(i);
+    const c = layer(spr.width / spr._dpr, spr.height / spr._dpr, this._dpr), ctx = c.getContext('2d');
+    const m = c.width / this._dpr / 2;
+    ctx.translate(m - CX, m - CY);                     // board coordinates, so the light falls as on a resting ring
+    ctx.fillStyle = ringLight(ctx);
+    ctx.beginPath(); ctx.arc(CX, CY, g.r1, 0, TAU); ctx.arc(CX, CY, g.r0, 0, TAU, true); ctx.fill();
+    return (this._lit[i] = { c, cells: ringCells(c, g.r0, g.r1) });
   }
 
   /** Ring i turned to rest position `steps` and lit (one cached copy per ring). */
@@ -511,7 +545,7 @@ export class WardApp extends MiniGameApp {
   }
 
   /** The static layer plus every resting ring and its gap. */
-  buildBoard(moving, c = layer(W, H, this._dpr)) {
+  buildBoard(moving, c = layer(W, H, this._dpr, { opaque: true })) {
     const ctx = c.getContext('2d');
     blit(ctx, this._static);                      // opaque: covers the previous board
     this.geo.forEach((g, i) => { if (!moving[i]) this.drawRing(ctx, i, 0, this.tgt[i]); });
@@ -574,7 +608,7 @@ export class WardApp extends MiniGameApp {
 
   /** Backdrop, rim band, core socket — never moves. */
   buildStatic() {
-    const c = layer(W, H, this._dpr);
+    const c = layer(W, H, this._dpr, { opaque: true });
     const ctx = c.getContext('2d');
     blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: 214 }));
     // rim band
@@ -591,6 +625,7 @@ export class WardApp extends MiniGameApp {
     sock.addColorStop(0, '#0a0b0f'); sock.addColorStop(1, '#262a35');
     ctx.beginPath(); ctx.arc(CX, CY, CORE_R + 3, 0, TAU); ctx.fillStyle = sock; ctx.fill();
     engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, CORE_R + 3, 0, TAU); }, 1.2, 1);
+    this.drawFixedNotes(ctx);
     return c;
   }
 

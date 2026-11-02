@@ -10,7 +10,7 @@
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateSigil, SigilGame, NODES } from './sigil-logic.mjs';
-import { ARC, TAU, layer, blit, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, layer, blit, ArcMeter, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
@@ -127,6 +127,9 @@ export class SigilApp extends MiniGameApp {
 
   syncState() { return { ...this.game.snapshot(), recallAt: this.show.recall ? this.show.t : null }; }
 
+  /** Stars, cracks and recalls go out at once; spectators drain the mana themselves in between. */
+  syncKey() { const g = this.game; return `${g.phase}|${g.progress}|${g.cracks}|${g.recalls}|${g.state}`; }
+
   applySync(s) {
     if (!s) return;
     const before = this.game.progress, cracks = this.game.cracks;
@@ -154,7 +157,13 @@ export class SigilApp extends MiniGameApp {
     for (const p of this.pulses) p.t += dt;
     this.pulses = this.pulses.filter(p => p.t < 0.6);
     // A recall costs exactly its 4 s: mana holds while the replay is on screen.
-    if (this._spectator || this._over || this.show.recall) return null;
+    if (this._over || this.show.recall) return null;
+    if (this._spectator) {
+      if (g.phase === 'trace') g.mana = Math.max(0, g.mana - dt);
+      this._acc = (this._acc ?? 0) + dt;
+      if (this._acc > 0.25) { this._acc = 0; this.refreshMeter(); }
+      return null;
+    }
     const out = g.update(dt);
     this._acc = (this._acc ?? 0) + dt;
     if (this._acc > 0.25) { this._acc = 0; this.refreshMeter(); }
@@ -170,47 +179,69 @@ export class SigilApp extends MiniGameApp {
     return { strokes: this.sigil.params.strokes, alpha: Math.max(0, 1 - (t - dT - this.show.hold) / FADE) };
   }
 
+  /** A line through stars path[from..to] of the sigil. */
+  linePath(ctx, from, to) {
+    ctx.beginPath();
+    const a = P(this.path[from]); ctx.moveTo(a.x, a.y);
+    for (let i = from + 1; i <= to; i++) { const p = P(this.path[i]); ctx.lineTo(p.x, p.y); }
+  }
+
+  /**
+   * The field with every line that holds still drawn in: the strokes shown so
+   * far (shown = their number) and the trace so far. It changes a few times a
+   * game, and stroking those long lines every frame is the costliest part of it.
+   */
+  buildBoard(shown, traced) {
+    this._board ??= layer(W, H, this._dpr, { opaque: true });
+    const ctx = this._board.getContext('2d');
+    blit(ctx, this._static);
+    if (shown > 0) {
+      const path = () => this.linePath(ctx, 0, shown);
+      glow(ctx, path, { color: ARC.violet, width: 3.6 });
+      glow(ctx, path, { color: ARC.gold, width: 1.4, intensity: 0.8, core: false });
+    }
+    if (traced > 1) glow(ctx, () => this.linePath(ctx, 0, traced - 1), { color: ARC.gold, width: 3.2 });
+  }
+
   draw(ctx) {
     if (!this._static) this._static = this.buildStatic();
-    blit(ctx, this._static);
     const g = this.game, t = this._t;
+    const showing = g.phase === 'memorize' || this.show.recall;
+    const { strokes, alpha } = showing ? this.showState() : { strokes: 0, alpha: 0 };
+    const last = this.path.length - 1, full = Math.min(Math.floor(strokes), last), part = strokes - Math.floor(strokes);
+    // While the sigil is at full strength its finished strokes can sit on the board; as it fades they can't.
+    const settled = showing && alpha === 1 ? full : 0;
+    const key = `${settled}|${g.progress}`;
+    if (key !== this._boardKey) { this.buildBoard(settled, g.progress); this._boardKey = key; }
+    blit(ctx, this._board);
 
     // Mana ring round the field
     if (g.phase === 'trace') {
       const f = g.mana / this.sigil.params.traceTime;
       const low = f < 0.25;
-      glow(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, SCALE + 26, -Math.PI / 2, -Math.PI / 2 + TAU * f); },
-        { color: low ? ARC.danger : ARC.violet, width: 2.4, intensity: low ? 0.7 + 0.3 * Math.sin(t * 10) : 0.8, core: false });
+      this._mana ??= new ArcMeter(this._dpr, SCALE + 26, { color: ARC.violet, width: 2.4 });
+      this._manaLow ??= new ArcMeter(this._dpr, SCALE + 26, { color: ARC.danger, width: 2.4 });
+      (low ? this._manaLow : this._mana).draw(ctx, CX, CY, f, low ? 0.7 + 0.3 * Math.sin(t * 10) : 0.8);
     }
 
-    // The sigil drawing itself (memorise, recall)
-    const showing = g.phase === 'memorize' || this.show.recall;
+    // The sigil drawing itself (memorise, recall): what is not on the board yet
     if (showing) {
-      const { strokes, alpha } = this.showState();
-      const full = Math.floor(strokes), part = strokes - full;
-      const path = () => {
-        ctx.beginPath();
-        const a = P(this.path[0]); ctx.moveTo(a.x, a.y);
-        for (let i = 1; i <= Math.min(full, this.path.length - 1); i++) { const p = P(this.path[i]); ctx.lineTo(p.x, p.y); }
-        if (full < this.path.length - 1 && part > 0) {
-          const p0 = P(this.path[full]), p1 = P(this.path[full + 1]);
-          ctx.lineTo(p0.x + (p1.x - p0.x) * part, p0.y + (p1.y - p0.y) * part);
-        }
-      };
-      glow(ctx, path, { color: ARC.violet, width: 3.6, intensity: alpha });
-      glow(ctx, path, { color: ARC.gold, width: 1.4, intensity: 0.8 * alpha, core: false });
+      if (settled !== full) {
+        const path = () => this.linePath(ctx, settled, full);
+        glow(ctx, path, { color: ARC.violet, width: 3.6, intensity: alpha });
+        glow(ctx, path, { color: ARC.gold, width: 1.4, intensity: 0.8 * alpha, core: false });
+      }
+      if (full < last && part > 0) {
+        const p0 = P(this.path[full]), p1 = P(this.path[full + 1]);
+        const tip = () => { ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p0.x + (p1.x - p0.x) * part, p0.y + (p1.y - p0.y) * part); };
+        glow(ctx, tip, { color: ARC.violet, width: 3.6, intensity: alpha, cap: 'butt' });
+        glow(ctx, tip, { color: ARC.gold, width: 1.4, intensity: 0.8 * alpha, core: false, cap: 'butt' });
+      }
       for (let i = 0; i <= Math.min(full, this.path.length - 1); i++) { const p = P(this.path[i]); spark(ctx, p.x, p.y, 16, ARC.gold, 0.8 * alpha); }
     }
 
-    // The trace so far
+    // The trace so far is on the board; a rubber band runs from the last star to the pointer while dragging
     if (g.progress > 0) {
-      const traced = () => {
-        ctx.beginPath();
-        const a = P(this.path[0]); ctx.moveTo(a.x, a.y);
-        for (let i = 1; i < g.progress; i++) { const p = P(this.path[i]); ctx.lineTo(p.x, p.y); }
-      };
-      if (g.progress > 1) glow(ctx, traced, { color: ARC.gold, width: 3.2, intensity: 1 });
-      // rubber band from the last star to the pointer while dragging
       if (this.drag && !this._over) {
         const a = P(this.path[g.progress - 1]);
         ctx.save(); ctx.setLineDash([4, 6]);
@@ -288,7 +319,7 @@ export class SigilApp extends MiniGameApp {
   }
 
   buildStatic() {
-    const c = layer(W, H, this._dpr);
+    const c = layer(W, H, this._dpr, { opaque: true });
     const ctx = c.getContext('2d');
     blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: SCALE + 38 }));
     // faint web of every legal stroke, so the stars read as one star chart

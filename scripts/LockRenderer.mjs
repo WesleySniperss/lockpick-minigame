@@ -14,8 +14,9 @@
  * піднятий вище зрізу, тож плаг при відкритті ковзає під пінами.
  *
  * Незмінне (дерево, корпус, камери, гирло паза, лінійка) малюється один раз у
- * кешований шар; щокадру — плаг, піни з пружинами, колеса (лише коли
- * повернулись), відмичка та маркер. Єдине джерело світла — згори-зліва.
+ * кешований шар; піни з пружинами, колеса й пунктир шкали — окремими шарами, що
+ * оновлюються лише коли щось змінилось; щокадру — плаг, той пін, що рухається,
+ * відмичка та маркер. Єдине джерело світла — згори-зліва.
  */
 
 import { TRACK_W, HIT_ZONE, RED_W } from './LockController.mjs';
@@ -23,10 +24,7 @@ import { drawResultOverlay } from './overlay.mjs';
 
 const TAU = Math.PI * 2;
 
-// Reused dash patterns — setLineDash([..]) inside a per-frame loop would
-// allocate a fresh array for every pin, every frame.
 const DASH_GUIDE = [2, 4];
-const DASH_NONE  = [];
 
 export const CANVAS_W = 520;
 export const CANVAS_H = 366;
@@ -48,6 +46,7 @@ const CHAMBER_W    = 32;
 const PIN_W        = 20;
 const PIN_H        = 52;
 const NOSE_H       = 9;     // заокруглений ніс піна
+const PIN_AREA = { x: HOUSE.x, y: HOUSE.y, w: HOUSE.w, h: SHEAR_Y + PIN_PROTRUDE + 4 - HOUSE.y };   // шар пінів
 
 // Лінійка шкали під корпусом
 const PLATE    = { x: 56, y: 288, w: 408, h: 60, r: 7 };
@@ -244,7 +243,7 @@ export class LockRenderer {
     this.H = CANVAS_H;
     canvas.width  = Math.round(this.W * this._dpr);
     canvas.height = Math.round(this.H * this._dpr);
-    this.ctx = canvas.getContext('2d');
+    this.ctx = canvas.getContext('2d', { alpha: false });     // the door covers it edge to edge
     this._t = 0;
     this._boltSlide = 0;
     this._gearAngle = 0;
@@ -255,6 +254,10 @@ export class LockRenderer {
     this._shared = sharedCache(this._dpr);   // base shell, gear and pick sprites
     this._gearLayer = null;     // rendered wheels; re-rendered only when they turned
     this._gearKey = null;
+    this._pinLayer = null;      // pins and springs at rest; re-rendered when one is set or starts or stops moving
+    this._pinKey = null;
+    this._guideLayer = null;    // dashed guides to the gauge; re-rendered when a pin is set
+    this._guideKey = null;
     this._grads = new Map();    // memoized gradients for the main context (perf)
     // The result screen uses core fonts; make sure they are ready before the end.
     try {
@@ -275,12 +278,12 @@ export class LockRenderer {
   }
 
   /** Offscreen canvas at device resolution; its context draws in logical units. */
-  _canvas(w, h) {
+  _canvas(w, h, { opaque = false } = {}) {
     const d = this._dpr;
     const c = document.createElement('canvas');
     c.width = Math.ceil(w * d);
     c.height = Math.ceil(h * d);
-    c.getContext('2d').setTransform(d, 0, 0, d, 0, 0);
+    c.getContext('2d', { alpha: !opaque }).setTransform(d, 0, 0, d, 0, 0);
     return c;
   }
 
@@ -296,9 +299,9 @@ export class LockRenderer {
    */
   dispose() {
     // Shared sprites (base shell, gears, pick) stay cached for the next window.
-    const all = [this._static, this._plugSprite, this._scaleSprite, this._gearLayer];
+    const all = [this._static, this._plugSprite, this._scaleSprite, this._gearLayer, this._pinLayer, this._guideLayer];
     for (const c of all) if (c) { c.width = 0; c.height = 0; }
-    this._static = this._plugSprite = this._scaleSprite = this._gearLayer = null;
+    this._static = this._plugSprite = this._scaleSprite = this._gearLayer = this._pinLayer = this._guideLayer = null;
     this._grads?.clear();
     this._grads = null;
     this.canvas = null;
@@ -308,7 +311,7 @@ export class LockRenderer {
   /** Render everything that never moves once, then just blit it each frame. */
   _buildStatic(state) {
     if (!this._shared.base) {
-      const b = this._canvas(this.W, this.H);
+      const b = this._canvas(this.W, this.H, { opaque: true });
       const bx = b.getContext('2d');
       this._drawWood(bx);
       this._drawCase(bx);
@@ -319,7 +322,7 @@ export class LockRenderer {
       this._shared.base = b;
     }
     // Chambers follow this game's pin layout, so the housing is per window.
-    const c = this._canvas(this.W, this.H);
+    const c = this._canvas(this.W, this.H, { opaque: true });
     const ctx = c.getContext('2d');
     this._blit(ctx, this._shared.base, 0, 0);
     this._drawHousing(ctx, state.pins);
@@ -333,11 +336,13 @@ export class LockRenderer {
   draw(state, fx = {}) {
     const ctx = this.ctx;
     if (!ctx) return;
-    this._t += 1 / 60;
+    const dt = fx.dt ?? 1 / 60;
+    this._t += dt;
     ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
 
     const success = fx.success ?? 0;
-    this._boltSlide += ((success > 0 ? 1 : 0) - this._boltSlide) * 0.08;
+    this._boltSlide += ((success > 0 ? 1 : 0) - this._boltSlide) * (1 - Math.pow(0.92, dt * 60));
+    this._gearEase = 1 - Math.pow(0.86, dt * 60);
 
     const shx = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
     const shy = fx.shake ? (Math.random() - 0.5) * fx.shake : 0;
@@ -356,7 +361,7 @@ export class LockRenderer {
     this._blit(ctx, this._static, 0, 0);
     this._drawGears(ctx, state, fx, success);
     this._drawPlug(ctx, state, success);     // plug + bores + keyway; slides out on success
-    this._drawPins(ctx, state, fx, success); // springs and solid pins
+    this._drawPins(ctx, state, fx);          // springs and solid pins
     this._drawWrench(ctx);                   // dark silhouette on the keyway floor
     this._drawPick(ctx, state, fx);
     if (fx.breakPiece) this._drawBreakPiece(ctx, fx.breakPiece);
@@ -625,7 +630,7 @@ export class LockRenderer {
     for (const p of state.pins) if (p.set) set++;
     const press = fx.press && fx.press.t < 1 ? Math.sin(fx.press.t * Math.PI) : 0;
     const target = set * 0.34 + press * 0.12 + success * 1.4;
-    this._gearAngle += (target - this._gearAngle) * 0.14;
+    this._gearAngle += (target - this._gearAngle) * (this._gearEase ?? 0.14);
 
     const key = Math.round(this._gearAngle * 2000);
     if (!this._gearLayer || key !== this._gearKey) {
@@ -1021,35 +1026,51 @@ export class LockRenderer {
   // Встановлений — повністю піднятий у корпус, вище лінії зрізу, тож плаг
   // при відкритті вільно ковзає ПІД пінами, не зачіпаючи їх.
 
-  _drawPins(ctx, state, fx, success) {
-    const press = fx.press;
+  _drawPins(ctx, state, fx) {
+    const pins = state.pins, press = fx.press;
+    const moving = press && press.t < 1 ? press.pinIndex : -1;
+
+    // Springs are the costliest thing in a frame by far, and pins only move when
+    // struck: the ones at rest are one layer, the one in motion is drawn live.
+    let key = moving + 1;
+    for (let i = 0; i < pins.length; i++) if (pins[i].set) key |= 1 << (i + 8);
+    if (!this._pinLayer || key !== this._pinKey) {
+      const { x, y, w, h } = PIN_AREA;
+      this._pinLayer ??= this._canvas(w, h);
+      const g = this._pinLayer.getContext('2d');
+      g.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+      g.clearRect(0, 0, w, h);
+      g.translate(-x, -y);
+      for (const pin of pins) if (pin.index !== moving) this._drawOnePin(g, pin, null);
+      this._pinKey = key;
+    }
+    this._blit(ctx, this._pinLayer, PIN_AREA.x, PIN_AREA.y);
+    if (moving >= 0) this._drawOnePin(ctx, pins[moving], press);
+  }
+
+  /** A pin with its spring. `press`: it is being struck. */
+  _drawOnePin(ctx, pin, press) {
     const SET_RISE = PIN_PROTRUDE + 2;
     const chTop = HOUSE.y + CAP_H + 1;
+    const px = TRACK_X + pin.x;
 
-    for (const pin of state.pins) {
-      const px = TRACK_X + pin.x;
-
-      // Хід піна: 0 у спокої, SET_RISE коли встановлений; press = снап / відскок
-      let raise;
-      if (pin.set) {
-        raise = SET_RISE;
-        if (press && press.pinIndex === pin.index && press.hit && press.t < 1) {
-          const p = press.t, c1 = 1.70158, c3 = c1 + 1;          // easeOutBack
-          raise = SET_RISE * (1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2));
-        }
-      } else {
-        raise = 0;
-        if (press && press.pinIndex === pin.index && !press.hit && press.t < 1) {
-          raise = Math.sin(press.t * Math.PI) * 10;
-        }
+    // Хід піна: 0 у спокої, SET_RISE коли встановлений; press = снап / відскок
+    let raise;
+    if (pin.set) {
+      raise = SET_RISE;
+      if (press?.hit) {
+        const p = press.t, c1 = 1.70158, c3 = c1 + 1;          // easeOutBack
+        raise = SET_RISE * (1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2));
       }
-      const felt = !pin.set && raise > 1.5;
-
-      const noseY  = SHEAR_Y - 1 + PIN_PROTRUDE - raise;
-      const pinTop = noseY - PIN_H;
-      this._drawSpring(ctx, px, chTop + 1, pinTop - 1);
-      this._drawPin(ctx, px - PIN_W / 2, pinTop, pin.set ? MAT.gold : (felt ? MAT.brassL : MAT.brass));
+    } else {
+      raise = press && !press.hit ? Math.sin(press.t * Math.PI) * 10 : 0;
     }
+    const felt = !pin.set && raise > 1.5;
+
+    const noseY  = SHEAR_Y - 1 + PIN_PROTRUDE - raise;
+    const pinTop = noseY - PIN_H;
+    this._drawSpring(ctx, px, chTop + 1, pinTop - 1);
+    this._drawPin(ctx, px - PIN_W / 2, pinTop, pin.set ? MAT.gold : (felt ? MAT.brassL : MAT.brass));
   }
 
   /**
@@ -1346,30 +1367,43 @@ export class LockRenderer {
     const top = PLUG_BOT + 3;
     const bot = SCALE.y - 3;
 
-    let target = null;
-    for (const p of pins) if (!p.set && (!target || p.x < target.x)) target = p;
+    let target = null, key = 0;
+    for (const p of pins) {
+      if (p.set) key |= 1 << p.index;
+      else if (!target || p.x < target.x) target = p;
+    }
+
+    // The dashed guides change only when a pin is set.
+    if (!this._guideLayer || key !== this._guideKey) {
+      this._guideLayer ??= this._canvas(TRACK_W + 2, bot - top);
+      const g = this._guideLayer.getContext('2d');
+      g.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
+      g.clearRect(0, 0, TRACK_W + 2, bot - top);
+      g.lineWidth = 1;
+      g.setLineDash(DASH_GUIDE);
+      for (const pin of pins) {
+        if (target && pin.index === target.index) continue;
+        g.strokeStyle = pin.set ? 'rgba(214,176,90,0.22)' : 'rgba(150,255,180,0.16)';
+        g.beginPath();
+        g.moveTo(pin.x + 0.5, 0);
+        g.lineTo(pin.x + 0.5, bot - top);
+        g.stroke();
+      }
+      this._guideKey = key;
+    }
+    this._blit(ctx, this._guideLayer, TRACK_X, top);
 
     ctx.save();
-    ctx.lineWidth = 1;
-    for (const pin of pins) {
-      const x = TRACK_X + pin.x + 0.5;
-      if (pin.set) {
-        ctx.strokeStyle = 'rgba(214,176,90,0.22)';
-        ctx.setLineDash(DASH_GUIDE);
-      } else if (target && pin.index === target.index) {
-        const pulse = 0.5 + 0.5 * Math.sin(this._t * 4);
-        ctx.strokeStyle = `rgba(140,255,170,${0.3 + 0.25 * pulse})`;
-        ctx.setLineDash(DASH_NONE);
-      } else {
-        ctx.strokeStyle = 'rgba(150,255,180,0.16)';
-        ctx.setLineDash(DASH_GUIDE);
-      }
+    if (target) {
+      const x = TRACK_X + target.x + 0.5;
+      const pulse = 0.5 + 0.5 * Math.sin(this._t * 4);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = `rgba(140,255,170,${0.3 + 0.25 * pulse})`;
       ctx.beginPath();
       ctx.moveTo(x, top);
       ctx.lineTo(x, bot);
       ctx.stroke();
     }
-    ctx.setLineDash(DASH_NONE);
 
     // Вертикаль від кінчика відмички до маркера
     const mx = TRACK_X + pickX + 0.5;
