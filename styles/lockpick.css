@@ -530,6 +530,9 @@
 .lpm-card__secret i { margin-right:3px; color:var(--lpm-gold); }
 
 /* The Puzzles & Challenges menu (DialogV2) */
+/* The meter in the footer changes while the canvas above it plays: keep those layouts in the footer. */
+.lpm-root .lpm-footer { contain: layout style; }
+
 .lpm-menu-dialog .form-group .hint { flex:0 0 100%; margin:2px 0 0; }
 .lpm-menu-dialog .lpm-hide-dc { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
 .lpm-menu-dialog .lpm-dc-fields { flex-wrap:nowrap; gap:12px; }

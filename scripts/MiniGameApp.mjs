@@ -20,7 +20,7 @@
  *   endDelay / renderEnding(ctx, t, success) — optional animation before the result screen
  */
 
-import { GameWindow } from './app-window.mjs';
+import { GameWindow, frameGap } from './app-window.mjs';
 import { drawResultOverlay } from './overlay.mjs';
 import { esc } from './cards.mjs';
 
@@ -52,7 +52,7 @@ export const dcHiddenHere = hideDC => !!hideDC && !game.user?.isGM;
 export function barHTML(label, value, max, { text = `${Math.round(value)} / ${Math.round(max)}`, tip = '', low = 0.25 } = {}) {
   const f = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return `<span class="lpm-attempts-label" title="${esc(tip)}">${esc(label)}</span>`
-    + `<span class="lpm-bar${f <= low ? ' is-low' : ''}" title="${esc(tip)}"><i style="width:${(f * 100).toFixed(1)}%"></i></span>`
+    + `<span class="lpm-bar${f <= low ? ' is-low' : ''}" title="${esc(tip)}"><i style="width:${Math.round(f * 100)}%"></i></span>`
     + `<span class="lpm-bar__num">${esc(text)}</span>`;
 }
 
@@ -85,6 +85,8 @@ export class MiniGameApp extends GameWindow {
     this.onFailure  = opts.onFailure ?? (() => {});
     this.onClose    = opts.onClose ?? (() => {});
     this._broadcast = !!opts.broadcast && !spectator;
+    this._minGap    = frameGap(spectator);
+    this.syncEvery  = 0.08;         // seconds between sync messages at most
     this._timers    = [];
     this._raf       = null;
     this._over      = false;        // no more input; ending plays
@@ -113,6 +115,8 @@ export class MiniGameApp extends GameWindow {
   hintHTML() { return ''; }
   controlsHTML() { return ''; }
   syncState() { return {}; }
+  /** What must reach spectators at once, as a string; null: send every time. Otherwise a message goes out once a second. */
+  syncKey() { return null; }
   applySync() {}
   endScreen(success) { return { title: success ? 'Success' : 'Failure', sub: '', icon: null }; }
   renderEnding() {}
@@ -148,7 +152,7 @@ export class MiniGameApp extends GameWindow {
     this.canvas = root.querySelector('.lpm-arcana-canvas');
     this.canvas.width = Math.round(w * this._dpr);
     this.canvas.height = Math.round(h * this._dpr);
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { alpha: false });     // the board covers it edge to edge
     this._meterEl = root.querySelector('.lpm-meter');
     rollBadge(root.querySelector('.lpm-roll-result'), this.rollResult, { hidden: dcHiddenHere(this.hideDC) });
     this.refreshMeter();
@@ -176,7 +180,11 @@ export class MiniGameApp extends GameWindow {
   }
 
   refreshMeter() {
-    if (this._meterEl) this._meterEl.innerHTML = this.meterHTML();
+    if (!this._meterEl) return;
+    const html = this.meterHTML();
+    if (html === this._meterHTML) return;      // every write costs the page a style and layout pass
+    this._meterHTML = html;
+    this._meterEl.innerHTML = html;
   }
 
   /** setTimeout that is cancelled when the window closes. */
@@ -188,17 +196,18 @@ export class MiniGameApp extends GameWindow {
 
   _tick(now) {
     if (this._dead) return;
+    const gap = now - this._last;
+    if (gap > 0 && gap < this._minGap) { this._raf = requestAnimationFrame(this._boundTick); return; }
     // rAF timestamps can be a little earlier than performance.now() taken at start → never negative
-    const dt = Math.max(0, Math.min(0.05, (now - this._last) / 1000 || 0.016));
+    const dt = Math.max(0, Math.min(0.05, gap / 1000 || 0.016));
     this._last = now;
     this._t += dt;
-    const ctx = this.ctx;
+    const ctx = this.ctx, seen = !this.minimized;      // folded away: the game goes on, undrawn
     ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
 
     if (this._ending) {
       this._ending.t += dt;
-      this.draw(ctx, dt);
-      this.renderEnding(ctx, this._ending.t, this._ending.success);
+      if (seen) { this.draw(ctx, dt); this.renderEnding(ctx, this._ending.t, this._ending.success); }
       if (this._ending.t >= this.endDelay) { this.finishEnding(); return; }
     } else {
       if (!this._spectator) {
@@ -207,10 +216,10 @@ export class MiniGameApp extends GameWindow {
       } else {
         this.update(dt);                    // spectators animate locally between syncs
       }
-      this.draw(ctx, dt);
+      if (seen) this.draw(ctx, dt);
       if (this._broadcast) {
         this._syncAcc += dt;
-        if (this._syncAcc >= 0.08) { this._syncAcc = 0; this._emitSync(); }
+        if (this._syncAcc >= this.syncEvery) { this._syncAcc = 0; this._emitSync(); }
       }
     }
     this._raf = requestAnimationFrame(this._boundTick);
@@ -218,6 +227,10 @@ export class MiniGameApp extends GameWindow {
 
   _emitSync(ended = undefined) {
     if (!this._broadcast) return;
+    const key = this.syncKey();
+    if (ended === undefined && key !== null && key === this._syncKey && this._t - this._syncAt < 1) return;
+    this._syncKey = key;
+    this._syncAt = this._t;
     game.socket.emit(CHANNEL, { action: 'gameSync', sessionId: this.sessionId, state: this.syncState(), ended });
   }
 

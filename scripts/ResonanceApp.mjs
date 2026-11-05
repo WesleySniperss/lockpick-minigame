@@ -6,12 +6,14 @@
  * runes. The caster's focus is a ring of light that glides after the pointer.
  * While the wisp is inside it, the focus turns gold, the runes around the pool
  * wake one by one and a quiet fifth sounds over the hum; outside it the
- * attunement slowly fades. Wake every rune before concentration runs out.
+ * attunement fades. The ring tightens as runes wake, and the wisp flares before
+ * each surge. A wave round the water shows the discord: wild while the light is
+ * outside, calm as it attunes. Wake every rune before concentration runs out.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateResonance, ResonanceGame, RUNE_COUNT } from './resonance-logic.mjs';
-import { ARC, TAU, RUNES, layer, blit, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, RUNES, layer, blit, ringCells, blitCells, discSprite, ArcMeter, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
@@ -19,6 +21,7 @@ import { Sfx } from './Sfx.mjs';
 const W = 520, H = 440, CX = 260, CY = 218;
 const POOL = 158, RIM_IN = 160, RIM_OUT = 200, RUNE_R = 180;
 const TRAIL = 22;
+const AMBER = '#f0b45a';
 const runeAngle = i => -Math.PI / 2 + i * TAU / RUNE_COUNT;
 
 /** A rune as a path only (glow() strokes it in several passes). */
@@ -43,6 +46,8 @@ export class ResonanceApp extends MiniGameApp {
     this.trail = [];
     this.runeIds = Array.from({ length: RUNE_COUNT }, (_, i) => (this.res.seed + i * 7) % RUNES.length);
     this.woke = 0;                         // runes already announced with a chime
+    this.waveAmp = 5;                      // height of the wave round the water, px
+    this.syncEvery = 0.12;                 // the wisp comes from the seed; spectators only ease the focus between syncs
   }
 
   meterHTML() {
@@ -94,7 +99,7 @@ export class ResonanceApp extends MiniGameApp {
     const a = this.audio;
     if (!a) return;
     const now = a.ac.currentTime, f = this.res.tone, g = this.game;
-    const w = g.wisp(), d = Math.hypot(w.x - g.focus.x, w.y - g.focus.y) / this.res.params.focus;
+    const w = g.wisp(), d = Math.hypot(w.x - g.focus.x, w.y - g.focus.y) / g.focusR();
     // In the ring: a clean fifth. Further out: it drifts sharp and beats against the hum.
     a.voice.o.frequency.setTargetAtTime(f * 1.5 * (g.inside ? 1 : 1 + 0.025 * Math.min(3, d)), now, 0.08);
     a.shimmer.g.gain.setTargetAtTime(g.inside ? 0.012 + 0.02 * g.attune : 0, now, 0.2);
@@ -123,6 +128,8 @@ export class ResonanceApp extends MiniGameApp {
     if (runes > this.woke) { this.woke = runes; if (!this._spectator) Sfx.node(runes); }
     else if (runes < this.woke) this.woke = runes;
     this.updateTones();
+    const calm = this.game.inside ? 0.8 + 2 * (1 - this.game.attune) : 6;
+    this.waveAmp += (calm - this.waveAmp) * (1 - Math.exp(-dt * 6));
     this._meterAcc = (this._meterAcc ?? 0) + dt;
     if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); }
     if (out === 'won') Sfx.unweave();
@@ -133,51 +140,118 @@ export class ResonanceApp extends MiniGameApp {
   syncState() { return this.game.snapshot(); }
   applySync(s) { this.game.apply(s); }
 
+  /** A rune lit up (one sprite each, not four strokes for every awake rune in every frame). */
+  runeLit(i) {
+    this._runeLit ??= [];
+    if (this._runeLit[i]) return this._runeLit[i];
+    const a = runeAngle(i), s = layer(44, 44, this._dpr);
+    glow(s.getContext('2d'), () => runePath(s.getContext('2d'), this.runeIds[i], 22, 22, 15, a + Math.PI / 2), { color: ARC.gold, width: 1.8, intensity: 1 });
+    return (this._runeLit[i] = { s, x: CX + Math.cos(a) * RUNE_R - 22, y: CY + Math.sin(a) * RUNE_R - 22 });
+  }
+
+  /**
+   * The focus ring as a sprite, redrawn only when its radius has changed by half
+   * a pixel. Four strokes round a circle every frame cost over a millisecond.
+   */
+  focusRing(r, inside) {
+    this._ring ??= {};
+    const key = Math.round(r * 2), which = inside ? 'in' : 'out';
+    let f = this._ring[which];
+    if (!f) {
+      const c = layer((this.res.params.focus * POOL + 10) * 2, (this.res.params.focus * POOL + 10) * 2, this._dpr);
+      f = this._ring[which] = { c, key: -1, cells: null };
+    }
+    if (f.key !== key) {
+      const g = f.c.getContext('2d'), m = f.c.width / this._dpr / 2, rr = key / 2;
+      g.clearRect(0, 0, m * 2, m * 2);
+      glow(g, () => { g.beginPath(); g.arc(m, m, rr, 0, TAU); },
+        inside ? { color: ARC.gold, width: 1.8, intensity: 0.95, core: true } : { color: ARC.energy, width: 1.2, intensity: 0.6, core: false });
+      f.key = key;
+      f.cells = ringCells(f.c, rr - 6, rr + 6);
+    }
+    return f;
+  }
+
   draw(ctx) {
     if (!this._static) this._static = this.buildStatic();
     blit(ctx, this._static);
     const g = this.game, t = this._t, p = this.res.params;
     const w = g.wisp(), wx = CX + w.x * POOL, wy = CY + w.y * POOL;
-    const fx = CX + g.focus.x * POOL, fy = CY + g.focus.y * POOL, fr = p.focus * POOL;
+    const fx = CX + g.focus.x * POOL, fy = CY + g.focus.y * POOL, fr = g.focusR() * POOL;
+    const warn = this._over ? 0 : g.surgeWarning();
 
-    // the wisp lights the water around it
+    // The light stays in the water: a plain rect clip here, and the basin laid back over it below.
+    // (A round clip makes everything inside it dearer, with or without a GPU.)
     ctx.save();
-    ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.clip();
+    ctx.beginPath(); ctx.rect(CX - POOL, CY - POOL, POOL * 2, POOL * 2); ctx.clip();
+    // the wisp lights the water around it
     spark(ctx, wx, wy, 110, g.inside ? ARC.gold : ARC.violet, 0.22);
+    // ripples spreading from it through the water
+    ctx.lineWidth = 1 / this._dpr;                     // one device pixel: by far the cheapest line there is
+    for (let k = 0; k < 2; k++) {
+      const u = (t * 0.7 + k / 2) % 1;
+      ctx.strokeStyle = hexA(g.inside ? ARC.gold : '#c9b3ff', 0.3 * (1 - u));
+      ctx.beginPath(); ctx.arc(wx, wy, 14 + u * 60, 0, TAU); ctx.stroke();
+    }
     // its trail, fading
     ctx.globalCompositeOperation = 'lighter';
+    const dot = discSprite(g.inside ? ARC.gold : '#c9b3ff');
     this.trail.forEach((q, i) => {
-      const k = (i + 1) / this.trail.length;
-      ctx.fillStyle = hexA(g.inside ? ARC.gold : '#c9b3ff', 0.22 * k);
-      ctx.beginPath(); ctx.arc(q.x, q.y, 1.5 + 4 * k, 0, TAU); ctx.fill();
+      const k = (i + 1) / this.trail.length, rad = 1.5 + 4 * k;
+      ctx.globalAlpha = 0.22 * k;
+      ctx.drawImage(dot, q.x - rad, q.y - rad, rad * 2, rad * 2);
     });
     ctx.restore();
+    blitCells(ctx, this._basin.c, this._basin.cells, CX, CY);
 
     // runes: awake ones glow gold, the one waking flickers in
     const awake = g.runes(), frac = g.attune * RUNE_COUNT - awake;
     for (let i = 0; i < RUNE_COUNT; i++) {
       const lit = i < awake ? 1 : i === awake ? frac * (0.6 + 0.4 * Math.sin(t * 12)) : 0;
       if (lit <= 0.02) continue;
-      const a = runeAngle(i), x = CX + Math.cos(a) * RUNE_R, y = CY + Math.sin(a) * RUNE_R;
-      glow(ctx, () => runePath(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2), { color: ARC.gold, width: 1.8, intensity: 0.4 + 0.6 * lit });
+      const a = runeAngle(i), rune = this.runeLit(i);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.4 + 0.6 * lit;
+      blit(ctx, rune.s, rune.x, rune.y);
+      ctx.restore();
+      // a thread of light from the woken rune down into the water
+      ctx.strokeStyle = hexA(ARC.gold, 0.55 * lit); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(CX + Math.cos(a) * (RUNE_R - 14), CY + Math.sin(a) * (RUNE_R - 14));
+      ctx.lineTo(CX + Math.cos(a) * (POOL - 16), CY + Math.sin(a) * (POOL - 16)); ctx.stroke();
     }
+    // the wave round the water: wild in discord, calm as the light attunes
+    this.drawWave(ctx, t, g.inside);
     // the attunement, also as an arc round the pool's edge
-    if (g.attune > 0) glow(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, POOL + 1, -Math.PI / 2, -Math.PI / 2 + TAU * g.attune); },
-      { color: ARC.gold, width: 1.6, intensity: 0.8, core: false });
+    this._arc ??= new ArcMeter(this._dpr, POOL + 1, { color: ARC.gold, width: 1.6 });
+    this._arc.draw(ctx, CX, CY, g.attune, 0.8);
 
-    // the wisp
-    spark(ctx, wx, wy, 20, g.inside ? ARC.gold : ARC.violet, 0.95);
+    // the wisp; a closing ring warns of the surge, and it burns amber through it
+    if (warn > 0 && warn < 1) {
+      ctx.strokeStyle = hexA(AMBER, 0.3 + 0.6 * warn); ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(wx, wy, 12 + 34 * (1 - warn), 0, TAU); ctx.stroke();
+    }
+    spark(ctx, wx, wy, 20 + 10 * warn, warn > 0 ? AMBER : g.inside ? ARC.gold : ARC.violet, 0.95);
     spark(ctx, wx, wy, 7, '#ffffff', 1);
 
     // your focus: a ring of light with three motes running round it
     if (!this._over) {
       const col = g.inside ? ARC.gold : ARC.energy;
+      // where the ring began, so its tightening can be seen
+      if (fr < p.focus * POOL - 1) {
+        ctx.strokeStyle = hexA(col, 0.3); ctx.lineWidth = 1 / this._dpr;
+        ctx.beginPath(); ctx.arc(fx, fy, p.focus * POOL, 0, TAU); ctx.stroke();
+      }
       if (g.inside) {
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = hexA(ARC.gold, 0.07); ctx.beginPath(); ctx.arc(fx, fy, fr, 0, TAU); ctx.fill();
         ctx.restore();
       }
-      glow(ctx, () => { ctx.beginPath(); ctx.arc(fx, fy, fr, 0, TAU); }, { color: col, width: g.inside ? 1.8 : 1.2, intensity: g.inside ? 0.95 : 0.6, core: g.inside });
+      const ring = this.focusRing(fr, g.inside);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      blitCells(ctx, ring.c, ring.cells, fx, fy);
+      ctx.restore();
       for (let k = 0; k < 3; k++) {
         const a = t * (g.inside ? 2.4 : 1.2) + k * TAU / 3;
         spark(ctx, fx + Math.cos(a) * fr, fy + Math.sin(a) * fr, 6, col, 0.9);
@@ -187,15 +261,44 @@ export class ResonanceApp extends MiniGameApp {
     this.drawGoal(ctx, awake);
   }
 
-  /** Top-left: what to do, and how many runes are awake. */
-  drawGoal(ctx, awake) {
+  /** A thin wave round the inside of the pool. Plain strokes: this runs every frame. */
+  drawWave(ctx, t, inside) {
+    const r = POOL - 10, a0 = this.waveAmp;
+    ctx.lineJoin = 'bevel';
+    ctx.beginPath();
+    for (let i = 0; i <= 72; i++) {
+      const a = i * TAU / 72;
+      const d = a0 * (Math.sin(a * 9 + t * 3.1) * 0.6 + Math.sin(a * 14 - t * 5.3) * 0.4);
+      const x = CX + Math.cos(a) * (r + d), y = CY + Math.sin(a) * (r + d);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = hexA(inside ? ARC.gold : ARC.violet, 0.75); ctx.lineWidth = 1 / this._dpr; ctx.stroke();
+    ctx.lineJoin = 'miter';
+  }
+
+  /** What never changes: what to do top-left, what fights back bottom-left. Part of the static layer. */
+  drawFixedNotes(ctx) {
     ctx.save();
     ctx.font = '700 10px "Signika", sans-serif';
     if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
     ctx.fillStyle = 'rgba(200,212,240,0.78)';
     ctx.fillText('KEEP THE LIGHT', 14, 22);
     ctx.fillText('IN YOUR FOCUS', 14, 36);
+    ctx.font = '700 9px "Signika", sans-serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1px';
+    ctx.fillStyle = 'rgba(200,212,240,0.72)';
+    ctx.fillText('THE RING TIGHTENS', 14, 411);
+    ctx.fillStyle = hexA(AMBER, 0.9);
+    ctx.fillText('A FLARE: IT SURGES', 14, 424);
+    ctx.restore();
+  }
+
+  /** How many runes are awake. */
+  drawGoal(ctx, awake) {
+    ctx.save();
     ctx.font = '700 12px "Signika", sans-serif';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
     ctx.fillStyle = awake ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
     ctx.fillText(`${awake} / ${RUNE_COUNT} RUNES AWAKE`, 14, 56);
     ctx.restore();
@@ -227,7 +330,7 @@ export class ResonanceApp extends MiniGameApp {
 
   /** Backdrop, the stone basin with its rune sockets, the dark water and its stars. */
   buildStatic() {
-    const c = layer(W, H, this._dpr);
+    const c = layer(W, H, this._dpr, { opaque: true });
     const ctx = c.getContext('2d');
     blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: 212 }));
     // stone basin
@@ -272,6 +375,14 @@ export class ResonanceApp extends MiniGameApp {
     edge.addColorStop(0, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(0,0,0,0.6)');
     ctx.fillStyle = edge; ctx.fillRect(CX - POOL, CY - POOL, POOL * 2, POOL * 2);
     ctx.restore();
+    this.drawFixedNotes(ctx);
+    // The basin around the water, with a hole for it: laid over the light that spills past the edge.
+    const reach = POOL * Math.SQRT2 + 2;
+    const b = layer(reach * 2, reach * 2, this._dpr), bx = b.getContext('2d'), m = b.width / this._dpr / 2;
+    bx.drawImage(c, m - CX, m - CY, W, H);
+    bx.globalCompositeOperation = 'destination-out';
+    bx.beginPath(); bx.arc(m, m, POOL, 0, TAU); bx.fill();
+    this._basin = { c: b, cells: ringCells(b, POOL - 1, reach) };
     return c;
   }
 }

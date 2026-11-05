@@ -58,6 +58,16 @@ export async function arcanaAppClass(kind) {
   return null;
 }
 
+/**
+ * Will anyone watch this attempt? If not, nothing needs to go over the socket:
+ * every message is relayed to every client at the table.
+ */
+function anyoneWatching(watch) {
+  const players = typeof watch === 'boolean' ? watch : setting('spectatePlayers', false);
+  const gms = setting('spectateGM', true);
+  return game.users.some(u => u.active && u.id !== game.user.id && (u.isGM ? gms : players));
+}
+
 /** Subtitle of a result card: what it was on, the check, the DC unless it is secret. */
 const resultSub = (label, check, dc, hideDC) => [label, check, hideDC ? '' : `DC ${dc}`].filter(Boolean).join(' · ');
 
@@ -284,13 +294,14 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, watch, la
   let settled   = false;
   let picksLeft = null;   // recorded when a pick is consumed, so the message never subtracts twice
   const settle = outcome => { if (settled) return; settled = true; onSettled(outcome); };
+  const watched = anyoneWatching(watch);
 
   const { LockpickApp } = await import('./LockpickApp.mjs');
   const app = new LockpickApp({
     sessionId, dc, hideDC, rollResult, label,
     tool: toolInfo,
     playerName: actor.name,
-    broadcast: true,
+    broadcast: watched,
     async consumePick() {                // only lockpicks are used up
       if (!tool.consumable || !tool.item) return;
       const q = Number(tool.item.system?.quantity ?? 1);
@@ -334,7 +345,7 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, watch, la
   await app.render({ force: true });
 
   // Announce to everyone; each client decides from its own settings whether to watch.
-  game.socket.emit(CHANNEL, {
+  if (watched) game.socket.emit(CHANNEL, {
     action: 'lockpickSpectate',
     sessionId, dc, hideDC, watch, rollResult, label,
     tool: toolInfo,
@@ -363,12 +374,13 @@ export async function startArcana({ kind, actor, dc, hideDC = false, watch, labe
   const init = { seed: Math.floor(Math.random() * 2 ** 31), dc, roll: { margin: rollResult.margin, d20: rollResult.d20 } };
   let settled = false;
   const settle = outcome => { if (settled) return; settled = true; onSettled(outcome); };
+  const watched = anyoneWatching(watch);
 
   const App = await arcanaAppClass(kind);
   const app = new App({
     sessionId, dc, hideDC, rollResult, label, init,
     playerName: actor.name,
-    broadcast: true,
+    broadcast: watched,
     async onSuccess() {
       settle({ state: 'success', by: actor.name });
       await ChatMessage.create({ speaker, content: resultCard({
@@ -386,7 +398,7 @@ export async function startArcana({ kind, actor, dc, hideDC = false, watch, labe
   });
   await app.render({ force: true });
 
-  game.socket.emit(CHANNEL, {
+  if (watched) game.socket.emit(CHANNEL, {
     action: 'gameSpectate', kind, sessionId, init, dc, hideDC, watch, rollResult, label,
     playerName: actor.name, userId: game.user.id,
   });

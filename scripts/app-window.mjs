@@ -51,6 +51,14 @@ export class GameWindow extends ApplicationV2 {
 }
 
 /**
+ * The shortest time between two frames of a game, ms. Nothing here needs more
+ * than about 60 fps, but the browser offers every refresh of the display: on a
+ * 144 Hz monitor this draws every second one. A watcher's window, whose data
+ * arrives 12 times a second at most, runs at about 30 fps.
+ */
+export const frameGap = watching => (watching ? 30 : 12);
+
+/**
  * DialogV2 content: v13+ cleans an HTML string (which can strip form markup)
  * but takes a bare <div> as it is; v12 only knows strings.
  */
