@@ -21,13 +21,22 @@ export const CHALLENGES = {
     lose: { title: 'The Ward Holds', body: '{who} is too slow: the rim closes and the ward knits itself whole again.' },
   },
   resonance: {
-    group: 'Arcana', title: 'Attune the Resonance', icon: 'fa-wave-square',
+    group: 'Arcana', title: 'Attune the Resonance', icon: 'fa-circle-dot',
     ask: 'is asked to attune to', on: 'the resonance of', none: 'a resonance',
     button: 'Roll Arcana &amp; attune', busy: 'is attuning…', done: 'Attuned by', failed: 'The resonance slipped',
     blurb: 'Hold your focus on a light wandering a scrying pool until every rune around it wakes.',
     placeholder: 'e.g. Humming crystal',
     win : { title: 'Resonance Attuned', body: '{who} holds the wandering light until the pool falls still. The working answers to them now.' },
     lose: { title: 'The Resonance Slips', body: '{who} loses the light; it sinks back into the deep.' },
+  },
+  echo: {
+    group: 'Arcana', title: 'Echo the Hum', icon: 'fa-wave-square',
+    ask: 'is asked to echo', on: 'the hum of', none: 'a hum',
+    button: 'Roll Arcana &amp; echo', busy: 'is echoing the hum…', done: 'Echoed by', failed: 'The hum faded',
+    blurb: 'Shape a ribbon of light until it lies on the hum, and hold it there while the runes wake.',
+    placeholder: 'e.g. Singing standing stone',
+    win : { title: 'Hum Echoed', body: '{who} sings the hum back note for note; the working falls quiet and answers to them.' },
+    lose: { title: 'The Hum Fades', body: '{who} loses the note, and the hum sinks out of reach.' },
   },
   sigil: {
     group: 'Arcana', title: 'Trace the Sigil', icon: 'fa-star',
@@ -40,5 +49,5 @@ export const CHALLENGES = {
   },
 };
 
-export const ARCANA_KINDS = ['ward', 'resonance', 'sigil'];
+export const ARCANA_KINDS = ['ward', 'resonance', 'echo', 'sigil'];
 export const isChallenge = kind => Object.prototype.hasOwnProperty.call(CHALLENGES, kind);

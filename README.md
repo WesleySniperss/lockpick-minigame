@@ -2,8 +2,8 @@
 
 Mini-games the GM requests for a specific character, for **Foundry VTT** with
 **dnd5e** and **Level Up Advanced 5e**: a pin-tumbler **lockpicking** game
-(Thieves' Tools check) and three **Arcana** workings — unweave a ward, attune
-to a resonance, trace a sigil. The character's roll, made the system's own way,
+(Thieves' Tools check) and four **Arcana** workings — unweave a ward, attune
+to a resonance, echo a hum, trace a sigil. The character's roll, made the system's own way,
 decides how hard the game is. Plus a set of puzzles the GM can hand out.
 
 ---
@@ -55,7 +55,7 @@ const api = game.modules.get('lockpick-minigame').api;
 const actor = canvas.tokens.controlled[0]?.actor;
 api.requestLockpick({ actor, dc: 17, label: 'Iron-bound chest' });
 api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true, watch: true });
-//                     kind: 'lock' | 'ward' | 'resonance' | 'sigil'
+//                     kind: 'lock' | 'ward' | 'resonance' | 'echo' | 'sigil'
 api.openMenu('sigil');            // the menu, with a challenge or a puzzle ('sudoku', …) preselected
 ```
 
@@ -136,32 +136,42 @@ generated from a seed, so spectators see exactly the same board.
 
 The goal is written on the board: **line up the gaps to light the crystal**. The
 core at the centre shoots a straight beam at a crystal on the rim. Between them
-sit rune rings, each a solid wall with one **gap** in it, and the beam stops at
+sit stone rings, each a solid wall with one **gap** in it, and the beam stops at
 the first ring whose gap is off its line; that gap pulses amber. Turn the ring
 until its gap is on the beam and the light runs on to the next ring. When every
 gap is on the line, the crystal lights and the ward comes apart.
 
 **Drag** a ring to turn it (a click turns it one step clockwise, a right-click
-one step back, the mouse wheel works too). Turning is free. A **link** means
-turning the ring at its dot also turns the ring at its arrow: gold the same way,
-red the other way. Hovering a ring outlines every ring that will move with it.
-Nothing is hidden: every gap and link is on the board from the start.
+one step back, the mouse wheel works too). Turning is free. Some rings are
+**linked**: turning one turns another as well. Links are not drawn on the board;
+**point at a ring** and every ring that turns with it is outlined, gold if it
+turns the same way, red if it turns the other way. A ring a link has just
+turned flashes in that colour. A link fires once (the ring it turns does not
+pass the turn on), and a ring may turn two others. From DC 18 two rings may
+turn each other, one the same way and one the other way, so they can no longer
+be fixed one after the other.
 
 **How you lose:** the ward knits itself back together. A violet seam stitches
 its way round the rim from the top, clockwise; when it closes the circle, the
 ward holds. The seconds count down in the corner of the board and in the footer
-(*Rim closes in*).
+(*Rim closes in*). From DC 13 the ward also **fights back**: every few seconds it
+turns its outermost open ring one step back (its links fire too). That ring
+glows violet for a moment first, and the interval is written in the corner.
 
 | DC | ≤ 12 | 13–17 | 18–21 | 22+ |
 |----|------|-------|-------|-----|
-| Rings | 3 | 4 | 5 | 5 |
-| Links | 0 | 1 | 2 | 3 |
-| Time before the rim closes | 40 s | 50 s | 60 s | 60 s |
+| Rings | 4 | 5 | 5 | 5 |
+| Links | 2 | 3 | 4 | 5 |
+| Two rings may turn each other | no | no | yes | yes |
+| Turns the start is from the solution, at least | 8 | 11 | 12 | 13 |
+| The ward turns a ring back every | — | 10 s | 7 s | 6 s |
+| Time before the rim closes | 40 s | 50 s | 55 s | 55 s |
 
-**The roll** adds or takes 2 s per point above or below the DC (from 60 % to
-160 % of the base time; ×1.8 on a natural 20, ×0.6 on a natural 1). Beating the
-DC by 5 (or a natural 20) adds a dotted trace from the amber gap to the beam:
-which way to turn and how far.
+**The roll** adds or takes 1.5 s per point above or below the DC (from 60 % to
+150 % of the base time; ×1.6 on a natural 20, ×0.6 on a natural 1), and slows or
+quickens the ward's turns back by 4 % per point (the interval between them is
+80–140 % of the base, 75 % on a natural 1). On a natural 20 the ward does not
+turn rings back at all.
 
 ### Attune the Resonance
 
@@ -191,6 +201,38 @@ DC the light can outrun it for a moment, so you have to lead it. A natural 20 is
 the widest and sharpest, a natural 1 the narrowest and slowest. Concentration:
 40 s ± 2 s per point, between 30 and 65 s (75 s on a natural 20, 30 s on a
 natural 1).
+
+### Echo the Hum
+
+Between two singing stones runs the working's **hum**: a violet ribbon of light
+that drifts, swells and now and then changes its note. Sing it back with a
+ribbon of your own (cyan). **Hold the mouse** on the stave and a crest of your
+ribbon comes to rest under the pointer: move it along to slide the ribbon,
+up or down to make it taller or flatter. The number of **crests** is the note:
+scroll on the board, or pick it from the stones under the board (2 to 6).
+Wherever your ribbon lies on the hum it turns **gold**; keep enough of it gold
+and the five runes under the stave wake one by one, let it slip and they fade.
+Wake all five before your **Concentration** runs out. Two quiet tones follow the
+ribbons and stop beating against each other as they meet.
+
+The hum fights back by **changing note**: it trembles and flickers white for a
+moment, then slides to a new number of crests, and you have to follow.
+
+| DC | ≤ 12 | 13–17 | 18+ |
+|----|------|-------|-----|
+| How close counts as gold | 16 % of the stave's half-height | 12 % | 10 % |
+| How much of the ribbon must be gold | 78 % | 86 % | 90 % |
+| Time in tune to wake every rune | 7 s | 9 s | 11 s |
+| A change of note every | 9 s | 6.5 s | 5 s |
+| How far a change may leap | 1 note | 1 note | up to 2 |
+| How fast the hum drifts | slow | steady | quick |
+| Attunement fades at, of the speed it grows | 50 % | 75 % | 100 % |
+
+**The roll** decides how steady the hum is for you and how well your ribbon
+obeys: the better it beats the DC, the slower the hum drifts, the less often it
+changes note (3 % per point) and the more sharply your ribbon follows your
+hand. Concentration: 45 s ± 2 s per point, between 30 and 65 s (75 s on a
+natural 20, 30 s on a natural 1).
 
 ### Trace the Sigil
 

@@ -7,16 +7,19 @@
  * gap is not on its line. Line up all the gaps and the light reaches the
  * crystal: the ward comes apart.
  *
- * Rings turn one sector (of 8) at a time, freely. The ward fights back by
- * knitting itself together again: the caster has until the rim closes (a time
- * limit set by the roll). Some rings are bound by a link: turning one turns
- * another as well (one way, not chained). Nothing is hidden: every gap
- * and link is on the board from the start.
+ * Rings turn one sector (of 8) at a time, freely. Some rings are linked:
+ * turning one turns another as well, the same way or the other way. A link
+ * fires once (the ring it turns does not pass the turn on), a ring may turn
+ * two others, and from DC 18 two rings may turn each other. The ward fights
+ * back: the caster has until the rim closes (a time limit set by the roll),
+ * and from DC 13 it turns the outermost open ring back every few seconds,
+ * links and all.
  *
  * A ring's rotation counts from its solved position: rot[i] = 0 means its gap
  * is on the beam. The start is scrambled with real moves, and one BFS from the
  * solved position over all ring positions (at most 8^5 = 32768) gives the exact
- * minimum number of turns from anywhere.
+ * minimum number of turns from anywhere. The ward's own turns are real turns
+ * too, so whatever it does can always be undone.
  */
 
 export const SECTORS = 8;
@@ -46,23 +49,28 @@ export function shuffle(arr, R) {
   return arr;
 }
 
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 /**
- * Difficulty. The DC shapes the ward (rings, links); the Arcana roll shapes how
- * well the caster reads it: the time before the ward re-forms (2 s per point
- * above or below the DC), and with insight (beat the DC by 5, or a natural 20)
- * a trace showing which way the next ring turns.
+ * Difficulty. The DC shapes the ward: rings, links, how tangled they may get,
+ * how many turns the start is from the solution and how often the ward turns a
+ * ring back. The Arcana roll shapes the caster's side: the time before the ward
+ * re-forms (1.5 s per point above or below the DC) and the pace of the ward's
+ * turns (4 % per point). On a natural 20 the ward does not turn rings back.
  */
 export function wardParams(dc = 15, roll = {}) {
   const margin = Number(roll.margin ?? 0), d20 = Number(roll.d20 ?? 10);
   const nat20 = d20 === 20, nat1 = d20 === 1;
-  const rings = dc <= 12 ? 3 : dc <= 17 ? 4 : 5;
-  const base = { 3: 40, 4: 50, 5: 60 }[rings];
+  const tier = dc <= 12 ? 0 : dc <= 17 ? 1 : dc <= 21 ? 2 : 3;
+  const base = [40, 50, 55, 55][tier], every = [0, 10, 7, 6][tier];
   return {
-    rings,
-    bindings: dc <= 12 ? 0 : dc <= 17 ? 1 : dc <= 21 ? 2 : 3,
-    time    : nat20 ? Math.round(base * 1.8) : nat1 ? Math.round(base * 0.6)
-            : Math.max(Math.round(base * 0.6), Math.min(Math.round(base * 1.6), base + margin * 2)),
-    insight : nat20 || margin >= 5,
+    rings   : tier ? 5 : 4,
+    bindings: [2, 3, 4, 5][tier],
+    loops   : tier >= 2,                 // two rings may turn each other
+    depth   : [8, 11, 12, 13][tier],     // turns the start needs at least
+    time    : nat20 ? Math.round(base * 1.6) : nat1 ? Math.round(base * 0.6)
+            : clamp(Math.round(base + margin * 1.5), Math.round(base * 0.6), Math.round(base * 1.5)),
+    twistEvery: !every || nat20 ? 0 : +(every * (nat1 ? 0.75 : clamp(1 + margin * 0.04, 0.8, 1.4))).toFixed(2),
   };
 }
 
@@ -136,6 +144,33 @@ export function minTurns(ward, rot) {
 }
 
 /**
+ * Links for a ward of n rings: a ring turns at most two others and is turned by
+ * at most one (by two where loops are allowed). With `loops`, one pair of rings
+ * may turn each other, always one the same way and the other the opposite way:
+ * two rings that turn each other the same way would only ever move as one.
+ */
+function makeLinks(n, count, loops, R) {
+  const pairs = [];
+  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (a !== b) pairs.push([a, b]);
+  shuffle(pairs, R);
+  const links = [];
+  // Does a chain of links lead from `from` to `to` (leaving out link `skip`)?
+  const reaches = (from, to, skip = null, seen = new Set()) =>
+    from === to || (!seen.has(from) && (seen.add(from), links.some(b => b !== skip && b.from === from && reaches(b.to, to, skip, seen))));
+  for (const [from, to] of pairs) {
+    if (links.length >= count) break;
+    if (links.filter(b => b.from === from).length >= 2 || links.filter(b => b.to === to).length >= (loops ? 2 : 1)) continue;
+    const back = links.find(b => b.from === to && b.to === from);
+    if (back) {
+      // the pair's own two links may be the only way round: no longer loop through a third ring
+      if (!loops || links.some(b => links.some(c => c.from === b.to && c.to === b.from)) || reaches(to, from, back)) continue;
+      links.push({ from, to, dir: -back.dir });
+    } else if (!reaches(to, from)) links.push({ from, to, dir: R() < 0.5 ? 1 : -1 });
+  }
+  return links;
+}
+
+/**
  * Build a ward. Everything random comes from `seed`, so a spectator given the
  * same {dc, roll, seed} builds the identical ward.
  */
@@ -145,34 +180,29 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
   const n = p.rings;
   const randInt = m => Math.floor(R() * m);
   const beam = randInt(SECTORS);                     // the sector the crystal sits in
-  const rings = Array.from({ length: n }, () => ({ rune: randInt(22) }));
+  const rings = Array.from({ length: n }, () => ({}));
 
-  // Links join neighbouring rings where they can (short links read best), and
-  // never form a loop: turning `from` turns `to` the same or the opposite way.
-  const pairs = [];
-  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (a !== b) pairs.push([a, b]);
-  shuffle(pairs, R);
-  pairs.sort((x, y) => Math.abs(x[0] - x[1]) - Math.abs(y[0] - y[1]));
-  const bindings = [];
-  const reaches = (from, to) => from === to || bindings.some(b => b.from === from && reaches(b.to, to));
-  for (const [from, to] of pairs) {
-    if (bindings.length >= p.bindings) break;
-    if (reaches(to, from) || bindings.some(b => b.from === from || b.to === to)) continue;
-    bindings.push({ from, to, dir: R() < 0.5 ? 1 : -1 });
+  // A loop leaves half the positions out of reach (fine: the ward only ever sits
+  // in the reachable half); links that tie the rings tighter than that are drawn again.
+  let ward, dist;
+  for (let tries = 0; tries < 20; tries++) {
+    ward = { beam, rings, bindings: makeLinks(n, p.bindings, p.loops, R), params: p, seed, dc };
+    dist = turnDistances(ward);
+    let reach = 0;
+    for (const d of dist) if (d >= 0) reach++;
+    if (reach * 2 >= dist.length) break;
   }
 
-  const ward = { beam, rings, bindings, params: p, seed, dc };
-
-  // Scramble with real turns until no gap starts on the line and it takes at least n turns.
-  const dist = turnDistances(ward);
+  // Scramble with real turns until no gap starts on the line and the solution is deep enough.
   let rot, best = -1;
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < 80; attempt++) {
     let r = new Array(n).fill(0);
-    const moves = 3 * n + randInt(n + 2);
+    const moves = 4 * n + randInt(2 * n);
     for (let m = 0; m < moves; m++) r = applyTurn(ward, r, randInt(n), R() < 0.5 ? 1 : -1).rot;
+    if (r.some(v => v === 0)) continue;
     const need = dist[encodeRot(r)];
-    if (r.every(v => v !== 0) && need >= n) { rot = r; best = need; break; }
-    if (!flow(ward, r).win && need > best) { rot = r; best = need; }
+    if (need > best) { rot = r; best = need; }
+    if (need >= p.depth) break;
   }
   if (!rot) {                                             // practically unreachable; still guarantee a puzzle
     rot = applyTurn(ward, applyTurn(ward, new Array(n).fill(0), 0, 1).rot, 0, 1).rot;
@@ -183,19 +213,16 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
   return ward;
 }
 
-/**
- * The shortest way to bring ring `i`'s gap onto the beam, in sectors (signed,
- * + = clockwise). Ignores links — it is a hint.
- */
-export function nextGate(rot, i) {
-  return ((-rot[i] % SECTORS) + SECTORS + SECTORS / 2) % SECTORS - SECTORS / 2;
-}
+/** The direction of the ward's n-th turn back: from the seed, so spectators agree. */
+const twistDir = (seed, n) => (rng((seed ^ Math.imul(n + 1, 0x9E3779B1)) >>> 0)() < 0.5 ? 1 : -1);
 
 /**
- * The game state on top of a ward: the rings, the light's flow and the time
- * left before the ward re-forms. Returned events let the UI play sounds and
- * effects without re-deriving rules.
+ * The game state on top of a ward: the rings, the light's flow, the time left
+ * before the ward re-forms and the ward's own turns. Returned events let the UI
+ * play sounds and effects without re-deriving rules.
  */
+export const TWIST_WARNING = 1.2;          // seconds the ring glows before the ward turns it
+
 export class WardGame {
   constructor(ward) {
     this.ward = ward;
@@ -204,6 +231,30 @@ export class WardGame {
     this.state = 'playing';                                  // playing | won | lost
     this.flow = flow(ward, this.rot);
     this.turns = 0;
+    this.twists = 0;                                         // turns back the ward has taken
+    this.lastTwist = null;                                   // { k, d, fired } of the latest
+  }
+
+  elapsed() { return this.ward.params.time - this.timeLeft; }
+
+  /** When the ward's n-th turn back is due (seconds into the game); the first comes a little later. */
+  twistDue(n) {
+    const every = this.ward.params.twistEvery;
+    return every ? every * (n + 1.5) : Infinity;
+  }
+
+  /** The ring the ward turns back: the outermost one the light runs through, or -1. */
+  twistTarget() {
+    const p = this.flow.powered;
+    for (let i = p.length - 1; i >= 0; i--) if (p[i]) return i;
+    return -1;
+  }
+
+  /** 0…1 over the moments before the ward turns a ring back (0 when there is nothing to turn). */
+  twistWarning() {
+    if (this.state !== 'playing' || this.twistTarget() < 0) return 0;
+    const left = this.twistDue(this.twists) - this.elapsed();
+    return left > TWIST_WARNING || left < -0.3 ? 0 : Math.min(1, 1 - left / TWIST_WARNING);
   }
 
   /** Turn ring k by d (turning is free). Returns { ok, fired:[binding], newlyPowered:[ring], won }. */
@@ -219,18 +270,31 @@ export class WardGame {
     return { ok: true, fired, newlyPowered, won: this.state === 'won' };
   }
 
-  /** The clock. Returns 'lost' once the ward has re-formed. */
+  /**
+   * The clock, and the ward turning its outermost open ring back when one is
+   * due (a real turn: its links fire too). Returns 'lost' once the ward has
+   * re-formed, 'twist' when it turned a ring (see lastTwist), else null.
+   */
   update(dt) {
     if (this.state !== 'playing') return null;
     this.timeLeft = Math.max(0, this.timeLeft - dt);
-    if (this.timeLeft > 0) return null;
-    this.state = 'lost';
-    return 'lost';
+    if (this.timeLeft <= 0) { this.state = 'lost'; return 'lost'; }
+    let out = null;
+    while (this.elapsed() >= this.twistDue(this.twists)) {
+      const n = this.twists++, k = this.twistTarget();
+      if (k < 0) continue;
+      const d = twistDir(this.ward.seed, n), { rot, fired } = applyTurn(this.ward, this.rot, k, d);
+      this.rot = rot;
+      this.flow = flow(this.ward, this.rot);
+      this.lastTwist = { k, d, fired };
+      out = 'twist';
+    }
+    return out;
   }
 
   /** Plain data for spectators. */
   snapshot() {
-    return { rot: this.rot.slice(), timeLeft: this.timeLeft, state: this.state, turns: this.turns };
+    return { rot: this.rot.slice(), timeLeft: this.timeLeft, state: this.state, turns: this.turns, twists: this.twists };
   }
 
   apply(s) {
@@ -239,6 +303,7 @@ export class WardGame {
     this.timeLeft = s.timeLeft;
     this.state = s.state;
     this.turns = s.turns;
+    this.twists = s.twists ?? this.twists;
     this.flow = flow(this.ward, this.rot);
   }
 }

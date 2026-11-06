@@ -1,7 +1,7 @@
 /**
  * requests.mjs — the GM asks a specific character to take on a challenge:
  * pick a lock or one of the Arcana workings (unweave a ward, attune a
- * resonance, trace a sigil).
+ * resonance, echo a hum, trace a sigil).
  *
  *   1. GM: "Puzzles & Challenges" (VTools, menu.mjs, or the API from a macro)
  *      → challenge, character, DC (shown or secret), optionally what it is on
@@ -54,6 +54,7 @@ export function candidates() {
 export async function arcanaAppClass(kind) {
   if (kind === 'ward')      return (await import('./WardApp.mjs')).WardApp;
   if (kind === 'resonance') return (await import('./ResonanceApp.mjs')).ResonanceApp;
+  if (kind === 'echo')      return (await import('./EchoApp.mjs')).EchoApp;
   if (kind === 'sigil')     return (await import('./SigilApp.mjs')).SigilApp;
   return null;
 }

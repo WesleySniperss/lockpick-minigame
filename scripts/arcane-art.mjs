@@ -238,11 +238,11 @@ export function hexA(hex, a) {
 const BACKDROPS = new Map();
 
 /**
- * Dark carved stone slab with a faint engraved circle of runes — the surface
- * the working is cut into. Cached per size and DPR (built once per page).
+ * Dark carved stone slab with a faint engraved circle of runes (`ring`) — the
+ * surface the working is cut into. Cached per size and DPR (built once per page).
  */
-export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.47, seed = 3 } = {}) {
-  const key = `${W}x${H}@${dpr}|${cx},${cy},${r}`;
+export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H) * 0.47, seed = 3, ring = true } = {}) {
+  const key = `${W}x${H}@${dpr}|${cx},${cy},${r}|${ring}`;
   if (BACKDROPS.has(key)) return BACKDROPS.get(key);
   const c = layer(W, H, dpr, { opaque: true });
   const ctx = c.getContext('2d');
@@ -279,10 +279,10 @@ export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H)
   }
 
   // Engraved outer circles with a ring of faint runes between them
-  for (const rr of [r, r - 18]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); }, 1.4, 0.8);
+  if (ring) for (const rr of [r, r - 18]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TAU); }, 1.4, 0.8);
   ctx.strokeStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth = 1.1;
-  const count = 28;
+  const count = ring ? 28 : 0;
   for (let i = 0; i < count; i++) {
     const a = -Math.PI / 2 + i * TAU / count;
     const x = cx + Math.cos(a) * (r - 9), y = cy + Math.sin(a) * (r - 9);
