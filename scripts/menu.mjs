@@ -1,7 +1,7 @@
 /**
  * menu.mjs — the one GM menu (VTools → "Puzzles & Challenges") for everything
  * the module runs:
- *   • a rolled challenge (lock, ward, resonance, sigil) — a request card in
+ *   • a rolled challenge (lock, ward, resonance, echo, sigil) — a request card in
  *     chat for one character, whose roll sets the difficulty (requests.mjs);
  *   • a puzzle (sudoku, sliding tiles, cipher, rune sequence) — sent straight
  *     to the chosen players (PuzzleApp.mjs).

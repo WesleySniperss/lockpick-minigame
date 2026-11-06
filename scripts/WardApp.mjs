@@ -1,20 +1,21 @@
 /**
- * WardApp.mjs — "Unweave the Ward": concentric rune rings cut into dark stone.
+ * WardApp.mjs — "Unweave the Ward": concentric stone rings cut into dark stone.
  *
  * The core shoots a straight beam at the crystal on the rim. Every ring is a
  * wall with one gap in it, and the beam stops at the first ring whose gap is
  * off the line; that gap pulses amber. Drag a ring to turn it (a click turns it
  * clockwise, a right-click back); turning is free. Line up every gap and the
- * light reaches the crystal. A link means turning the ring at its dot turns the
- * ring at its arrow too: gold the same way, red the other way; hovering a ring
- * outlines every ring that will move with it. Meanwhile
- * the ward knits itself back together: a violet seam creeps around the rim, and
- * when it closes the circle the ward holds.
+ * light reaches the crystal. Links are not drawn on the board: pointing at a
+ * ring outlines every ring that turns with it, gold the same way, red the other
+ * way, and a ring a link has just turned flashes in that colour. Meanwhile the
+ * ward knits itself back together: a violet seam creeps around the rim, and
+ * when it closes the circle the ward holds. From DC 13 it also turns its
+ * outermost open ring back every few seconds; that ring glows violet first.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
-import { generateWard, WardGame, SECTORS, nextGate, mod } from './ward-logic.mjs';
-import { ARC, TAU, layer, blit, ringCells, blitCells, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { generateWard, WardGame, SECTORS, mod } from './ward-logic.mjs';
+import { ARC, TAU, layer, blit, ringCells, blitCells, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
@@ -53,9 +54,8 @@ export class WardApp extends MiniGameApp {
     this.disp = this.game.rot.slice();          // displayed rotation (sectors, float)
     this.tgt  = this.game.rot.slice();          // where it is heading (unwrapped)
     this.hover = -1;
-    this.hoverAt = null;
-    this.drag = null;                           // { k, a, acc, done, moved, x, y }
-    this.flash = { link: new Map() };           // binding index → glow left after it fired
+    this.drag = null;                          // { k, a, acc, done, moved, x, y }
+    this.flash = new Map();                     // ring → { v, color }: a link or the ward has just turned it
     this.endDelay = 1.2;
   }
 
@@ -100,7 +100,6 @@ export class WardApp extends MiniGameApp {
     });
     canvas.addEventListener('pointermove', ev => {
       const p = pos(ev);
-      this.hoverAt = p;
       if (this.drag) this.dragTo(p);
       else this.hover = this.ringAt(p.x, p.y);
       cursor();
@@ -114,7 +113,7 @@ export class WardApp extends MiniGameApp {
     };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('pointerleave', () => { if (!this.drag) { this.hover = -1; this.hoverAt = null; } });
+    canvas.addEventListener('pointerleave', () => { if (!this.drag) this.hover = -1; });
     canvas.addEventListener('wheel', ev => {
       const p = pos(ev), k = this.ringAt(p.x, p.y);
       if (k < 0) return;
@@ -152,13 +151,27 @@ export class WardApp extends MiniGameApp {
   turn(k, d) {
     const r = this.game.turn(k, d);
     if (!r.ok) return;
-    this.tgt[k] += d;
-    for (const i of r.fired) { const b = this.ward.bindings[i]; this.tgt[b.to] += d * b.dir; this.flash.link.set(i, 1); }
+    this.moved(k, d, r.fired);
     Sfx.ringTurn();
     r.newlyPowered.forEach((i, n) => this.later(() => Sfx.channel(i), 140 + n * 110));
     if (r.won) {
       this.drag = null;                         // the ring settles on the line
       this.later(() => { Sfx.unweave(); this._end(true); }, 380);
+    }
+  }
+
+  /**
+   * Ring k has turned by d (the player's turn or the ward's), and the rings its
+   * links turned with it: they all head for their new places, and the linked
+   * ones' gaps flash in the colour of their link. `color`: flash all of ring k.
+   */
+  moved(k, d, fired, color = null) {
+    this.tgt[k] += d;
+    if (color) this.flash.set(k, { v: 1, color, whole: true });
+    for (const i of fired) {
+      const b = this.ward.bindings[i];
+      this.tgt[b.to] += d * b.dir;
+      this.flash.set(b.to, { v: 1, color: b.dir > 0 ? ARC.gold : AGAINST });
     }
   }
 
@@ -171,27 +184,37 @@ export class WardApp extends MiniGameApp {
 
   applySync(s) {
     if (!s) return;
+    const twisted = (s.twists ?? 0) > this.game.twists ? this.game.twistTarget() : -1;
     s.rot.forEach((v, i) => { this.tgt[i] += shortest(v - this.game.rot[i]); });
     this.game.apply(s);
+    if (twisted >= 0) this.flash.set(twisted, { v: 1, color: ARC.violet, whole: true });
   }
 
   // ── frame ─────────────────────────────────────────────────────────────
 
   update(dt) {
-    const ease = 1 - Math.pow(0.0008, dt);
+    const ease = 1 - Math.pow(0.0002, dt);
     const held = this.drag?.moved ? this.drag : null;
-    // Land exactly on the target, so a ring at rest goes back into the cached board.
+    // Land on the target as soon as the last of the move is under a pixel, so a
+    // ring at rest goes back into the cached board: a moving ring is the dearest
+    // part of a frame, and the links now move several at once.
     this.disp = this.disp.map((v, i) => {
       if (held && i === held.k) return this.tgt[i] + Math.max(-0.5, Math.min(0.5, held.acc - held.done));
       const n = v + (this.tgt[i] - v) * ease;
-      return Math.abs(this.tgt[i] - n) < 0.002 ? this.tgt[i] : n;
+      return Math.abs(this.tgt[i] - n) < 0.008 ? this.tgt[i] : n;
     });
-    for (const [i, v] of this.flash.link) { if (v <= 0) this.flash.link.delete(i); else this.flash.link.set(i, v - dt * 1.8); }
-    // The clock: the player's decides; spectators count down between syncs.
+    for (const [i, f] of this.flash) { f.v -= dt * 1.6; if (f.v <= 0) this.flash.delete(i); }
+    // The clock and the ward's turns back: the player's game decides; spectators count down between syncs.
     let out = null;
     if (this._over) return null;
     if (this._spectator) this.game.timeLeft = Math.max(0, this.game.timeLeft - dt);
     else if (this.game.state === 'playing') out = this.game.update(dt);
+    if (out === 'twist') {
+      const tw = this.game.lastTwist;
+      this.moved(tw.k, tw.d, tw.fired, ARC.violet);
+      Sfx.backlash();
+      out = null;
+    }
     this._meterAcc = (this._meterAcc ?? 0) + dt;
     if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); }
     if (out === 'lost') Sfx.fail();
@@ -222,6 +245,8 @@ export class WardApp extends MiniGameApp {
     // Hovered or dragged ring, and every ring a link will turn with it
     const focusRing = this.drag?.k ?? this.hover;
     if (focusRing >= 0 && !this._over) this.drawHover(ctx, focusRing);
+    // Rings a link or the ward has just turned, and the ring the ward is about to turn back
+    this.drawFlashes(ctx, t);
 
     // The line the gaps have to meet, from where the light stops to the crystal
     const reach = this.beamReach();
@@ -264,9 +289,6 @@ export class WardApp extends MiniGameApp {
     if (reach.home) spark(ctx, crystal.x, crystal.y, 24, ARC.energy, 0.8 * pulse + 0.2);
     this.drawCrystal(ctx, crystal.x, crystal.y, this.beamA, reach.home);
 
-    // Golden links
-    this.ward.bindings.forEach((b, i) => this.drawBinding(ctx, b, i, this.flash.link.get(i) ?? 0));
-
     // The goal, the clock and the links, written in the corners
     this.drawNotes(ctx, f);
   }
@@ -307,7 +329,11 @@ export class WardApp extends MiniGameApp {
     return { r: RIM_R, home: true };
   }
 
-  /** What never changes: the goal top-left, what the links do bottom-left. Part of the static layer. */
+  /**
+   * What never changes: the goal top-left; bottom-left, what the outlines mean
+   * (only the kinds of link this ward has); bottom-right, how often the ward
+   * turns a ring back. Part of the static layer.
+   */
   drawFixedNotes(ctx) {
     const letters = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px; };
     ctx.save();
@@ -316,16 +342,22 @@ export class WardApp extends MiniGameApp {
     ctx.fillStyle = 'rgba(200,212,240,0.8)';
     ctx.fillText('LINE UP THE GAPS', 14, 22);
     ctx.fillText('TO LIGHT THE CRYSTAL', 14, 36);
-    // What the links on this board do; only the kinds it has.
+    ctx.font = '700 9px "Signika", sans-serif';
+    letters('1px');
     const links = this.ward.bindings;
     if (links.length) {
-      ctx.font = '700 9px "Signika", sans-serif';
-      letters('1px');
       let y = 424;
-      if (links.some(b => b.dir < 0)) { ctx.fillStyle = hexA(AGAINST, 0.95); ctx.fillText('RED: IT TURNS BACKWARD', 14, y); y -= 13; }
-      if (links.some(b => b.dir > 0)) { ctx.fillStyle = hexA(ARC.gold, 0.95); ctx.fillText('GOLD: IT TURNS ALONG', 14, y); y -= 13; }
+      if (links.some(b => b.dir < 0)) { ctx.fillStyle = hexA(AGAINST, 0.95); ctx.fillText('RED TURNS AGAINST IT', 14, y); y -= 13; }
+      if (links.some(b => b.dir > 0)) { ctx.fillStyle = hexA(ARC.gold, 0.95); ctx.fillText('GOLD TURNS WITH IT', 14, y); y -= 13; }
       ctx.fillStyle = 'rgba(200,212,240,0.72)';
-      ctx.fillText('LINKS: TURN THE DOT’S RING', 14, y);
+      ctx.fillText('POINT AT A RING:', 14, y);
+    }
+    const every = this.ward.params.twistEvery;
+    if (every) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = hexA(ARC.violet, 0.95);
+      ctx.fillText('THE WARD TURNS AN OPEN', W - 14, 411);
+      ctx.fillText(`RING BACK EVERY ${Math.round(every)} s`, W - 14, 424);
     }
     ctx.restore();
   }
@@ -375,21 +407,11 @@ export class WardApp extends MiniGameApp {
     spark(ctx, needle.x, needle.y, late ? 13 + 5 * Math.abs(Math.sin(t * 7)) : 11, col, 0.95);
   }
 
-  /** The gap that has to come next pulses amber; with insight, a trace shows which way and how far. */
+  /** The gap that has to come next pulses amber. */
   drawNextGap(ctx, i, beat) {
     const ang = this.disp[i] * STEP;
     this.slotFill(ctx, i, ang, AMBER, 0.14 + 0.2 * beat);
     glow(ctx, () => this.slotSides(ctx, i, ang), { color: AMBER, width: 2.2, intensity: 0.6 + 0.4 * beat, core: false });
-    if (!this.ward.params.insight || this.drag) return;
-    const steps = nextGate(this.game.rot, i);
-    if (!steps) return;
-    const g = this.geo[i], from = this.beamA + ang, to = from + steps * STEP, dir = Math.sign(steps);
-    ctx.save();
-    ctx.setLineDash([2, 5]); ctx.lineCap = 'round';
-    ctx.strokeStyle = hexA(AMBER, 0.6 + 0.3 * beat); ctx.lineWidth = 1.7;
-    ctx.beginPath(); ctx.arc(CX, CY, g.rm, from + dir * 0.16, to - dir * 0.16, dir < 0); ctx.stroke();
-    ctx.restore();
-    this.drawArrow(ctx, g.rm, to - dir * 0.14, dir, hexA(AMBER, 0.95));
   }
 
   /**
@@ -398,7 +420,7 @@ export class WardApp extends MiniGameApp {
    * strokes around whole rings cost over a millisecond a frame without a GPU.
    */
   ringOutline(i, color, tint = null) {
-    const key = `${i}|${color}`;
+    const key = `${i}|${color}|${tint}`;
     this._outlines ??= new Map();
     let o = this._outlines.get(key);
     if (o) return o;
@@ -416,33 +438,39 @@ export class WardApp extends MiniGameApp {
     return o;
   }
 
-  /** Highlight ring k, arrows along it at the pointer, and outline the rings linked to it. */
+  /** Highlight ring k, and outline the rings that turn with it: gold the same way, red the other way. */
   drawHover(ctx, k) {
-    const g = this.geo[k];
     const self = this.ringOutline(k, 'rgba(134,236,255,0.55)', 'rgba(134,236,255,0.07)');
     blitCells(ctx, self.c, self.cells, CX, CY);
-    const at = this.hoverAt ? Math.atan2(this.hoverAt.y - CY, this.hoverAt.x - CX) : -Math.PI / 2;
-    // turn arrows either side of the pointer
-    if (this.hoverAt && !this.drag) for (const side of [1, -1]) this.drawArrow(ctx, g.rm, at + side * 0.32, side, 'rgba(200,240,255,0.85)');
-    // linked rings: outlined in the link's colour, with the way they will turn
     this.ward.bindings.forEach(b => {
       if (b.from !== k) return;
-      const h = this.geo[b.to], col = b.dir > 0 ? ARC.gold : AGAINST;
-      const other = this.ringOutline(b.to, hexA(col, 0.7));
+      const other = this.tinted(b.to, b.dir > 0 ? ARC.gold : AGAINST);
       blitCells(ctx, other.c, other.cells, CX, CY);
-      this.drawArrow(ctx, h.rm, at + 0.32, b.dir, hexA(col, 0.9));
-      this.drawArrow(ctx, h.rm, at - 0.32, -b.dir, hexA(col, 0.9));
     });
   }
 
-  /** A small arrowhead on the circle of radius r at angle a, pointing clockwise (dir 1) or back. */
-  drawArrow(ctx, r, a, dir, color) {
-    const p = polar(r, a);
-    ctx.save();
-    ctx.translate(p.x, p.y); ctx.rotate(a + dir * Math.PI / 2);
-    ctx.beginPath(); ctx.moveTo(5, 0); ctx.lineTo(-3.5, -4.5); ctx.lineTo(-1.5, 0); ctx.lineTo(-3.5, 4.5); ctx.closePath();
-    ctx.fillStyle = color; ctx.fill();
-    ctx.restore();
+  /** Ring i outlined and tinted in a link's or the ward's colour: one cached layer per ring and colour. */
+  tinted(i, color) { return this.ringOutline(i, hexA(color, 0.9), hexA(color, 0.13)); }
+
+  /**
+   * A ring a link has just turned: its gap flashes gold or red. The ring the
+   * ward is about to turn back glows violet, brighter and brighter until it
+   * turns, and flashes violet once it has. (A whole tinted ring costs about
+   * 2.5 ms a frame without a GPU, so only the ward's rare turns get one.)
+   */
+  drawFlashes(ctx, t) {
+    const whole = (i, color, a) => {
+      const o = this.tinted(i, color);
+      ctx.globalAlpha = Math.max(0, Math.min(1, a));
+      blitCells(ctx, o.c, o.cells, CX, CY);
+      ctx.globalAlpha = 1;
+    };
+    for (const [i, f] of this.flash) {
+      if (f.whole) whole(i, f.color, f.v);
+      else this.slotFill(ctx, i, this.disp[i] * STEP, f.color, 0.6 * Math.min(1, f.v));
+    }
+    const warn = this._over ? 0 : this.game.twistWarning();
+    if (warn > 0) whole(this.game.twistTarget(), ARC.violet, warn * (0.65 + 0.35 * Math.sin(t * 16)));
   }
 
   // ── drawing helpers ───────────────────────────────────────────────────
@@ -553,11 +581,11 @@ export class WardApp extends MiniGameApp {
     return c;
   }
 
-  /** Stone ring i with its runes and the gap cut through it, at rotation 0. Built once. */
+  /** Stone ring i with the gap cut through it, at rotation 0. Built once. */
   ringSprite(i) {
     this._sprites ??= [];
     if (this._sprites[i]) return this._sprites[i];
-    const g = this.geo[i], ring = this.ward.rings[i], beam = this.ward.beam;
+    const g = this.geo[i];
     const size = Math.ceil(g.r1 * 2 + 6);
     const c = layer(size, size, this._dpr);
     const ctx = c.getContext('2d');
@@ -581,17 +609,6 @@ export class WardApp extends MiniGameApp {
       ctx.beginPath(); ctx.arc(CX, CY, rad, 0, TAU); ctx.strokeStyle = `rgba(0,0,0,${a})`; ctx.lineWidth = 1.2; ctx.stroke();
     }
     ctx.beginPath(); ctx.arc(CX, CY, g.r1 - 1.5, 0, TAU); ctx.strokeStyle = 'rgba(200,215,245,0.07)'; ctx.lineWidth = 1; ctx.stroke();
-
-    // carved runes, except where the gap is
-    for (let s = 0; s < SECTORS; s++) {
-      if (s === beam) continue;
-      const p = polar(g.rm, sectorAngle(s));
-      const size2 = Math.min(13, (g.r1 - g.r0) * 0.6), rot = sectorAngle(s) + Math.PI / 2, rune = ring.rune + s * 3 + i * 5;
-      ctx.strokeStyle = 'rgba(190,205,240,0.09)'; ctx.lineWidth = 1.3;
-      drawRune(ctx, rune, p.x, p.y + 0.7, size2, rot);
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-      drawRune(ctx, rune, p.x, p.y, size2, rot);
-    }
 
     // the gap, cut clean through the stone
     const a = this.beamA, cos = Math.cos(a), sin = Math.sin(a), hw = SLOT / 2;
@@ -643,29 +660,6 @@ export class WardApp extends MiniGameApp {
     ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.closePath();
     ctx.fillStyle = gem; ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.7; ctx.stroke();
-    ctx.restore();
-  }
-
-  /** A link: a dot on the ring you turn, an arrow on the ring that follows. Gold: the same way; red: the other way. */
-  drawBinding(ctx, b, i, flashV) {
-    const a = sectorAngle(this.ward.beam + [3, 5, 2][i % 3]) + STEP / 2;     // well away from the beam
-    const p1 = polar(this.geo[b.from].rm, a), p2 = polar(this.geo[b.to].rm, a);
-    const col = b.dir > 0 ? ARC.gold : AGAINST;
-    const out = b.to > b.from ? 1 : -1, tip = polar(this.geo[b.to].rm + out * 2, a);
-    const line = () => { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); };
-    ctx.save();
-    ctx.lineCap = 'round';
-    line(); ctx.strokeStyle = 'rgba(5,6,10,0.75)'; ctx.lineWidth = 5; ctx.stroke();
-    if (flashV > 0) { line(); ctx.strokeStyle = hexA(col, 0.5 * flashV); ctx.lineWidth = 8; ctx.stroke(); }
-    line(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
-    // the dot
-    ctx.beginPath(); ctx.arc(p1.x, p1.y, 5, 0, TAU); ctx.fillStyle = 'rgba(5,6,10,0.85)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(p1.x, p1.y, 3.4, 0, TAU); ctx.fillStyle = col; ctx.fill();
-    // the arrow
-    ctx.translate(tip.x, tip.y); ctx.rotate(a + (out > 0 ? 0 : Math.PI));
-    const head = () => { ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-5, -5.5); ctx.lineTo(-5, 5.5); ctx.closePath(); };
-    head(); ctx.strokeStyle = 'rgba(5,6,10,0.8)'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
-    head(); ctx.fillStyle = col; ctx.fill();
     ctx.restore();
   }
 }
