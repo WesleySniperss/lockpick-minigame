@@ -1,244 +1,182 @@
 /**
- * echo-logic.mjs — rules of "Echo the Hum" (no DOM, no Foundry).
+ * echo-logic.mjs — rules of "Sound the Weave" (no DOM, no Foundry).
  *
- * A working hums: a ribbon of light that sways, swells and now and then changes
- * its note. The caster sings it back with a ribbon of their own, shaped by
- * hand: the crest under the pointer follows it (where it lies, how high it
- * rises), and the number of crests is a note picked from a few. Where the two
- * ribbons lie together they turn gold; keep enough of the ribbon gold and the
- * runes wake one by one, let it slip and they fade. Wake every rune before
- * concentration (time) runs out.
+ * A working's weave lies hidden in the dark: threads of light that run out
+ * from one to three knots to the edge of the field. The caster calls into the
+ * dark: wherever they click, their voice spreads in a ring, and every thread
+ * it reaches glints and stays faintly seen. Threads thicken towards their knot,
+ * so each glimpse shows which way to follow, and a knot shows itself when a
+ * call comes close to it. A call that lands on a knot undoes it. Every call costs one
+ * of a few; undo every knot before they run out. From DC 13 an undone knot
+ * ties itself again after a while, unless the last one falls first.
  *
- * A ribbon is amp·sin(2π·crests·(x − ½) + phase) across the stave, x from 0 to
- * 1, so a crest held at the middle stays put when the crests change. The hum's
- * whole course comes from a seed, so a spectator given {seed, t} hears the
- * same hum as the player.
+ * Positions are in field radii: (0, 0) is the centre, 1 the edge. The weave
+ * comes from a seed, so a spectator given the seed and the calls sees the same.
  */
 
 import { rng } from './ward-logic.mjs';
 
 const TAU = Math.PI * 2;
-export const NOTES = [2, 3, 4, 5, 6];      // crests across the stave
-export const RUNE_COUNT = 5;
-export const AMP_MIN = 0.12;               // your ribbon never lies quite flat
-export const ASPECT = 4.4;                 // the stave is this many half-heights long
-export const SAMPLES = 48;                 // points along the stave the match is judged at
-export const GLIDE = 0.7;                  // seconds the hum takes to slide to a new note
-export const SHIFT_WARNING = 1.1;          // seconds it shimmers before it does
+export const SAMPLES = 36;          // segments along a thread, from its knot (0) to the edge
+export const RING_TIME = 0.7;       // seconds a call takes to reach as far as it goes
+export const GLINT = 1.6;           // seconds a thread glints before it settles into a faint trace
+export const EDGE = 0.97;           // threads end this far out
+export const KNOT_SHOWS = 0.55;     // a knot shows itself only this close to a call (as a share of its reach)
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const smooth = u => u * u * (3 - 2 * u);
 
 /**
- * DC: how close counts as in tune, how much of the ribbon must be, how long it
- * takes, how fast the hum moves and how often it changes note. The Arcana roll:
- * how steady the hum is for this caster, how sharply their ribbon answers the
- * hand, how long they can concentrate and how often the note changes.
+ * DC: how many knots, how many threads lead to each (fewer is harder), how far
+ * the threads bend, how close a call must land and how soon an undone knot ties
+ * again. The Arcana roll: how many calls, how far the voice carries and how long
+ * the knots stay undone.
  */
-export function echoParams(dc = 15, roll = {}) {
+export function weaveParams(dc = 15, roll = {}) {
   const margin = Number(roll.margin ?? 0), d20 = Number(roll.d20 ?? 10);
   const nat20 = d20 === 20, nat1 = d20 === 1;
   const tier = dc <= 12 ? 0 : dc <= 17 ? 1 : 2;
+  const knots = tier + 1, retie = [0, 12, 8][tier];
   return {
-    tol   : [0.16, 0.12, 0.1][tier],                 // in tune within this, in heights of the stave's half
-    need  : [0.78, 0.86, 0.9][tier],                 // share of the ribbon that must be in tune
-    hold  : [7, 9, 11][tier],                         // seconds in tune to wake every rune
-    fade  : [0.5, 0.75, 1][tier],                    // share of that speed it fades at
-    flow  : [0.45, 0.7, 0.95][tier],                 // how fast the hum drifts along, radians a second
-    leap  : tier === 2 ? 2 : 1,                      // how far a change of note may go
-    shiftEvery: +([9, 6.5, 5][tier] * (nat20 ? 1.6 : nat1 ? 0.75 : clamp(1 + margin * 0.03, 0.8, 1.3))).toFixed(2),
-    drift : nat20 ? 0.6 : nat1 ? 1.5 : clamp(1.1 - margin * 0.035, 0.75, 1.4),   // the hum's pace for this caster
-    follow: nat20 ? 30 : nat1 ? 9 : clamp(16 + margin * 0.8, 10, 26),            // how fast your ribbon closes on the hand, per second
-    time  : nat20 ? 75 : nat1 ? 30 : clamp(45 + margin * 2, 30, 65),
+    knots,
+    threads: [6, 5, 4][tier],
+    bend   : [0, 0.12, 0.24][tier],          // how far a thread curves, as a share of its length
+    hit    : [0.1, 0.085, 0.07][tier],       // a call this close to a knot undoes it
+    calls  : 2 * knots + 2 + (nat20 ? 3 : nat1 ? -2 : clamp(Math.floor(margin / 3), -2, 3)),
+    reach  : nat20 ? 0.5 : nat1 ? 0.26 : clamp(0.36 + margin * 0.012, 0.28, 0.48),   // how far a call carries
+    retie  : !retie ? 0 : +(retie * (nat20 ? 1.5 : nat1 ? 0.75 : clamp(1 + margin * 0.04, 0.8, 1.4))).toFixed(1),
   };
 }
 
-/** The ribbon's height at x (0…1 across the stave). `crests` may be fractional while a note slides. */
-export const waveAt = (w, x) => w.amp * Math.sin(TAU * w.crests * (x - 0.5) + w.phase);
+/** A point on the quadratic curve from a through c to b. */
+const bez = (a, c, b, t) => {
+  const u = 1 - t;
+  return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
+};
 
-export function generateEcho({ dc = 15, roll = {}, seed = 1 } = {}) {
+export function generateWeave({ dc = 15, roll = {}, seed = 1 } = {}) {
   const R = rng(seed);
-  const params = echoParams(dc, roll);
-  const k = Array.from({ length: 6 }, () => R() * TAU);
-  // The hum's notes, one per change: a step or two up or down, never off the scale.
-  let i = 1 + Math.floor(R() * 3);
-  const notes = [NOTES[i]];
-  for (let n = 0; n < 40; n++) {
-    const step = (1 + Math.floor(R() * params.leap)) * (R() < 0.5 ? -1 : 1);
-    i = i + step < 0 || i + step >= NOTES.length ? i - step : i + step;
-    notes.push(NOTES[i]);
-  }
-  const echo = {
-    seed, dc, params, k, notes,
-    flowDir : R() < 0.5 ? -1 : 1,
-    baseAmp : 0.5 + R() * 0.25,
-    shiftOffset: params.shiftEvery * (0.45 + 0.3 * R()),
-    tone    : 196 * Math.pow(2, Math.floor(R() * 4) / 12),
-  };
-  // Start the caster on another note, low and out of step.
-  const others = NOTES.filter(n => n !== notes[0]);
-  echo.start = { crests: others[Math.floor(R() * others.length)], amp: 0.3, phase: R() * TAU };
-  return echo;
-}
-
-/** Which change of note the hum is on at time t (0 = none yet), and how far into it. */
-export function shiftAt(echo, t) {
-  const P = echo.params.shiftEvery, since = t - echo.shiftOffset;
-  if (since < 0) return { n: 0, into: Infinity, next: -since };
-  const n = Math.min(echo.notes.length - 1, Math.floor(since / P) + 1);
-  const into = since - (n - 1) * P;
-  return { n, into, next: P - into };
-}
-
-/** The hum at time t: { crests, amp, phase, note } (crests slides between notes). */
-export function humAt(echo, t) {
-  const { k, params } = echo, s = t * params.drift;
-  const { n, into } = shiftAt(echo, t);
-  const note = echo.notes[n], u = clamp(into / GLIDE, 0, 1);
-  const crests = n && u < 1 ? echo.notes[n - 1] + (note - echo.notes[n - 1]) * smooth(u) : note;
-  return {
-    note, crests,
-    amp  : clamp(echo.baseAmp + 0.2 * Math.sin(0.37 * s + k[3]) + 0.08 * Math.sin(1.1 * s + k[4]), 0.35, 0.95),
-    phase: k[0] + echo.flowDir * params.flow * s + 0.9 * Math.sin(0.5 * s + k[1]) + 0.36 * Math.sin(1.3 * s + k[2]),
-  };
-}
-
-/**
- * Which of the SAMPLES points along your ribbon lie in tune, and the share that
- * do. In tune: the hum passes within `tol` of the point as the eye sees it
- * (half-heights both ways), so a crest a little to one side still counts on
- * the steep flanks, not only where the two happen to cross.
- */
-export function tuneOf(you, hum, tol) {
-  const marks = new Array(SAMPLES), reach = tol / ASPECT;
-  let good = 0;
-  for (let i = 0; i < SAMPLES; i++) {
-    const x = 0.03 + 0.94 * i / (SAMPLES - 1), y = waveAt(you, x);
-    let ok = false;
-    for (let j = -3; j <= 3 && !ok; j++) {
-      const o = reach * j / 3, dy = y - waveAt(hum, x + o);
-      ok = (o * ASPECT) ** 2 + dy * dy <= tol * tol;
+  const params = weaveParams(dc, roll);
+  const knots = [];
+  for (let k = 0; k < params.knots; k++) {
+    // Somewhere inside, and well apart from the other knots.
+    let pos;
+    for (let tries = 0; tries < 200; tries++) {
+      const a = R() * TAU, r = 0.12 + 0.56 * Math.sqrt(R());
+      pos = { x: Math.cos(a) * r, y: Math.sin(a) * r };
+      if (knots.every(o => Math.hypot(o.x - pos.x, o.y - pos.y) > 0.6)) break;
     }
-    marks[i] = ok;
-    if (ok) good++;
+    // Its threads, spread round it, each to the edge of the field.
+    const threads = [], base = R() * TAU, n = params.threads;
+    for (let i = 0; i < n; i++) {
+      const a = base + (i + (R() - 0.5) * 0.5) * TAU / n, ux = Math.cos(a), uy = Math.sin(a);
+      const b = pos.x * ux + pos.y * uy, len = -b + Math.sqrt(b * b - (pos.x ** 2 + pos.y ** 2 - EDGE ** 2));
+      const end = { x: pos.x + ux * len, y: pos.y + uy * len };
+      const bend = params.bend * len * (R() < 0.5 ? -1 : 1) * (0.6 + 0.4 * R());
+      const mid = { x: (pos.x + end.x) / 2 - uy * bend, y: (pos.y + end.y) / 2 + ux * bend };
+      const pts = [];
+      for (let s = 0; s <= SAMPLES; s++) {
+        const p = bez(pos, mid, end, s / SAMPLES), r = Math.hypot(p.x, p.y);
+        pts.push(r > EDGE ? { x: p.x * EDGE / r, y: p.y * EDGE / r } : p);
+      }
+      threads.push(pts);
+    }
+    knots.push({ x: pos.x, y: pos.y, threads });
   }
-  return { marks, share: good / SAMPLES };
+  return { seed, dc, params, knots };
 }
 
-/** The shortest signed turn from angle a to angle b. */
-const turnTo = (a, b) => ((((b - a) % TAU) + TAU + Math.PI) % TAU) - Math.PI;
-
-/** Live game state: your ribbon, where your hand wants it, the attunement and the clock. */
-export class EchoGame {
-  constructor(echo) {
-    this.echo = echo;
+/** Live game state: the calls so far, what they have shown, the knots undone and the calls left. */
+export class WeaveGame {
+  constructor(weave) {
+    this.weave = weave;
     this.t = 0;
-    this.you = { ...echo.start };          // your ribbon as it is
-    this.aim = { ...echo.start };          // where the hand wants it
-    this.anchor = 0.5;                     // where along the stave the hand last held it
-    this.attune = 0;
-    this.timeLeft = echo.params.time;
+    this.calls = [];                                        // { x, y, t }
+    this.left = weave.params.calls;
+    this.undone = weave.knots.map(() => null);              // when each knot came undone, or null
+    // When each thread segment and each knot was first reached by a call (Infinity: not yet),
+    // and by which call.
+    this.seen = weave.knots.map(k => k.threads.map(th => new Array(th.length - 1).fill(Infinity)));
+    this.seenBy = weave.knots.map(k => k.threads.map(th => new Array(th.length - 1).fill(-1)));
+    this.knotSeen = weave.knots.map(() => Infinity);
     this.state = 'playing';
-    this.share = 0;
-    this.marks = new Array(SAMPLES).fill(false);
+    this.lastRetie = -1;                                    // the knot that tied itself again last
   }
 
-  hum() { return humAt(this.echo, this.t); }
-
-  /**
-   * The hand at (x, y): x along the stave (0…1), y up from the middle in
-   * half-heights (−1…1). A crest of your ribbon (a trough below the middle)
-   * comes to rest under it.
-   */
-  holdAt(x, y) {
-    const amp = clamp(Math.abs(y), AMP_MIN, 1), up = y >= 0;
-    this.anchor = clamp(x, -0.2, 1.2);
-    this.aim.amp = amp;
-    this.aim.phase = (up ? Math.PI / 2 : -Math.PI / 2) - TAU * this.aim.crests * (this.anchor - 0.5);
+  /** What call n shows: everything within reach of it, reached as its ring spreads. */
+  reveal(c, n) {
+    const reach = this.weave.params.reach;
+    const at = d => c.t + RING_TIME * d / reach;
+    this.weave.knots.forEach((k, ki) => {
+      const dk = Math.hypot(k.x - c.x, k.y - c.y);
+      if (dk <= reach * KNOT_SHOWS) this.knotSeen[ki] = Math.min(this.knotSeen[ki], at(dk));
+      k.threads.forEach((th, ti) => {
+        const seen = this.seen[ki][ti], by = this.seenBy[ki][ti];
+        for (let i = 0; i < th.length - 1; i++) {
+          const mx = (th[i].x + th[i + 1].x) / 2, my = (th[i].y + th[i + 1].y) / 2, d = Math.hypot(mx - c.x, my - c.y);
+          if (d <= reach && at(d) < seen[i]) { seen[i] = at(d); by[i] = n; }
+        }
+      });
+    });
   }
 
-  /** Pick a note (crests); the crest by the hand stays where it is. */
-  setNote(crests) {
-    if (!NOTES.includes(crests) || crests === this.aim.crests) return false;
-    const shift = TAU * (this.aim.crests - crests) * (this.anchor - 0.5);
-    this.aim.phase += shift;
-    this.you.phase += shift;
-    this.aim.crests = this.you.crests = crests;
-    return true;
+  /** The not-undone knot a call at (x, y) lands on, or -1. */
+  knotAt(x, y) {
+    let best = -1, bd = this.weave.params.hit;
+    this.weave.knots.forEach((k, i) => {
+      const d = Math.hypot(k.x - x, k.y - y);
+      if (this.undone[i] === null && d <= bd) { best = i; bd = d; }
+    });
+    return best;
   }
 
-  /** One note up or down the scale. */
-  stepNote(d) {
-    const i = NOTES.indexOf(this.aim.crests) + d;
-    return i >= 0 && i < NOTES.length && this.setNote(NOTES[i]);
+  /** Call at (x, y). Returns { ok, undid: knot | -1, won, lost }. */
+  call(x, y) {
+    if (this.state !== 'playing' || this.left <= 0) return { ok: false };
+    const r = Math.hypot(x, y);
+    if (r > 1) { x /= r; y /= r; }
+    const c = { x, y, t: this.t };
+    this.calls.push(c);
+    this.left--;
+    this.reveal(c, this.calls.length - 1);
+    const undid = this.knotAt(x, y);
+    if (undid >= 0) this.undone[undid] = this.t;
+    if (this.undone.every(u => u !== null)) this.state = 'won';
+    else if (this.left <= 0) this.state = 'lost';
+    return { ok: true, undid, won: this.state === 'won', lost: this.state === 'lost' };
   }
 
-  /** Your ribbon closes on the hand as sharply as the roll allows. */
-  follow(dt) {
-    const k = 1 - Math.exp(-dt * this.echo.params.follow);
-    this.you.amp += (this.aim.amp - this.you.amp) * k;
-    this.you.phase += turnTo(this.you.phase, this.aim.phase) * k;
+  /** 0…1: how far undone knot k has come to tying itself again (0 when it is tied or never ties). */
+  retieShare(k) {
+    const t0 = this.undone[k], every = this.weave.params.retie;
+    return t0 === null || !every ? 0 : Math.min(1, (this.t - t0) / every);
   }
 
-  check() {
-    const { marks, share } = tuneOf(this.you, this.hum(), this.echo.params.tol);
-    this.marks = marks;
-    this.share = share;
-    return share >= this.echo.params.need;
-  }
-
-  /** In tune right now? */
-  get inTune() { return this.share >= this.echo.params.need; }
-
-  /** 0…1 while the hum shimmers before it changes note; 1 while it slides. */
-  shiftWarning() {
-    const s = shiftAt(this.echo, this.t);
-    if (s.n && s.into < GLIDE) return 1;
-    return Math.max(0, 1 - s.next / SHIFT_WARNING);
-  }
-
-  /** Advance by dt seconds. Returns 'won' | 'lost' | null. */
+  /** Advance by dt seconds. Returns 'retie' when a knot has tied itself again (see lastRetie), else null. */
   update(dt) {
     if (this.state !== 'playing') return null;
     this.t += dt;
-    this.timeLeft = Math.max(0, this.timeLeft - dt);
-    this.follow(dt);
-    const { hold, fade } = this.echo.params;
-    if (this.check()) this.attune = Math.min(1, this.attune + dt / hold);
-    else this.attune = Math.max(0, this.attune - dt * fade / hold);
-    if (this.attune >= 1) { this.state = 'won'; return 'won'; }
-    if (this.timeLeft <= 0) { this.state = 'lost'; return 'lost'; }
-    return null;
+    let out = null;
+    this.undone.forEach((t0, k) => {
+      if (t0 !== null && this.retieShare(k) >= 1) { this.undone[k] = null; this.lastRetie = k; out = 'retie'; }
+    });
+    return out;
   }
 
-  /** Spectators: the hum goes on between syncs, and the ribbon eases to where it was last seen. */
-  advance(dt) {
-    if (this.state !== 'playing') return;
-    this.t += dt;
-    this.timeLeft = Math.max(0, this.timeLeft - dt);
-    const ease = 1 - Math.exp(-dt * 25);
-    this.you.amp += (this.aim.amp - this.you.amp) * ease;
-    this.you.phase += turnTo(this.you.phase, this.aim.phase) * ease;
-    this.you.crests = this.aim.crests;
-    const { hold, fade } = this.echo.params;
-    if (this.check()) this.attune = Math.min(1, this.attune + dt / hold);
-    else this.attune = Math.max(0, this.attune - dt * fade / hold);
-  }
+  /** Spectators: the clock runs on between syncs (the player's game decides what ties again). */
+  advance(dt) { if (this.state === 'playing') this.t += dt; }
 
-  /** How many runes are awake. */
-  runes() { return Math.floor(this.attune * RUNE_COUNT + 1e-6); }
+  undoneCount() { return this.undone.filter(u => u !== null).length; }
 
-  /** For spectators: where the hand holds the ribbon (theirs eases there), the attunement and the clock. */
   snapshot() {
-    return { t: this.t, aim: { ...this.aim }, attune: this.attune, timeLeft: this.timeLeft, state: this.state };
+    return { t: this.t, calls: this.calls.map(c => ({ ...c })), undone: this.undone.slice(), left: this.left, state: this.state };
   }
 
   apply(s) {
     if (!s) return;
+    for (const c of s.calls.slice(this.calls.length)) { this.calls.push({ ...c }); this.reveal(c, this.calls.length - 1); }
     this.t = s.t;
-    this.aim = { ...s.aim };
-    this.you.crests = s.aim.crests;
-    this.attune = s.attune; this.timeLeft = s.timeLeft; this.state = s.state;
-    this.check();
+    this.undone = s.undone.slice();
+    this.left = s.left;
+    this.state = s.state;
   }
 }

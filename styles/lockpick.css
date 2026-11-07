@@ -637,21 +637,3 @@
 .lpm-hint-violet { color:#c3a5ff; font-weight:700; }
 .lpm-hint-amber  { color:#f0b45a; font-weight:700; }
 .lpm-recall-note { font:600 11px var(--lpm-font-body); color:#9aa6c4; }
-
-/* Echo the Hum: the notes your ribbon can take, as a row of stones */
-.lpm-echo-label { font:700 10px var(--lpm-font-body); letter-spacing:.16em; text-transform:uppercase; color:#9aa6c4; }
-.lpm-echo-notes { display:flex; gap:6px; }
-.lpm-arcana .lpm-echo-note {
-  width:30px; height:26px; flex:0 0 auto; margin:0; padding:0; border-radius:6px; cursor:pointer;
-  font:700 13px/1 var(--lpm-font-body); color:#b9c3e0; line-height:24px;
-  background:linear-gradient(180deg, #1d2030, #14161f); border:1px solid #39405a;
-  box-shadow:inset 0 1px 0 rgba(200,215,255,.07);
-}
-.lpm-arcana .lpm-echo-note:hover { border-color:#5a6690; color:#e4ebff; }
-.lpm-arcana .lpm-echo-note.is-on {
-  color:#06222c; background:linear-gradient(180deg, #d6f8ff, #69d9ff 55%, #2f8fd6); border-color:#9eeaff;
-  box-shadow:0 0 10px rgba(120,230,255,.55);
-}
-.lpm-arcana .lpm-echo-note[disabled] { cursor:default; }
-.lpm-arcana .lpm-echo-note[disabled]:not(.is-on) { opacity:.55; }
-.lpm-echo-tip { font:600 11px var(--lpm-font-body); color:#7f8aa8; }

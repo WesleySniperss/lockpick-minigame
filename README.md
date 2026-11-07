@@ -3,7 +3,7 @@
 Mini-games the GM requests for a specific character, for **Foundry VTT** with
 **dnd5e** and **Level Up Advanced 5e**: a pin-tumbler **lockpicking** game
 (Thieves' Tools check) and four **Arcana** workings — unweave a ward, attune
-to a resonance, echo a hum, trace a sigil. The character's roll, made the system's own way,
+to a resonance, sound a hidden weave, trace a sigil. The character's roll, made the system's own way,
 decides how hard the game is. Plus a set of puzzles the GM can hand out.
 
 ---
@@ -55,7 +55,7 @@ const api = game.modules.get('lockpick-minigame').api;
 const actor = canvas.tokens.controlled[0]?.actor;
 api.requestLockpick({ actor, dc: 17, label: 'Iron-bound chest' });
 api.requestChallenge({ kind: 'ward', actor, dc: 16, label: 'Sealed vault door', hideDC: true, watch: true });
-//                     kind: 'lock' | 'ward' | 'resonance' | 'echo' | 'sigil'
+//                     kind: 'lock' | 'ward' | 'resonance' | 'echo' (Sound the Weave) | 'sigil'
 api.openMenu('sigil');            // the menu, with a challenge or a puzzle ('sudoku', …) preselected
 ```
 
@@ -202,37 +202,39 @@ the widest and sharpest, a natural 1 the narrowest and slowest. Concentration:
 40 s ± 2 s per point, between 30 and 65 s (75 s on a natural 20, 30 s on a
 natural 1).
 
-### Echo the Hum
+### Sound the Weave
 
-Between two singing stones runs the working's **hum**: a violet ribbon of light
-that drifts, swells and now and then changes its note. Sing it back with a
-ribbon of your own (cyan). **Hold the mouse** on the stave and a crest of your
-ribbon comes to rest under the pointer: move it along to slide the ribbon,
-up or down to make it taller or flatter. The number of **crests** is the note:
-scroll on the board, or pick it from the stones under the board (2 to 6).
-Wherever your ribbon lies on the hum it turns **gold**; keep enough of it gold
-and the five runes under the stave wake one by one, let it slip and they fade.
-Wake all five before your **Concentration** runs out. Two quiet tones follow the
-ribbons and stop beating against each other as they meet.
+A weave of light is hidden in a black mirror: threads that run out from one to
+three **knots** to the edge. **Click** to call into the dark. A pale ring spreads
+from the spot, and every thread it reaches glints and then stays faintly seen,
+so the weave comes out of the dark call by call. Threads grow **thicker and
+brighter towards their knot**, and motes of light run along them towards it, so
+every glimpse tells you which way to go. A knot shows itself (three loops of
+light) once a call comes close; click it to **undo** it: it flares gold and its
+threads unravel. Undo every knot before your **calls** run out. Each call costs
+one, and two clicks within a quarter second count as one. While you point at
+the mirror, a dashed circle shows how far a call would reach.
 
-The hum fights back by **changing note**: it trembles and flickers white for a
-moment, then slides to a new number of crests, and you have to follow.
+**How you lose:** the calls left are written in the corner of the board and in
+the footer; when none are left and a knot still holds, so does the weave. From
+DC 13 the weave also **ties itself again**: round an undone knot a violet seam
+closes, and when it meets, the knot is back (one more call to undo it). It is
+usually best to find every knot first and strike them one after the other.
 
 | DC | ≤ 12 | 13–17 | 18+ |
 |----|------|-------|-----|
-| How close counts as gold | 16 % of the stave's half-height | 12 % | 10 % |
-| How much of the ribbon must be gold | 78 % | 86 % | 90 % |
-| Time in tune to wake every rune | 7 s | 9 s | 11 s |
-| A change of note every | 9 s | 6.5 s | 5 s |
-| How far a change may leap | 1 note | 1 note | up to 2 |
-| How fast the hum drifts | slow | steady | quick |
-| Attunement fades at, of the speed it grows | 50 % | 75 % | 100 % |
+| Knots | 1 | 2 | 3 |
+| Threads to each knot | 6 | 5 | 4 |
+| Threads | straight | gently bent | bent |
+| Calls (at the DC) | 4 | 6 | 8 |
+| An undone knot ties again after | — | 12 s | 8 s |
+| How close a click must land on a knot | 17 px | 15 px | 12 px |
 
-**The roll** decides how steady the hum is for you and how well your ribbon
-obeys: the better it beats the DC, the slower the hum drifts, the less often it
-changes note (3 % per point) and the more sharply your ribbon follows your
-hand. Concentration: 45 s ± 2 s per point, between 30 and 65 s (75 s on a
-natural 20, 30 s on a natural 1).
+**The roll** adds a call for every 3 points above the DC (up to 3) and takes one
+for every 3 below (up to 2; +3 on a natural 20, −2 on a natural 1), carries the
+call further (36 % of the mirror's radius, 1.2 % more or less a point, 28–48 %;
+50 % on a natural 20, 26 % on a natural 1) and stretches the time before a knot
+ties again by 4 % a point (80–140 %; ×1.5 on a natural 20, ×0.75 on a natural 1).
 
 ### Trace the Sigil
 
