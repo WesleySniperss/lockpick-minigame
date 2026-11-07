@@ -183,6 +183,12 @@ export const Sfx = {
     tone(150, { dur: 0.22, gain: 0.12, type: 'square', glideTo: 90 });
   },
 
+  /** A call into the dark, and its echo coming back. */
+  call() {
+    tone(196, { dur: 0.45, gain: 0.07, type: 'sine', attack: 0.02, glideTo: 247 });
+    tone(247, { when: 0.32, dur: 0.5, gain: 0.03, type: 'sine', attack: 0.02 });
+  },
+
   /** Low-level access for continuous synthesis (the resonance tones). */
   audio() {
     const ac = ctx();

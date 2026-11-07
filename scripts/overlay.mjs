@@ -128,6 +128,17 @@ export const ARCANE_ICONS = {
     ctx.beginPath(); ctx.arc(caught ? x : x + 9, caught ? y : y - 9, 4.5, 0, TAU); ctx.fill();
     ctx.restore();
   },
+  /** A knot of three loops; parted when the weave is undone. */
+  knot(ctx, x, y, tone, undone = false) {
+    ctx.save();
+    ctx.strokeStyle = metalOf(ctx, x, y, tone);
+    ctx.lineWidth = 2.2;
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + i * TAU / 3, d = undone ? 9 : 5;
+      ctx.beginPath(); ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, 7, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  },
   /** A five-point sigil star; cracked when the trace failed. */
   sigil(ctx, x, y, tone, cracked = false) {
     ctx.save();

@@ -1,329 +1,357 @@
 /**
- * EchoApp.mjs — "Echo the Hum": sing a working's hum back to it.
+ * EchoApp.mjs — "Sound the Weave": find a hidden weave by its echo.
  *
- * Between two singing stones runs the hum, a violet ribbon of light that
- * sways, swells and now and then changes note (it trembles and flickers white
- * first, then slides). Your ribbon is cyan: hold the mouse on the stave and its crest comes
- * to rest under the pointer; scroll, or pick under the board, for how many
- * crests it has. Where the two lie together your ribbon turns gold, and while
- * enough of it is gold the runes under the stave wake one by one. Wake all of
- * them before concentration runs out. Two quiet tones follow the ribbons and
- * fall into tune as they meet.
+ * A black mirror in a stone rim, misted over: somewhere in it a weave of light
+ * is hidden. Click to call into the dark: a pale ring spreads from the spot,
+ * and every thread it reaches glints, then stays faintly seen. Threads grow
+ * thicker and brighter towards their knot, so each glimpse says which way to
+ * go; a knot shows itself (three loops of light) when a call comes close.
+ * Click a knot to undo it: it flares gold and its threads unravel. Every call
+ * costs one; undo every knot before they run out. From DC 13 an undone knot
+ * ties itself again: a violet seam closes round it, and when it meets, the
+ * knot is back.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
-import { generateEcho, EchoGame, shiftAt, waveAt, NOTES, RUNE_COUNT, SAMPLES, ASPECT } from './echo-logic.mjs';
-import { ARC, TAU, RUNES, layer, blit, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { generateWeave, WeaveGame, SAMPLES, RING_TIME, GLINT } from './echo-logic.mjs';
+import { ARC, TAU, layer, blit, backdrop, engrave, spark, hexA } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
 
-const W = 520, H = 420;
-const X0 = 40, X1 = 480, SW = X1 - X0, CY = 194, A = SW / ASPECT;   // the stave; A: its half height
-const CH = { x: 22, y: CY - 116, w: 476, h: 232 };                    // the channel the ribbons run in
-const RUNE_Y = 350, runeX = i => W / 2 + (i - (RUNE_COUNT - 1) / 2) * 56;
-const SHIMMER = '#f4eeff';                                         // the hum flickering before a change of note
-const RATIO = { 2: 1, 3: 9 / 8, 4: 5 / 4, 5: 3 / 2, 6: 5 / 3 };     // the notes, as a pentatonic scale
-const px = x => X0 + x * SW, py = y => CY - y * A;
+const W = 520, H = 440, CX = 260, CY = 222;
+const FR = 172, RIM_OUT = 200;                     // the mirror's radius, and the rim round it
+const THREAD = '#c9b6ff', CALL = '#bfefff';
+const BANDS = 6;                                   // a thread drawn in six widths, thick at its knot
+const UNRAVEL = 1.2;                               // seconds an undone knot's threads take to fall away
+const fx = x => CX + x * FR, fy = y => CY + y * FR;
+const band = i => Math.min(BANDS - 1, Math.floor(i * BANDS / SAMPLES));
+const bandW = b => 0.9 + 3.8 * Math.pow(1 - (b + 0.5) / BANDS, 1.5);     // width of band b, px
+const bandA = b => 0.5 + 0.5 * (1 - (b + 0.5) / BANDS);                  // and how bright
 
 export class EchoApp extends MiniGameApp {
   static KIND   = 'echo';
-  static TITLE  = 'Echo the Hum';
+  static TITLE  = 'Sound the Weave';
   static CANVAS = { w: W, h: H };
 
   buildGame(init) {
-    this.echo = generateEcho(init);
-    this.game = new EchoGame(this.echo);
-    this.endDelay = 1.3;
-    this.audio = null;
-    this.holding = false;
-    this.wheel = 0;
-    this.woke = 0;                          // runes already announced with a chime
-    this.shiftSeen = 0;                     // changes of note already announced
-    this.runeIds = Array.from({ length: RUNE_COUNT }, (_, i) => (this.echo.seed + i * 5) % 22);
-  }
-
-  controlsHTML() {
-    const off = this._spectator ? 'disabled' : '', on = this._noteShown = this.game.aim.crests;
-    return `<div class="lpm-arcana-controls lpm-echo-controls">
-      <span class="lpm-echo-label">Crests</span>
-      <span class="lpm-echo-notes">${NOTES.map(n =>
-        `<button type="button" class="lpm-echo-note${n === on ? ' is-on' : ''}" data-n="${n}" ${off}>${n}</button>`).join('')}</span>
-      <span class="lpm-echo-tip">${this._spectator ? '' : 'or scroll on the board'}</span>
-    </div>`;
+    this.weave = generateWeave(init);
+    this.game = new WeaveGame(this.weave);
+    this.endDelay = 1.4;
+    this.pointer = null;                // where the mouse is over the mirror (field units), for the reach preview
+    this.lastCall = -1;
+    this.shown = this.weave.knots.map(() => false);        // knots already announced
+    this.retied = this.weave.knots.map(() => -1);          // when each knot last tied itself again
+    this.syncEvery = 0.1;
   }
 
   meterHTML() {
-    return barHTML('Concentration', this.game.timeLeft, this.echo.params.time, {
-      text: `${Math.ceil(this.game.timeLeft)} s`, tip: 'When your concentration runs out the hum slips away.',
+    const p = this.weave.params;
+    return barHTML('Calls', this.game.left, p.calls, {
+      text: `${this.game.left} / ${p.calls}`, tip: 'Every call into the dark costs one. When none are left, the weave holds.',
     });
   }
 
   hintHTML() {
-    return '<strong>Hold</strong> on the stave to move <span class="lpm-hint-cyan">your crest</span>'
-      + ' &middot; <strong>scroll</strong> to change crests &middot; keep it <span class="lpm-hint-amber">gold</span>';
+    return '<strong>Click</strong> to call into the dark'
+      + ' &middot; <span class="lpm-hint-violet">threads</span> thicken toward their <span class="lpm-hint-amber">knot</span>'
+      + ' &middot; click the knot to undo it';
   }
 
   // ── input ─────────────────────────────────────────────────────────────
 
-  bindInput(canvas, root) {
+  bindInput(canvas) {
     const at = ev => {
       const b = canvas.getBoundingClientRect();
-      return { x: (ev.clientX - b.left) * (W / b.width), y: (ev.clientY - b.top) * (H / b.height) };
+      const x = ((ev.clientX - b.left) * (W / b.width) - CX) / FR, y = ((ev.clientY - b.top) * (H / b.height) - CY) / FR;
+      return { x, y, inside: Math.hypot(x, y) <= 1 };
     };
-    const inStave = p => p.x >= CH.x && p.x <= CH.x + CH.w && p.y >= CH.y && p.y <= CH.y + CH.h;
-    const hold = p => this.game.holdAt((p.x - X0) / SW, (CY - p.y) / A);
-    const cursor = p => { canvas.style.cursor = this._over ? 'default' : this.holding ? 'grabbing' : inStave(p) ? 'grab' : 'default'; };
-    canvas.addEventListener('pointerdown', ev => {
-      const p = at(ev);
-      if (this._over || ev.button !== 0 || !inStave(p)) return;
-      ev.preventDefault();
-      try { canvas.setPointerCapture?.(ev.pointerId); } catch (e) {}    // keep hold when the pointer leaves the canvas
-      this.holding = true;
-      hold(p);
-      this.startTones();
-      cursor(p);
-    });
     canvas.addEventListener('pointermove', ev => {
       const p = at(ev);
-      if (this.holding && !this._over) hold(p);
-      cursor(p);
+      this.pointer = p.inside ? p : null;
+      canvas.style.cursor = p.inside && !this._over ? 'crosshair' : 'default';
     });
-    const end = ev => { this.holding = false; cursor(at(ev)); };
-    canvas.addEventListener('pointerup', end);
-    canvas.addEventListener('pointercancel', end);
-    // A wheel notch is one note; a touchpad's small steps add up to one.
-    canvas.addEventListener('wheel', ev => {
-      if (this._over) return;
+    canvas.addEventListener('pointerleave', () => { this.pointer = null; });
+    canvas.addEventListener('pointerdown', ev => {
+      const p = at(ev);
+      if (ev.button !== 0 || !p.inside || this._over) return;
       ev.preventDefault();
-      this.wheel += ev.deltaY;
-      if (Math.abs(this.wheel) < 50) return;
-      const d = this.wheel < 0 ? 1 : -1;
-      this.wheel = 0;
-      if (this.game.stepNote(d)) this.refreshNotes();
-      this.startTones();
-    }, { passive: false });
-    root.querySelectorAll('.lpm-echo-note').forEach(b => b.addEventListener('click', () => {
-      if (this._over) return;
-      if (this.game.setNote(Number(b.dataset.n))) this.refreshNotes();
-      this.startTones();
-    }));
-    this.refreshNotes();
+      this.callAt(p.x, p.y);
+    });
   }
 
-  /** Light the button of the note your ribbon is on. */
-  refreshNotes() {
-    const n = this.game.aim.crests;
-    if (n === this._noteShown) return;
-    this._noteShown = n;
-    this.element?.querySelectorAll('.lpm-echo-note').forEach(b => b.classList.toggle('is-on', Number(b.dataset.n) === n));
-  }
-
-  // ── sound: the hum, and your voice that falls into tune with it ────────
-
-  pitch(crests) {
-    const lo = Math.floor(crests), hi = Math.ceil(crests), r = RATIO[lo] ?? 1, r2 = RATIO[hi] ?? r;
-    return this.echo.tone * (r + (r2 - r) * (crests - lo));
-  }
-
-  startTones() {
-    if (this.audio || this._spectator) return;
-    const io = Sfx.audio();
-    if (!io) return;
-    const { ac, out } = io;
-    const mk = (type, gain) => {
-      const o = ac.createOscillator(), g = ac.createGain();
-      o.type = type; g.gain.value = 0; o.connect(g); g.connect(out); o.start();
-      g.gain.linearRampToValueAtTime(gain, ac.currentTime + 0.6);
-      return { o, g };
-    };
-    this.audio = { ac, hum: mk('sine', 0.03), voice: mk('triangle', 0.016), fifth: mk('sine', 0) };
-  }
-
-  updateTones() {
-    const a = this.audio;
-    if (!a) return;
-    const now = a.ac.currentTime, g = this.game, hz = this.pitch(g.hum().crests);
-    a.hum.o.frequency.setTargetAtTime(hz, now, 0.05);
-    // Off the hum, your voice beats against it; in tune, the beat slows and stops.
-    a.voice.o.frequency.setTargetAtTime(this.pitch(g.you.crests) * (1 + 0.03 * (1 - g.share)), now, 0.05);
-    a.fifth.o.frequency.setTargetAtTime(hz * 1.5, now, 0.05);
-    a.fifth.g.gain.setTargetAtTime(g.inTune ? 0.012 + 0.02 * g.attune : 0, now, 0.15);
-  }
-
-  teardown() {
-    const a = this.audio;
-    if (!a) return;
-    this.audio = null;
-    const now = a.ac.currentTime;
-    for (const n of [a.hum, a.voice, a.fifth]) {
-      try { n.g.gain.setTargetAtTime(0, now, 0.08); n.o.stop(now + 0.5); } catch (e) {}
-    }
+  /** A call into the dark at (x, y), field units. A second click within a quarter second is a slip, not a call. */
+  callAt(x, y) {
+    if (this.game.state !== 'playing' || this.game.t - this.lastCall < 0.25) return;
+    this.lastCall = this.game.t;
+    const r = this.game.call(x, y);
+    if (!r.ok) return;
+    Sfx.call();
+    if (r.undid >= 0) this.later(() => Sfx.channel(this.game.undoneCount() - 1), 120);
+    if (r.won) this.later(() => { Sfx.unweave(); this._end(true); }, 700);
+    else if (r.lost) this.later(() => { Sfx.fail(); this._end(false); }, 900);
   }
 
   // ── frame ─────────────────────────────────────────────────────────────
 
   update(dt) {
     if (this._over) return null;
-    const out = this._spectator ? null : this.game.update(dt);
-    if (this._spectator) this.game.advance(dt);
-    const runes = this.game.runes();
-    if (runes > this.woke) { this.woke = runes; if (!this._spectator) Sfx.node(runes); }
-    else if (runes < this.woke) this.woke = runes;
-    const shift = shiftAt(this.echo, this.game.t).n;
-    if (shift !== this.shiftSeen) { this.shiftSeen = shift; if (!this._spectator) Sfx.reveal(); }
-    this.updateTones();
+    const out = this._spectator ? (this.game.advance(dt), null) : this.game.update(dt);
+    if (out === 'retie') { this.retied[this.game.lastRetie] = this.game.t; Sfx.backlash(); }
+    // a knot showing itself for the first time
+    this.game.knotSeen.forEach((t, k) => {
+      if (!this.shown[k] && t <= this.game.t) { this.shown[k] = true; if (!this._spectator) Sfx.reveal(); }
+    });
     this._meterAcc = (this._meterAcc ?? 0) + dt;
     if (this._meterAcc > 0.25) { this._meterAcc = 0; this.refreshMeter(); }
-    if (out === 'won') Sfx.unweave();
-    if (out === 'lost') Sfx.fail();
-    return out;
+    return null;                      // the end comes from callAt, after the last ring has spread
   }
 
   syncState() { return this.game.snapshot(); }
 
-  /** Only the hand needs sending at once: the hum comes from the seed, the clock runs on its own. */
-  syncKey() {
-    const a = this.game.aim;
-    return `${a.crests}|${a.amp.toFixed(3)}|${a.phase.toFixed(3)}|${this.game.state}`;
+  /** Calls and knots need sending at once; the clock runs on its own in between. */
+  syncKey() { return `${this.game.calls.length}|${this.game.undone.map(u => (u === null ? 0 : 1)).join('')}|${this.game.state}`; }
+
+  applySync(s) {
+    const before = this.game.undone.slice();
+    this.game.apply(s);
+    // a knot the player's game has tied again
+    before.forEach((u, k) => { if (u !== null && this.game.undone[k] === null) this.retied[k] = this.game.t; });
   }
 
-  applySync(s) { this.game.apply(s); this.refreshNotes(); }
+  /** Has the call that first showed this segment finished glinting? Then it is part of the cached traces. */
+  settled(n) { const c = this.game.calls[n]; return !!c && this.game.t >= c.t + RING_TIME + GLINT; }
 
   /**
-   * Add the ribbon from x0 to x1 (0…1 along the stave) to the path: about 18
-   * points a crest, enough for the sharpest of them and no more (every point of
-   * a wide stroke costs the browser triangles).
+   * The thread segments seen so far whose glint is over, in the six widths, as
+   * a layer: rebuilt only when a call settles or a knot comes undone or ties
+   * again. Calls already made stay marked with a faint ring.
    */
-  trace(ctx, w, x0, x1) {
-    const n = Math.max(2, Math.ceil((x1 - x0) * (w.crests * 18 + 12)));
-    for (let i = 0; i <= n; i++) {
-      const x = x0 + (x1 - x0) * i / n, X = px(x), Y = py(waveAt(w, x));
-      i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
-    }
-  }
-
-  ribbon(ctx, w) { ctx.beginPath(); this.trace(ctx, w, 0, 1); }
-
-  /** The stretches of a ribbon that are (or are not) in tune, as one path. */
-  stretches(ctx, w, runs, inTune) {
-    ctx.beginPath();
-    for (const [a, b, gold] of runs) if (gold === inTune) this.trace(ctx, w, a, b);
-  }
-
-  /** Stroke the path again and again, wide and faint to thin and bright, adding the light up. */
-  shine(ctx, path, passes) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round'; ctx.lineJoin = 'bevel';
-    for (const [color, width, alpha] of passes) {
-      ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = width;
-      path(); ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  /** A rune lit up, as a sprite. */
-  runeLit(i) {
-    this._runeLit ??= [];
-    if (this._runeLit[i]) return this._runeLit[i];
-    const s = layer(44, 44, this._dpr), g = s.getContext('2d');
-    glow(g, () => runePath(g, this.runeIds[i], 22, 22, 15), { color: ARC.gold, width: 1.8, intensity: 1 });
-    return (this._runeLit[i] = s);
+  traces() {
+    const g = this.game;
+    const done = g.calls.filter((c, n) => this.settled(n)).length;
+    const key = `${done}|${g.undone.map(u => (u === null ? 0 : 1)).join('')}`;
+    if (key === this._traceKey) return this._traces;
+    this._traceKey = key;
+    const lay = this._traces ??= layer(W, H, this._dpr);
+    const ctx = lay.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    const bands = Array.from({ length: BANDS }, () => []);
+    this.weave.knots.forEach((k, ki) => {
+      if (g.undone[ki] !== null) return;
+      k.threads.forEach((th, ti) => {
+        const by = g.seenBy[ki][ti];
+        for (let i = 0; i < th.length - 1; i++) if (by[i] >= 0 && this.settled(by[i])) bands[band(i)].push(th[i], th[i + 1]);
+      });
+    });
+    ctx.lineCap = 'round';
+    bands.forEach((segs, b) => {
+      if (!segs.length) return;
+      const path = () => { ctx.beginPath(); for (let j = 0; j < segs.length; j += 2) { ctx.moveTo(fx(segs[j].x), fy(segs[j].y)); ctx.lineTo(fx(segs[j + 1].x), fy(segs[j + 1].y)); } };
+      ctx.strokeStyle = hexA(ARC.violet, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; path(); ctx.stroke();
+      ctx.strokeStyle = hexA(THREAD, 0.75 * bandA(b)); ctx.lineWidth = bandW(b); path(); ctx.stroke();
+    });
+    // where you have called
+    ctx.strokeStyle = hexA(CALL, 0.3); ctx.lineWidth = 1;
+    g.calls.forEach((q, n) => { if (this.settled(n)) { ctx.beginPath(); ctx.arc(fx(q.x), fy(q.y), 2.5, 0, TAU); ctx.stroke(); } });
+    return lay;
   }
 
   draw(ctx) {
     if (!this._static) this._static = this.buildStatic();
     blit(ctx, this._static);
-    const g = this.game, t = this._t, hum = g.hum(), you = g.you;
-    const warn = this._over ? 0 : g.shiftWarning(), tuned = g.inTune;
+    blit(ctx, this.traces());
+    const g = this.game, t = g.t, p = this.weave.params;
 
-    // motes drifting along the hum
-    for (let i = 0; i < 6; i++) {
-      const x = ((t * (0.05 + i * 0.011) + i / 6) % 1 + 1) % 1;
-      spark(ctx, px(x), py(waveAt(hum, x)), 5 + (i % 3), ARC.violet, 0.55);
-    }
-    // the hum: violet; before it changes note (and while it slides) it trembles and flickers white
-    const shown = warn > 0 ? { ...hum, amp: hum.amp * (1 + 0.05 * Math.sin(t * 31)) } : hum;
-    const white = warn > 0 && Math.sin(t * 26) > 0;
-    this.shine(ctx, () => this.ribbon(ctx, shown), [[white ? SHIMMER : ARC.violet, 8, 0.2], [white ? '#ffffff' : '#e4d6ff', 1.6, 0.9]]);
-    // your ribbon: cyan, and gold wherever it lies on the hum (one path for each colour)
-    const runs = runsOf(g.marks);
-    if (runs.some(r => !r[2])) this.shine(ctx, () => this.stretches(ctx, you, runs, false), [[ARC.energy, 6, 0.15], [ARC.energy, 2, 0.85]]);
-    if (runs.some(r => r[2])) {
-      this.shine(ctx, () => this.stretches(ctx, you, runs, true), [[ARC.gold, 8, tuned ? 0.4 : 0.3]]);
-      ctx.save();
-      ctx.lineCap = 'round'; ctx.lineJoin = 'bevel';
-      ctx.strokeStyle = ARC.gold; ctx.lineWidth = 2.6;       // drawn over, not added: gold, whatever lies under it
-      this.stretches(ctx, you, runs, true); ctx.stroke();
-      ctx.restore();
-    }
-    // where the hand holds it
-    if (this.holding && !this._over) {
-      const x = g.anchor;
-      spark(ctx, px(x), py(waveAt(you, x)), 12, tuned ? ARC.gold : ARC.energy, 0.9);
-      spark(ctx, px(x), py(waveAt(you, x)), 4, '#ffffff', 1);
-    }
-    // the singing stones answer: violet while the hum is alone, gold as it is echoed
-    for (const x of [CH.x, CH.x + CH.w]) this.drawStone(ctx, x, CY, tuned, g.attune, t);
+    // threads still glinting from a recent call: white-hot as the ring reaches them, settling to a trace
+    const live = Array.from({ length: BANDS }, () => []);
+    this.weave.knots.forEach((k, ki) => {
+      const gone = g.undone[ki] !== null;
+      k.threads.forEach((th, ti) => {
+        const seen = g.seen[ki][ti], by = g.seenBy[ki][ti];
+        for (let i = 0; i < th.length - 1; i++) {
+          if (by[i] < 0 || t < seen[i] || this.settled(by[i]) || gone) continue;
+          live[band(i)].push(th[i], th[i + 1], Math.max(0, 1 - (t - seen[i]) / GLINT));
+        }
+      });
+    });
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.globalCompositeOperation = 'lighter';
+    live.forEach((segs, b) => {
+      if (!segs.length) return;
+      // two groups: still glinting, and settled to a trace (drawn like the cached ones until their call settles)
+      for (const hot of [false, true]) {
+        ctx.beginPath();
+        let any = false;
+        for (let j = 0; j < segs.length; j += 3) {
+          if ((segs[j + 2] > 0.05) !== hot) continue;
+          any = true;
+          ctx.moveTo(fx(segs[j].x), fy(segs[j].y)); ctx.lineTo(fx(segs[j + 1].x), fy(segs[j + 1].y));
+        }
+        if (!any) continue;
+        if (hot) {
+          ctx.strokeStyle = hexA(ARC.violet, 0.4 * bandA(b)); ctx.lineWidth = bandW(b) * 4; ctx.stroke();
+          ctx.strokeStyle = hexA('#ffffff', 0.95 * bandA(b)); ctx.lineWidth = bandW(b) * 0.9; ctx.stroke();
+        } else {
+          ctx.strokeStyle = hexA(ARC.violet, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; ctx.stroke();
+          ctx.strokeStyle = hexA(THREAD, 0.75 * bandA(b)); ctx.lineWidth = bandW(b); ctx.stroke();
+        }
+      }
+    });
+    ctx.restore();
 
-    // runes: awake ones glow gold, the one waking flickers in
-    const awake = g.runes(), frac = g.attune * RUNE_COUNT - awake;
-    for (let i = 0; i < RUNE_COUNT; i++) {
-      const lit = i < awake ? 1 : i === awake ? frac * (0.6 + 0.4 * Math.sin(t * 12)) : 0;
-      if (lit <= 0.02) continue;
+    // motes of light run along the threads you have seen, toward their knot
+    this.weave.knots.forEach((k, ki) => {
+      if (g.undone[ki] !== null) return;
+      k.threads.forEach((th, ti) => {
+        const seen = g.seen[ki][ti];
+        let lo = -1, hi = -1;
+        for (let i = 0; i < seen.length; i++) if (seen[i] <= t) { if (lo < 0) lo = i; hi = i; }
+        if (lo < 0 || hi - lo < 2) return;
+        for (const off of [0, 0.5]) {
+          const f = hi + 1 - (((t * 5) / (hi + 1 - lo) + off + ti * 0.37) % 1) * (hi + 1 - lo), i = Math.floor(f);
+          if (i < 0 || i >= seen.length || seen[i] > t) continue;           // never across a stretch still dark
+          const a = th[i], b = th[i + 1], u = f - i;
+          spark(ctx, fx(a.x + (b.x - a.x) * u), fy(a.y + (b.y - a.y) * u), 3 + 4 * (1 - i / SAMPLES), THREAD, 0.85);
+        }
+      });
+    });
+
+    // an undone knot's threads unravel in gold and fall away
+    this.weave.knots.forEach((k, ki) => {
+      const u = g.undone[ki];
+      if (u === null || t - u > UNRAVEL) return;
+      const a = 1 - (t - u) / UNRAVEL;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.4 + 0.6 * lit;
-      blit(ctx, this.runeLit(i), runeX(i) - 22, RUNE_Y - 22);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = hexA(ARC.gold, 0.7 * a); ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      k.threads.forEach((th, ti) => {
+        const seen = g.seen[ki][ti], end = Math.round((1 - a) * SAMPLES);       // unravelling from the knot outwards
+        for (let i = end; i < th.length - 1; i++) if (seen[i] <= t) { ctx.moveTo(fx(th[i].x), fy(th[i].y)); ctx.lineTo(fx(th[i + 1].x), fy(th[i + 1].y)); }
+      });
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // the calls' rings
+    for (const c of g.calls) {
+      const age = t - c.t;
+      if (age < 0 || age > RING_TIME + 0.5) continue;
+      const r = p.reach * FR * Math.min(1, age / RING_TIME), a = 1 - age / (RING_TIME + 0.5);     // at the pace threads light up
+      ctx.strokeStyle = hexA(CALL, 0.16 * a); ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.arc(fx(c.x), fy(c.y), Math.max(1, r), 0, TAU); ctx.stroke();
+      ctx.strokeStyle = hexA(CALL, 0.75 * a); ctx.lineWidth = 1.4; ctx.stroke();
+      spark(ctx, fx(c.x), fy(c.y), 16, CALL, 0.8 * a);
+    }
+
+    // the knots: in view, undone (with the seam that ties it again), or just tied again
+    this.weave.knots.forEach((k, ki) => this.drawKnot(ctx, ki, k, t));
+
+    // how far a call would reach, round the pointer
+    if (this.pointer && !this._over && g.state === 'playing') {
+      ctx.save();
+      ctx.setLineDash([3, 6]);
+      ctx.strokeStyle = hexA(CALL, 0.28); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(fx(this.pointer.x), fy(this.pointer.y), p.reach * FR, 0, TAU); ctx.stroke();
       ctx.restore();
     }
-    this.drawNotes(ctx, awake);
+    this.drawNotes(ctx);
   }
 
-  /** A singing stone at the end of the stave: a crystal in a brass socket. */
-  drawStone(ctx, x, y, tuned, attune, t) {
-    const col = tuned ? ARC.gold : ARC.violet;
-    spark(ctx, x, y, 22 + 8 * attune, col, (tuned ? 0.55 : 0.35) + 0.1 * Math.sin(t * 3));
-    const gem = ctx.createLinearGradient(x, y - 9, x, y + 9);
-    if (tuned) { gem.addColorStop(0, '#fffbe8'); gem.addColorStop(0.5, ARC.gold); gem.addColorStop(1, '#8a6424'); }
-    else       { gem.addColorStop(0, '#d9c8ff'); gem.addColorStop(1, '#3a2c66'); }
-    ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 9); ctx.lineTo(x - 6, y); ctx.closePath();
-    ctx.fillStyle = gem; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.7; ctx.stroke();
+  /** A knot as three loops of light, slowly turning; undone, the loops part and turn gold. */
+  drawKnot(ctx, ki, k, t) {
+    const g = this.game, x = fx(k.x), y = fy(k.y), u = g.undone[ki];
+    const size = Math.max(11, this.weave.params.hit * FR);
+    const loops = (spread, color, alpha, width) => {
+      ctx.strokeStyle = hexA(color, alpha); ctx.lineWidth = width;
+      for (let i = 0; i < 3; i++) {
+        const a = t * 0.5 + i * TAU / 3 - Math.PI / 2;
+        ctx.beginPath(); ctx.arc(x + Math.cos(a) * size * spread, y + Math.sin(a) * size * spread, size * 0.55, 0, TAU); ctx.stroke();
+      }
+    };
+    if (u !== null) {
+      // undone: a burst, then the loops lie apart in gold while a violet seam closes round them
+      const since = t - u;
+      if (since < 0.8) spark(ctx, x, y, 40 * (1 - since / 0.8) + 14, ARC.gold, 1 - since / 0.8);
+      spark(ctx, x, y, size * 2.4, ARC.gold, 0.35);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      loops(1.0, ARC.gold, 0.35, 4);
+      loops(1.0, '#ffe7a8', 0.95, 1.6);
+      ctx.restore();
+      const share = g.retieShare(ki);
+      if (share > 0) {
+        const late = share > 0.75, beat = late ? 0.6 + 0.4 * Math.sin(t * 12) : 1;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = hexA(ARC.violet, 0.25 * beat); ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(x, y, size * 1.9, -Math.PI / 2, -Math.PI / 2 + TAU * share); ctx.stroke();
+        ctx.strokeStyle = hexA(late ? '#e0b8ff' : ARC.violet, 0.9 * beat); ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.restore();
+      }
+      return;
+    }
+    if (g.knotSeen[ki] > t) return;
+    // in view: a soft glow, a dark bed that hides the threads' ends, the loops on it and a bright heart;
+    // a flash as it shows itself or ties again
+    const fresh = Math.max(0, 1 - (t - Math.max(g.knotSeen[ki], this.retied[ki])) / 0.9);
+    const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + ki);
+    spark(ctx, x, y, size * 2.6 + 18 * fresh, this.retied[ki] >= 0 && fresh > 0 ? ARC.violet : THREAD, 0.45 * breathe + 0.5 * fresh);
+    const bed = ctx.createRadialGradient(x, y, size * 0.5, x, y, size * 1.25);
+    bed.addColorStop(0, 'rgba(6,5,16,0.92)'); bed.addColorStop(1, 'rgba(6,5,16,0)');
+    ctx.fillStyle = bed; ctx.beginPath(); ctx.arc(x, y, size * 1.25, 0, TAU); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    loops(0.42, ARC.violet, 0.7, 4.5);
+    loops(0.42, '#f2ecff', 0.95 * breathe, 1.7);
+    ctx.restore();
+    spark(ctx, x, y, 6, '#ffffff', 1);
   }
 
-  /** What never changes: the goal top-left, what the hum does bottom-left. Part of the static layer. */
+  /**
+   * What never changes: the goal top-left; bottom-left, what the threads say;
+   * bottom-right, how soon an undone knot ties again. Part of the static layer.
+   */
   drawFixedNotes(ctx) {
+    const letters = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px; };
     ctx.save();
     ctx.font = '700 10px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
-    ctx.fillStyle = 'rgba(200,212,240,0.78)';
-    ctx.fillText('LAY YOUR LIGHT ON THE HUM', 14, 22);
-    ctx.fillText('AND KEEP IT GOLD', 14, 36);
+    letters('1.6px');
+    ctx.fillStyle = 'rgba(200,212,240,0.8)';
+    ctx.fillText('CALL INTO THE DARK', 14, 22);
+    ctx.fillText('AND UNDO EVERY KNOT', 14, 36);
     ctx.textAlign = 'right';
-    ctx.fillText('YOUR CRESTS', W - 14, 22);
+    ctx.fillStyle = hexA(CALL, 0.85);
+    ctx.fillText('CALLS LEFT', W - 14, 22);
     ctx.textAlign = 'left';
     ctx.font = '700 9px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1px';
-    ctx.fillStyle = 'rgba(200,212,240,0.72)';
-    ctx.fillText('THE HUM DRIFTS AND SWELLS', 14, 393);
-    ctx.fillStyle = hexA(SHIMMER, 0.95);
-    ctx.fillText('A FLICKER: IT CHANGES NOTE', 14, 406);
+    letters('1px');
+    ctx.fillStyle = hexA(THREAD, 0.9);
+    ctx.fillText('THREADS THICKEN', 14, 411);
+    ctx.fillText('TOWARD THEIR KNOT', 14, 424);
+    const every = this.weave.params.retie;
+    if (every) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = hexA(ARC.violet, 0.95);
+      ctx.fillText('AN UNDONE KNOT TIES', W - 14, 411);
+      ctx.fillText(`AGAIN AFTER ${Math.round(every)} s`, W - 14, 424);
+    }
     ctx.restore();
   }
 
-  /** How many runes are awake, and how many crests your ribbon has. */
-  drawNotes(ctx, awake) {
+  /** How many knots are undone, and how many calls are left. */
+  drawNotes(ctx) {
+    const g = this.game, done = g.undoneCount(), all = this.weave.knots.length;
     ctx.save();
-    ctx.font = '700 12px "Signika", sans-serif';
     if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
-    ctx.fillStyle = awake ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
-    ctx.fillText(`${awake} / ${RUNE_COUNT} RUNES AWAKE`, 14, 56);
+    ctx.font = '700 12px "Signika", sans-serif';
+    ctx.fillStyle = done ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
+    ctx.fillText(`${done} / ${all} ${all === 1 ? 'KNOT' : 'KNOTS'} UNDONE`, 14, 56);
     ctx.textAlign = 'right';
     ctx.font = '700 18px "Signika", sans-serif';
-    ctx.fillStyle = 'rgba(225,232,250,0.92)';
-    ctx.fillText(String(this.game.you.crests), W - 14, 44);
+    ctx.fillStyle = g.left <= 1 ? '#ff8aa2' : 'rgba(225,232,250,0.92)';
+    ctx.fillText(String(g.left), W - 14, 42);
     ctx.restore();
   }
 
@@ -331,103 +359,69 @@ export class EchoApp extends MiniGameApp {
     const k = Math.min(1, t / this.endDelay);
     if (success) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const g = ctx.createRadialGradient(W / 2, CY, 10, W / 2, CY, 300);
+      const g = ctx.createRadialGradient(CX, CY, 10, CX, CY, 260);
       g.addColorStop(0, `rgba(255,236,190,${0.6 * Math.sin(k * Math.PI)})`); g.addColorStop(1, 'rgba(255,236,190,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
       ctx.restore();
     } else {
-      // the hum sinks out of hearing
-      ctx.fillStyle = `rgba(2,3,10,${0.6 * k})`; ctx.fillRect(CH.x, CH.y, CH.w, CH.h);
+      // the dark closes over the mirror
+      ctx.save();
+      ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.clip();
+      ctx.fillStyle = `rgba(2,3,8,${0.75 * k})`; ctx.fillRect(0, 0, W, H);
+      ctx.restore();
       ctx.fillStyle = `rgba(40,6,4,${0.35 * k})`; ctx.fillRect(0, 0, W, H);
     }
   }
 
   endScreen(success) {
     return success
-      ? { title: 'Hum Echoed', sub: 'The working falls quiet — it answers to you', icon: (c, x, y, tone) => ARCANE_ICONS.wave(c, x, y, tone, true) }
-      : { title: 'The Hum Fades', sub: 'The note slips out of reach', icon: (c, x, y, tone) => ARCANE_ICONS.wave(c, x, y, tone, false) };
+      ? { title: 'Weave Undone', sub: 'The last knot slips — the working falls apart', icon: (c, x, y, tone) => ARCANE_ICONS.knot(c, x, y, tone, true) }
+      : { title: 'The Weave Holds', sub: 'Your voice gives out in the dark', icon: (c, x, y, tone) => ARCANE_ICONS.knot(c, x, y, tone, false) };
   }
 
-  /** Backdrop, the channel of night the ribbons run in, the stones' sockets and the rune sockets. */
+  /** Backdrop, the stone rim and the black mirror with its mist. */
   buildStatic() {
     const c = layer(W, H, this._dpr, { opaque: true });
     const ctx = c.getContext('2d');
-    blit(ctx, backdrop(W, H, this._dpr, { cx: W / 2, cy: CY, r: 300, ring: false }));
-    const { x, y, w, h } = CH, r = 18;
-    const channel = () => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
-    // a raised stone lip round the channel
+    blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: 214 }));
+    // the rim
+    const rim = () => { ctx.beginPath(); ctx.arc(CX, CY, RIM_OUT, 0, TAU); ctx.arc(CX, CY, FR, 0, TAU, true); };
+    const stone = ctx.createRadialGradient(CX, CY, FR, CX, CY, RIM_OUT);
+    stone.addColorStop(0, '#2a2e3a'); stone.addColorStop(0.5, '#323745'); stone.addColorStop(1, '#22252f');
+    rim(); ctx.fillStyle = stone; ctx.fill();
+    const light = ctx.createLinearGradient(CX - RIM_OUT, CY - RIM_OUT, CX + RIM_OUT, CY + RIM_OUT);
+    light.addColorStop(0, 'rgba(210,225,255,0.10)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
+    rim(); ctx.fillStyle = light; ctx.fill();
+    for (const rr of [RIM_OUT, FR + 1, (FR + RIM_OUT) / 2]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, rr, 0, TAU); }, rr === (FR + RIM_OUT) / 2 ? 0.8 : 1.4, rr === (FR + RIM_OUT) / 2 ? 0.6 : 1);
+    // the black mirror
+    const glass = ctx.createRadialGradient(CX - 40, CY - 50, 10, CX, CY, FR);
+    glass.addColorStop(0, '#11142a'); glass.addColorStop(0.6, '#080a16'); glass.addColorStop(1, '#030409');
+    ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.fillStyle = glass; ctx.fill();
     ctx.save();
-    ctx.beginPath(); ctx.roundRect(x - 8, y - 8, w + 16, h + 16, r + 8);
-    const lip = ctx.createLinearGradient(0, y - 8, 0, y + h + 8);
-    lip.addColorStop(0, '#323745'); lip.addColorStop(1, '#1f222b');
-    ctx.fillStyle = lip; ctx.fill();
+    ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.clip();
+    // mist drifting over it, and a little dust catching the light
+    const R = rng(this.weave.seed + 51);
+    for (let i = 0; i < 6; i++) {
+      const x = CX + (R() - 0.5) * FR * 1.6, y = CY + (R() - 0.5) * FR * 1.6, r = 50 + R() * 90;
+      const col = i % 3 === 0 ? '120,200,255' : '160,130,255';
+      const m = ctx.createRadialGradient(x, y, 0, x, y, r);
+      m.addColorStop(0, `rgba(${col},0.1)`); m.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = m; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    for (let i = 0; i < 70; i++) {
+      const a = R() * TAU, rr = Math.sqrt(R()) * FR, s = R();
+      ctx.fillStyle = `rgba(210,220,255,${0.08 + 0.25 * s * s})`;
+      ctx.fillRect(CX + Math.cos(a) * rr, CY + Math.sin(a) * rr, 1, 1);
+    }
+    // a sheen across the glass, and its edge sinking into shadow
+    const sheen = ctx.createLinearGradient(CX - FR, CY - FR, CX + FR * 0.2, CY + FR * 0.4);
+    sheen.addColorStop(0, 'rgba(200,215,255,0.06)'); sheen.addColorStop(0.5, 'rgba(200,215,255,0)');
+    ctx.fillStyle = sheen; ctx.fillRect(CX - FR, CY - FR, FR * 2, FR * 2);
+    const edge = ctx.createRadialGradient(CX, CY, FR * 0.72, CX, CY, FR);
+    edge.addColorStop(0, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = edge; ctx.fillRect(CX - FR, CY - FR, FR * 2, FR * 2);
     ctx.restore();
-    engrave(ctx, () => { ctx.beginPath(); ctx.roundRect(x - 8, y - 8, w + 16, h + 16, r + 8); }, 1.4, 1);
-    // the night inside, with a drift of stars and two faint clouds
-    const night = ctx.createLinearGradient(0, y, 0, y + h);
-    night.addColorStop(0, '#0b0e22'); night.addColorStop(0.5, '#121736'); night.addColorStop(1, '#070812');
-    channel(); ctx.fillStyle = night; ctx.fill();
-    ctx.save();
-    channel(); ctx.clip();
-    const R = rng(this.echo.seed + 77);
-    for (const [col, n] of [['rgba(150,110,255,', 2], ['rgba(90,200,255,', 2]]) {
-      for (let i = 0; i < n; i++) {
-        const cx = x + R() * w, cy = y + R() * h, rr = 60 + R() * 80;
-        const cloud = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
-        cloud.addColorStop(0, col + '0.09)'); cloud.addColorStop(1, col + '0)');
-        ctx.fillStyle = cloud; ctx.fillRect(cx - rr, cy - rr, rr * 2, rr * 2);
-      }
-    }
-    for (let i = 0; i < 120; i++) {
-      const s = R();
-      ctx.fillStyle = `rgba(220,230,255,${0.12 + 0.45 * s * s})`;
-      ctx.fillRect(x + R() * w, y + R() * h, s > 0.92 ? 1.6 : 1, s > 0.92 ? 1.6 : 1);
-    }
-    // the edges sink into shadow
-    const shade = ctx.createLinearGradient(0, y, 0, y + h);
-    shade.addColorStop(0, 'rgba(0,0,0,0.45)'); shade.addColorStop(0.18, 'rgba(0,0,0,0)');
-    shade.addColorStop(0.82, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.5)');
-    ctx.fillStyle = shade; ctx.fillRect(x, y, w, h);
-    ctx.restore();
-    engrave(ctx, channel, 1.2, 1);
-    // the stones' sockets, set into the lip at either end
-    for (const sx of [x, x + w]) {
-      const ring = ctx.createLinearGradient(sx - 13, CY - 13, sx + 13, CY + 13);
-      ring.addColorStop(0, '#f2d68e'); ring.addColorStop(0.5, '#a07a36'); ring.addColorStop(1, '#4e3a17');
-      ctx.beginPath(); ctx.arc(sx, CY, 13, 0, TAU); ctx.fillStyle = ring; ctx.fill();
-      ctx.beginPath(); ctx.arc(sx, CY, 10.5, 0, TAU); ctx.fillStyle = '#0c0e14'; ctx.fill();
-    }
-    // rune sockets, carved and dark until they wake
-    for (let i = 0; i < RUNE_COUNT; i++) {
-      const rx = runeX(i);
-      ctx.beginPath(); ctx.arc(rx, RUNE_Y, 15, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
-      engrave(ctx, () => { ctx.beginPath(); ctx.arc(rx, RUNE_Y, 15, 0, TAU); }, 1, 0.8);
-      ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(190,205,240,0.10)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], rx, RUNE_Y, 15); ctx.restore();
-      ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], rx, RUNE_Y, 15);
-    }
     this.drawFixedNotes(ctx);
     return c;
   }
-}
-
-/**
- * The stave cut into stretches of in-tune and out-of-tune points, [x0, x1,
- * inTune] each, meeting halfway between the points and covering 0…1.
- */
-function runsOf(marks) {
-  const runs = [], step = 0.94 / (SAMPLES - 1), xAt = i => 0.03 + step * i;
-  for (let i = 0; i < SAMPLES; i++) {
-    let j = i;
-    while (j + 1 < SAMPLES && marks[j + 1] === marks[i]) j++;
-    runs.push([i ? xAt(i) - step / 2 : 0, j < SAMPLES - 1 ? xAt(j) + step / 2 : 1, marks[i]]);
-    i = j;
-  }
-  return runs;
-}
-
-/** A rune as a path only, for glow() to stroke in passes. */
-function runePath(ctx, idx, x, y, size) {
-  const segs = RUNES[((idx % RUNES.length) + RUNES.length) % RUNES.length];
-  ctx.beginPath();
-  for (const [x1, y1, x2, y2] of segs) { ctx.moveTo(x + x1 * size, y + y1 * size); ctx.lineTo(x + x2 * size, y + y2 * size); }
 }
