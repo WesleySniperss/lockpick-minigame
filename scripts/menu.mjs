@@ -20,7 +20,7 @@ const MODULE_ID = 'lockpick-minigame';
 const PUZZLE_BLURBS = {
   sudoku : 'Classic 9×9 sudoku. Sent straight to the players you pick.',
   sliding: 'Slide the stone tiles back into the picture. Sent straight to the players you pick.',
-  cipher : 'Decode a word written in a fantasy alphabet and a Caesar shift.',
+  cipher : 'Decode a word written in a fantasy alphabet with its codex. Harder difficulties leave glyphs out of the codex.',
   simon  : 'Memorise a sequence of runes, then repeat it.',
 };
 
@@ -95,10 +95,6 @@ export async function openMenu(what) {
           <div class="form-group">
             <label>Word / phrase</label>
             <div class="form-fields"><input type="text" name="pword" placeholder="Leave empty for random" autocomplete="off" spellcheck="false"></div>
-          </div>
-          <div class="form-group">
-            <label>Caesar shift</label>
-            <div class="form-fields"><input type="number" name="pshift" value="" min="1" max="25" placeholder="Random"></div>
           </div>
         </div>
         <div class="form-group">
@@ -214,7 +210,6 @@ async function submit(f) {
   const opts = generatePuzzleOpts(what, diff, {
     lang      : f.plang.value || undefined,
     customWord: f.pword.value || undefined,
-    shift     : parseInt(f.pshift.value) || undefined,
     shared,
     recipients: recipients.map(u => ({ id: u.id, name: u.name })),
   });

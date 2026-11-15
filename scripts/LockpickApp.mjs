@@ -6,13 +6,13 @@
  *   - біля прихованого піна кінчик піднімається і звук міняє тон — це підказка
  *   - відпустив кнопку → спроба зафіксувати пін у поточній точці
  *   - влучив → пін стає золотим; промазав → −1 спроба; 3 промахи → спроба провалена
- *     (відмичка ламається лише якщо інструмент витратний — див. tools.mjs)
+ *     (кажемо, що відмичка зламалась, і гра закривається; в інвентарі нічого не змінюється)
  */
 
 import { GameWindow, frameGap } from './app-window.mjs';
 import { rollBadge, dcHiddenHere } from './MiniGameApp.mjs';
 import { LockController, TRACK_W } from './LockController.mjs';
-import { LockRenderer, CANVAS_W, CANVAS_H, TRACK_X, KEYWAY_CY, SHEAR_Y } from './LockRenderer.mjs';
+import { LockRenderer, CANVAS_W, CANVAS_H, TRACK_X, SHEAR_Y } from './LockRenderer.mjs';
 
 const LPM_ID = 'lockpick-minigame';
 const WITHDRAW_SPEED = 900;   // px/сек — швидке повернення після фіксації/провалу
@@ -49,10 +49,6 @@ export class LockpickApp extends GameWindow {
     this.onSuccess   = opts.onSuccess   ?? (() => {});
     this.onFailure   = opts.onFailure   ?? (() => {});
     this.onClose     = opts.onClose     ?? (() => {});
-    this.consumePick = opts.consumePick ?? (() => Promise.resolve());
-    // What the attempt is made with. Only consumable tools (lockpicks) break;
-    // Thieves' Tools just slip and leave the lock shut.
-    this.tool = { kind: 'thieves', label: "Thieves' Tools", consumable: false, ...(opts.tool ?? {}) };
 
     this.controller = new LockController(this.dc, this.rollResult);
     // Спектатор бачить ту саму розкладку пінів, що й гравець
@@ -83,7 +79,6 @@ export class LockpickApp extends GameWindow {
     this._shake       = 0;
     this._missFlash   = 0;
     this._hitFlash    = null;    // {x, t}
-    this._breakPiece  = null;    // {x, y, vx, vy, rot, vr, life}
     this._successAnim = 0;
     this._resistance  = 0;
     this._press       = null;    // {pinIndex, hit, t} — анімація удару по піну
@@ -248,7 +243,7 @@ export class LockpickApp extends GameWindow {
 
     if (broke) {
       this._attemptPending = false;
-      this._beginBreak(TRACK_X + this.controller.pickX);
+      this._beginSlip();
     } else {
       this._attemptPending = true;
       this._later(() => this._startWithdraw(), 260);
@@ -362,17 +357,6 @@ export class LockpickApp extends GameWindow {
       this._successAnim = Math.min(1, this._successAnim + 1.2 * dt);
     }
 
-    // Уламок відмички
-    if (this._breakPiece) {
-      const p = this._breakPiece;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vy += 800 * dt;
-      p.rot += p.vr * dt;
-      p.life -= 0.8 * dt;
-      if (p.life <= 0) this._breakPiece = null;
-    }
-
     // Трансляція глядачам ~12 разів на секунду
     if (this._broadcast) {
       this._syncAcc += dt;
@@ -427,7 +411,6 @@ export class LockpickApp extends GameWindow {
         vibrate   : this._held ? this._resistance : 0,
         shake     : this._shake,
         particles : this._particles,
-        breakPiece: this._breakPiece,
         hitFlash  : this._hitFlash,
         missFlash : this._missFlash,
         success   : this._successAnim,
@@ -446,27 +429,12 @@ export class LockpickApp extends GameWindow {
     this._later(() => this._end(true), 1500);
   }
 
-  _beginBreak(tipCanvasX) {
-    this._stopScrape();
-    if (!this.tool.consumable) return this._beginSlip();
-    this._soundBreak();
-    this._shake = 12;
-    this._missFlash = 1;
-    this._breakPiece = {
-      x: tipCanvasX, y: KEYWAY_CY,
-      vx: 60 + Math.random() * 60, vy: -160,
-      rot: 0, vr: 9, life: 1.2,
-    };
-    this._spawnSparks(tipCanvasX, KEYWAY_CY, '#d8d8e2');
-    this.consumePick().catch(console.error);
-    this._later(() => this._end(false), 1100);
-  }
-
   /**
-   * Out of attempts with Thieves' Tools: nothing breaks. The pins drop back,
-   * the pick slides out and the attempt simply fails.
+   * Out of attempts: the pins drop back, the pick slides out and the result
+   * says it snapped (in words only: nothing leaves the inventory).
    */
   _beginSlip() {
+    this._stopScrape();
     this._soundMiss();
     this._shake = 7;
     this._missFlash = 0.7;
@@ -482,7 +450,7 @@ export class LockpickApp extends GameWindow {
     this._stopScrape();
     cancelAnimationFrame(this._raf);
     this._raf = null;
-    this.renderer?.drawEndOverlay(success, { snapped: !success && this.tool.consumable });
+    this.renderer?.drawEndOverlay(success);
 
     // Tracked directly (not via _later) because _dead is already true. If the
     // player closes early, close() fires the outcome immediately instead.
@@ -645,15 +613,6 @@ export class LockpickApp extends GameWindow {
     this._toneBody(ac, now, 90, 0.3, 0.005, 0.12);
   }
 
-  _soundBreak() {
-    const ac = this._audio(); if (!ac) return;
-    const now = ac.currentTime;
-    this._noiseClick(ac, now, 5200, 0.7, 0.0004, 1.4);
-    this._toneBody(ac, now, 110, 0.55, 0.002, 0.3);
-    this._noiseClick(ac, now + 0.03, 2600, 0.22, 0.002, 0.7);
-    this._toneBody(ac, now + 0.05, 70, 0.3, 0.01, 0.4);
-  }
-
   _soundUnlock() {
     const ac = this._audio(); if (!ac) return;
     const now = ac.currentTime;
@@ -670,19 +629,17 @@ export class LockpickApp extends GameWindow {
 
   // ── UI ────────────────────────────────────────────────────────────────
 
-  /** Misses left. Lockpicks snap when they run out; Thieves' Tools only slip. */
+  /** Misses left before the pick snaps. */
   _refreshAttempts() {
     if (!this._attemptsEl) return;
     const left = this.controller.attemptsLeft;
     if (left === this._attemptsShown) return;      // spectators are told 12 times a second
     this._attemptsShown = left;
-    const snaps = this.tool.consumable;
     const pips = Array.from({ length: 3 }, (_, i) =>
       `<span class="lpm-pip${i < left ? '' : ' used'}"></span>`).join('');
-    const tip = snaps ? 'Misses left before the pick snaps'
-                      : "Misses left before the pins drop (Thieves' Tools never break)";
-    this._attemptsEl.innerHTML = `<span class="lpm-attempts-label" title="${tip}">`
-      + `${snaps ? 'Pick' : 'Tries'}</span><span class="lpm-pips" title="${tip}">${pips}</span>`;
+    const tip = 'Misses left before the pick snaps and the attempt fails';
+    this._attemptsEl.innerHTML = `<span class="lpm-attempts-label" title="${tip}">Tries</span>`
+      + `<span class="lpm-pips" title="${tip}">${pips}</span>`;
   }
 
 

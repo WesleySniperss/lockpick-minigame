@@ -8,7 +8,7 @@
  *   other: the ability modifier, plus proficiency if the skill is marked proficient
  */
 
-/** Labelled terms for rollFormula() (tools.mjs), e.g. [{ value: 5, label: 'Arcana' }]. */
+/** Labelled terms for rollFormula(), e.g. [{ value: 5, label: 'Arcana' }]. */
 export function skillCheckTerms(actor, key = 'arc', label = 'Arcana', fallbackAbility = 'int') {
   const s  = actor?.system ?? {};
   const sk = s.skills?.[key];
@@ -23,4 +23,11 @@ export function skillCheckTerms(actor, key = 'arc', label = 'Arcana', fallbackAb
   const terms = [{ value: mod, label: (sk?.ability || fallbackAbility).toUpperCase() }];
   if (prof) terms.push({ value: prof, label: mult >= 2 ? 'Expertise' : 'Prof' });
   return terms;
+}
+
+/** "1d20 + 3[DEX] + 2[Prof]" — the labels show up in the roll tooltip. */
+export function rollFormula(terms) {
+  const parts = terms.filter(t => t.value)
+    .map(t => `${t.value < 0 ? '-' : '+'} ${Math.abs(t.value)}[${t.label}]`);
+  return ['1d20', ...parts].join(' ');
 }

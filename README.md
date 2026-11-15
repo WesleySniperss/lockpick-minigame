@@ -2,7 +2,7 @@
 
 Mini-games the GM requests for a specific character, for **Foundry VTT** with
 **dnd5e** and **Level Up Advanced 5e**: a pin-tumbler **lockpicking** game
-(Thieves' Tools check) and four **Arcana** workings — unweave a ward, attune
+(Sleight of Hand check, no tools needed) and four **Arcana** workings — unweave a ward, attune
 to a resonance, sound a hidden weave, trace a sigil. The character's roll, made the system's own way,
 decides how hard the game is. Plus a set of puzzles the GM can hand out.
 
@@ -33,7 +33,7 @@ challenge whenever the story needs it.
    gets the button (**Roll & pick the lock**, **Roll Arcana & unweave**, …);
    everyone else sees "Waiting for …". If several players own the character,
    the first one to press it gets the attempt.
-3. The card follows the attempt: *picking…* → *Picked by …* or *The lock held*
+3. The card follows the attempt: *picking…* → *Picked by …* or *The pick snapped — the lock held*
    (*Unwoven by …* / *The ward held* and so on for Arcana). After a failure the
    GM can **Allow another try**.
 
@@ -67,7 +67,7 @@ bonuses all apply, and the roll card is the system's own:
 
 | | dnd5e | Level Up (a5e) | any other system |
 |---|---|---|---|
-| Lockpicking | Thieves' Tools check (a Dexterity check without the tools) | Dexterity check, the Thieves' Tools proficiency pre-filled as a situational bonus | 1d20 + Dex + proficiency |
+| Lockpicking | Sleight of Hand skill check | Sleight of Hand skill check | 1d20 + the Sleight of Hand bonus (Dex + proficiency) |
 | Arcana | Arcana skill check | Arcana skill check | 1d20 + the Arcana bonus |
 
 Closing the system's roll dialog cancels the attempt and leaves the card open.
@@ -81,13 +81,13 @@ With Dice So Nice the game opens once the die has landed.
 
 1. The player presses **Roll & pick the lock** on the request card.
 2. The **check** is rolled (see *The roll* above) — it sets how hard the game
-   will be. Without Thieves' Tools it is a plain Dexterity check.
+   will be. No tools are needed or looked for: it is Dexterity (Sleight of Hand).
 3. The **mini-game opens** — a cutaway of the lock with the pick in the keyway.
 4. **Hold** the mouse to slide the pick, **release on green** under a pin to set
    it; releasing on red costs an attempt.
-5. Set all pins → **Lock Picked**. Three misses → the attempt fails. With
-   **Thieves' Tools** nothing breaks — the pins drop back and the lock stays
-   shut; with **Lockpicks** one pick snaps and is removed from the inventory.
+5. Set all pins → **Lock Picked**. Three misses → **the pick snaps** and the
+   game closes: the lock stays shut. That is only what the result says; nothing
+   leaves the inventory.
 
 The GM watches the attempt live, and so do the other players when **Others can
 watch** is ticked on the request (see *Module Settings*).
@@ -111,17 +111,6 @@ the slower and steadier the pick moves; a roll under the DC makes it fast and
 jerky (higher DCs add speed too). A natural 20 gives the calmest pick, a
 natural 1 the wildest. The target zones never change size: a green zone under
 each pin, with a red band on both sides.
-
-### Tools
-
-What a character needs is a world setting (**Tool needed to pick a lock**):
-
-| Mode | Needs | On a failed attempt |
-|------|-------|---------------------|
-| Nothing *(default)* | — anyone can try; carried Thieves' Tools add their proficiency, without them it is a Dexterity check | nothing is lost |
-| Thieves' Tools | an item named Thieves' Tools (or dnd5e base item `thief`) | nothing is lost |
-| Lockpicks | an item named Lockpick(s), quantity ≥ 1 | one lockpick snaps |
-| Either | Thieves' Tools if carried, otherwise Lockpicks | as above |
 
 ---
 
@@ -260,6 +249,16 @@ again for 4 s of mana; tracing waits until it is over); a natural 20 gives two.
 Open **VTools → Puzzles & Challenges** and pick a puzzle under **What**:
 Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 
+**Cipher:** a word or phrase is written in a fantasy script (Infernal, Abyssal or
+Elvish), one big glyph per letter with a slot under it. Type a letter under a
+glyph and it fills in under every copy of that glyph; click a codex entry to
+write its letter; when every slot is filled the answer is checked, and wrong
+letters turn red. Pointing at a glyph lights its codex entry. Easy gives the
+whole alphabet; Medium a codex of 14 letters that lacks two of the word's glyphs,
+Hard a codex of 12 that lacks about half of them. The missing glyphs glow orange
+in the inscription and are worked out from the word itself. The GM can set the
+word and the script in the menu.
+
 - **Send to** — all connected players, one player, or **Only me** (the GM solves
   it; also used automatically when no player is connected).
 - **Solve together** (checkbox) — *checked*: one shared puzzle, every move by
@@ -281,7 +280,6 @@ Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Tool needed to pick a lock | **Nothing** | Nothing / Thieves' Tools / Lockpicks / Either — see *Tools* |
 | Default DC | 15 | Pre-filled in the Puzzles & Challenges menu |
 | Keep the DC secret by default | Off | Pre-ticks **Secret** in the menu |
 | Show challenges live to the GM | **On** | Spectator window for the GM while a player picks a lock or works an Arcana challenge |

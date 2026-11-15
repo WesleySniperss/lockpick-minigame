@@ -60,9 +60,9 @@ export function requestCard({ kind = 'lock', name, dc, label = '', hideDC = fals
 }
 
 /** Flavour line above the check roll (no DC when it is hidden: dc = null). */
-export function checkFlavor(toolLabel, dc, icon = 'fa-key') {
+export function checkFlavor(what, dc, icon = 'fa-key') {
   return `<span class="lpm-flavor"><i class="fa-solid ${icon}"></i>`
-    + `<span class="lpm-flavor__what">${esc(toolLabel)} check</span>`
+    + `<span class="lpm-flavor__what">${esc(what)} check</span>`
     + (dc === null || dc === undefined ? '' : `<span class="lpm-flavor__dc">DC ${esc(dc)}</span>`)
     + `</span>`;
 }
