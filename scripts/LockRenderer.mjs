@@ -331,7 +331,7 @@ export class LockRenderer {
 
   /**
    * state: { pins, pickX, pickIn, zone }   zone: 'green'|'red'|'neutral'
-   * fx:    { deflect, vibrate, shake, particles, breakPiece, hitFlash, missFlash, success, press }
+   * fx:    { deflect, vibrate, shake, particles, hitFlash, missFlash, success, press }
    */
   draw(state, fx = {}) {
     const ctx = this.ctx;
@@ -364,7 +364,6 @@ export class LockRenderer {
     this._drawPins(ctx, state, fx);          // springs and solid pins
     this._drawWrench(ctx);                   // dark silhouette on the keyway floor
     this._drawPick(ctx, state, fx);
-    if (fx.breakPiece) this._drawBreakPiece(ctx, fx.breakPiece);
     this._drawGuides(ctx, state);
     this._drawScale(ctx, state);
 
@@ -1169,20 +1168,9 @@ export class LockRenderer {
   // Спрайт будується один раз; щокадру він лише зсувається.
 
   /** Profile of the pick in local coordinates (tip at 0,0). */
-  _pickPath(g, snapped = false) {
+  _pickPath(g) {
     const A = PICK_AX, T = PICK_T;
     g.beginPath();
-    if (snapped) {
-      // гак відламано — рваний торець стрижня
-      g.moveTo(-PICK_LEN, A - T);
-      g.lineTo(-11, A - T);
-      g.lineTo(-8.5, A - 1.2);
-      g.lineTo(-10.5, A + 0.6);
-      g.lineTo(-8, A + T);
-      g.lineTo(-PICK_LEN, A + T);
-      g.closePath();
-      return;
-    }
     g.moveTo(-PICK_LEN, A - T);
     g.lineTo(-17, A - T);                                   // верхня кромка стрижня
     g.quadraticCurveTo(-6.4, A - T, -6.4, A - 14);          // галтель біля основи гака
@@ -1196,14 +1184,14 @@ export class LockRenderer {
   }
 
   /** Paint polished steel into the pick profile (called with the rotation applied). */
-  _paintPick(g, snapped) {
+  _paintPick(g) {
     const A = PICK_AX, T = PICK_T;
-    this._pickPath(g, snapped);
+    this._pickPath(g);
     g.fillStyle = '#8c939e';
     g.fill();
 
     g.save();
-    this._pickPath(g, snapped);
+    this._pickPath(g);
     g.clip();
     // Стрижень: пласка сталь з блиском у верхній третині
     const sg = g.createLinearGradient(0, A - T, 0, A + T);
@@ -1236,24 +1224,22 @@ export class LockRenderer {
     // Фаски: світла кромка там, де нормаль дивиться на світло, темна — навпаки
     g.lineWidth = 1.4;
     g.translate(1.1, 1.1);
-    this._pickPath(g, snapped);
+    this._pickPath(g);
     g.strokeStyle = 'rgba(255,255,255,0.7)';
     g.stroke();
     g.translate(-2.2, -2.2);
-    this._pickPath(g, snapped);
+    this._pickPath(g);
     g.strokeStyle = 'rgba(0,0,0,0.5)';
     g.stroke();
     g.restore();
 
     // Відполірований кінчик
-    if (!snapped) {
-      const tg = g.createRadialGradient(-0.6, 2.2, 0, -0.6, 2.2, 4.5);
-      tg.addColorStop(0, 'rgba(255,255,255,0.85)');
-      tg.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = tg;
-      g.fillRect(-6, -3, 10, 10);
-    }
-    this._pickPath(g, snapped);
+    const tg = g.createRadialGradient(-0.6, 2.2, 0, -0.6, 2.2, 4.5);
+    tg.addColorStop(0, 'rgba(255,255,255,0.85)');
+    tg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = tg;
+    g.fillRect(-6, -3, 10, 10);
+    this._pickPath(g);
     g.strokeStyle = 'rgba(8,10,14,0.75)';
     g.lineWidth = 0.8;
     g.stroke();
@@ -1261,12 +1247,12 @@ export class LockRenderer {
 
   _buildPickSprites() {
     const W = PICK_OX + 18, H = 84;
-    const make = snapped => {
+    const make = () => {
       const c = this._canvas(W, H);
       const g = c.getContext('2d');
       g.translate(PICK_OX, PICK_OY);
       g.rotate(PICK_ANG);
-      this._paintPick(g, snapped);
+      this._paintPick(g);
       return c;
     };
     // М'яка тінь: чорний силует, накладений кількома зсунутими копіями
@@ -1287,16 +1273,8 @@ export class LockRenderer {
       sil.width = sil.height = 0;
       return c;
     };
-    const full = make(false), snapped = make(true);
-    // Відламаний гак — окремий маленький спрайт для уламка
-    const hook = this._canvas(24, 44);
-    const hg = hook.getContext('2d');
-    hg.translate(12, 4);
-    hg.save();
-    hg.beginPath(); hg.rect(-9.5, -6, 20, PICK_AX + 4); hg.clip();
-    this._paintPick(hg, false);
-    hg.restore();
-    this._shared.pick = { full, snapped, shadow: shadowOf(full), snappedShadow: shadowOf(snapped), hook };
+    const full = make();
+    this._shared.pick = { full, shadow: shadowOf(full) };
   }
 
   _drawPick(ctx, state, fx) {
@@ -1313,9 +1291,7 @@ export class LockRenderer {
     const noseRest = SHEAR_Y - 1 + PIN_PROTRUDE;
     const cx0 = tipX;                               // вершина гака = точка контакту
     const cy0 = noseRest + 4 - lift + tipBob;
-    const broken = !!fx.breakPiece;
-    const spr = broken ? pick.snapped : pick.full;
-    const shd = broken ? pick.snappedShadow : pick.shadow;
+    const spr = pick.full, shd = pick.shadow;
     const sx = cx0 - PICK_OX, sy = cy0 - PICK_OY;
 
     // Тінь лягає на задню стінку паза; поза корпусом — далі й м'якше, на дерево
@@ -1337,7 +1313,7 @@ export class LockRenderer {
     this._blit(ctx, spr, sx, sy);
 
     // Теплий відблиск контакту, коли гак реально тисне на пін
-    if (lift > 0.5 && !broken) {
+    if (lift > 0.5) {
       const a = Math.min(1, lift / 8);
       const g = ctx.createRadialGradient(cx0, cy0, 0, cx0, cy0, 7);
       g.addColorStop(0, `rgba(255,236,180,${0.75 * a})`);
@@ -1345,17 +1321,6 @@ export class LockRenderer {
       ctx.fillStyle = g;
       ctx.fillRect(cx0 - 8, cy0 - 8, 16, 16);
     }
-  }
-
-  /** The snapped-off hook tumbling away. */
-  _drawBreakPiece(ctx, p) {
-    if (!this._shared.pick) return;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
-    this._blit(ctx, this._shared.pick.hook, -12, -20);
-    ctx.restore();
   }
 
   // ── Прив'язка механізму до шкали ──────────────────────────────────────
@@ -1646,21 +1611,19 @@ export class LockRenderer {
   /**
    * Result screen over the lock: brass medallion with an icon, title in
    * Modesto Condensed, subtitle in Amiri (both are core fonts).
-   * Three outcomes: picked, the lock holds (tools intact), the pick snapped.
+   * Two outcomes: picked, or the pick snaps (in words only: nothing is used up).
    */
-  drawEndOverlay(success, { snapped = false } = {}) {
+  drawEndOverlay(success) {
     if (!this.ctx) return;
     drawResultOverlay(this.ctx, {
       W: this.W, H: this.H, dpr: this._dpr, success,
-      title: success ? 'Lock Picked' : snapped ? 'Pick Snapped' : 'The Lock Holds',
-      sub  : success ? 'The mechanism gives way'
-           : snapped ? 'The pick breaks in the keyway'
-           :           'The pins drop back into place',
-      icon : (ctx, x, y, tone) => this._drawResultIcon(ctx, x, y, success ? 'open' : snapped ? 'snapped' : 'closed', tone),
+      title: success ? 'Lock Picked' : 'Pick Snapped',
+      sub  : success ? 'The mechanism gives way' : 'The pick breaks in the keyway',
+      icon : (ctx, x, y, tone) => this._drawResultIcon(ctx, x, y, success ? 'open' : 'snapped', tone),
     });
   }
 
-  /** Icons inside the result medallion: open / closed padlock, snapped pick. */
+  /** Icons inside the result medallion: an open padlock, or a snapped pick. */
   _drawResultIcon(ctx, x, y, kind, tone) {
     ctx.save();
     ctx.lineCap = 'round';

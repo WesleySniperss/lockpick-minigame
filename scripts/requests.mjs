@@ -20,7 +20,6 @@
  */
 
 import { docFromUuid } from './compat.mjs';
-import { resolveTool } from './tools.mjs';
 import { rollArcana, rollLockpicking } from './rolls.mjs';
 import { resultCard, requestCard, esc } from './cards.mjs';
 import { CHALLENGES, isChallenge } from './challenges.mjs';
@@ -254,18 +253,12 @@ async function startFromRequest(message) {
   if (!actor.isOwner) return ui.notifications.warn(`Only ${actor.name}'s player can do this.`);
   const kind = isChallenge(req.kind) ? req.kind : 'lock';
 
-  let tool = null;
-  if (kind === 'lock') {
-    tool = resolveTool(actor, setting('toolMode', 'none'));
-    if (tool.error) return ui.notifications.warn(tool.error);
-  }
-
   _busy = true;
   if (!(await claim(message))) { _busy = false; return; }
   const onSettled = outcome => setState(message.id, outcome ?? { state: 'open' });
   const opts = { actor, dc: req.dc, hideDC: !!req.hideDC, watch: req.watch, label: req.label, onSettled };
   try {
-    if (kind === 'lock') await startLockpick({ ...opts, tool });
+    if (kind === 'lock') await startLockpick(opts);
     else                 await startArcana({ ...opts, kind });
   } catch (e) {
     _busy = false;
@@ -278,38 +271,27 @@ async function startFromRequest(message) {
 
 /**
  * Roll the check, open the lockpicking game and announce it to spectators.
- * `onSettled({state, by, snapped, quit})` fires once: success, failed (also
+ * `onSettled({state, by, quit})` fires once: success, failed (also
  * when the window is closed before the end), or null when nothing was rolled.
  */
-export async function startLockpick({ actor, tool, dc, hideDC = false, watch, label = '', onSettled = () => {} }) {
-  const rolled = await rollLockpicking(actor, tool, { dc, hideDC });
+export async function startLockpick({ actor, dc, hideDC = false, watch, label = '', onSettled = () => {} }) {
+  const rolled = await rollLockpicking(actor, { dc, hideDC });
   if (!rolled) { _busy = false; onSettled(null); return; }
   const rollResult = { total: rolled.total, d20: rolled.d20, dc, margin: rolled.total - dc };
 
-  const bare     = tool.kind === 'none' && !tool.item;
   const who      = `<strong>${esc(actor.name)}</strong>`;
-  const sub      = resultSub(label, bare ? 'Bare hands' : tool.label, dc, hideDC);
+  const sub      = resultSub(label, 'Sleight of Hand', dc, hideDC);
   const speaker  = ChatMessage.getSpeaker({ actor });
-  const toolInfo = { kind: tool.kind, label: tool.label, consumable: tool.consumable };
   const sessionId = foundry.utils.randomID();
   let settled   = false;
-  let picksLeft = null;   // recorded when a pick is consumed, so the message never subtracts twice
   const settle = outcome => { if (settled) return; settled = true; onSettled(outcome); };
   const watched = anyoneWatching(watch);
 
   const { LockpickApp } = await import('./LockpickApp.mjs');
   const app = new LockpickApp({
     sessionId, dc, hideDC, rollResult, label,
-    tool: toolInfo,
     playerName: actor.name,
     broadcast: watched,
-    async consumePick() {                // only lockpicks are used up
-      if (!tool.consumable || !tool.item) return;
-      const q = Number(tool.item.system?.quantity ?? 1);
-      picksLeft = Math.max(0, q - 1);
-      if (q <= 1) await tool.item.delete();
-      else        await tool.item.update({ 'system.quantity': q - 1 });
-    },
     async onSuccess() {
       settle({ state: 'success', by: actor.name });
       await ChatMessage.create({
@@ -321,21 +303,13 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, watch, la
       });
     },
     async onFailure() {
-      settle({ state: 'failed', snapped: tool.consumable });
-      const left = picksLeft ?? Math.max(0, Number(tool.item?.system?.quantity ?? 1) - 1);
+      settle({ state: 'failed' });
       await ChatMessage.create({
         speaker,
-        content: tool.consumable
-          ? resultCard({
-              tone: 'failure', icon: 'fa-burst', title: 'Lockpick Snapped', subtitle: sub,
-              body: `${who} snaps a lockpick in the keyway. The lock holds`
-                  + ` — ${left} ${left === 1 ? 'pick' : 'picks'} left.`,
-            })
-          : resultCard({
-              tone: 'failure', icon: 'fa-lock', title: 'The Lock Holds', subtitle: sub,
-              body: bare ? `${who} loses the pins and they drop back into place. The lock stays shut.`
-                         : `${who} loses the pins and they drop back into place. The tools are fine; the lock stays shut.`,
-            }),
+        content: resultCard({
+          tone: 'failure', icon: 'fa-burst', title: 'Lockpick Snapped', subtitle: sub,
+          body: `${who} snaps the pick in the keyway. The lock holds.`,
+        }),
       });
     },
     onClose() {
@@ -349,7 +323,6 @@ export async function startLockpick({ actor, tool, dc, hideDC = false, watch, la
   if (watched) game.socket.emit(CHANNEL, {
     action: 'lockpickSpectate',
     sessionId, dc, hideDC, watch, rollResult, label,
-    tool: toolInfo,
     playerName: actor.name,
     userId: game.user.id,
     pins: app.controller.pins.map(p => ({ x: p.x, set: p.set })),

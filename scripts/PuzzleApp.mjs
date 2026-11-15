@@ -825,12 +825,18 @@ class SlidingPuzzle extends PuzzleBase {
 // ═════════════════════════════════════════════════════════════════════════════
 // CIPHER
 // ═════════════════════════════════════════════════════════════════════════════
+//
+// An inscription in a fantasy script, one big glyph per letter with a slot
+// under it, and the codex that says which glyph is which letter. Type a letter
+// under a glyph and it goes under every copy of that glyph. Easy gives the
+// whole alphabet; medium and hard a codex of 14 and 12 letters that leaves two
+// of the word's glyphs out (hard: about half), to be worked out from the word.
+// The codex is partial anyway, so what it lacks says nothing about them.
 
-// Fantasy alphabets mapping to English letters
+// Fantasy alphabets: glyph → English letter
 const FANTASY_ALPHABETS = {
   infernal: {
     name: 'Infernal',
-    // Each entry: fantasy char → English letter
     map: {
       '𐌰':'A','𐌱':'B','𐌲':'C','𐌳':'D','𐌴':'E','𐌵':'F','𐌶':'G','𐌷':'H',
       '𐌸':'I','𐌹':'J','𐌺':'K','𐌻':'L','𐌼':'M','𐌽':'N','𐌾':'O','𐌿':'P',
@@ -848,7 +854,7 @@ const FANTASY_ALPHABETS = {
     }
   },
   elvish: {
-    name: 'Elvish (Tengwar)',
+    name: 'Elvish',
     map: {
       'α':'A','β':'B','γ':'C','δ':'D','ε':'E','ζ':'F','η':'G','θ':'H',
       'ι':'I','κ':'J','λ':'K','μ':'L','ν':'M','ξ':'N','ο':'O','π':'P',
@@ -864,126 +870,164 @@ const CIPHER_WORDS = {
   hard:   ['DUNGEON MASTER', 'ANCIENT RUNES', 'FORBIDDEN TOME', 'DRAGONS HOARD'],
 };
 
-function _makeCipher(difficulty, { lang, customWord, shift } = {}) {
-  const clean = String(customWord ?? '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
-  const pool  = CIPHER_WORDS[difficulty] ?? CIPHER_WORDS.easy;
-  const s     = Number.parseInt(shift);
-  return {
-    lang  : FANTASY_ALPHABETS[lang] ? lang : Object.keys(FANTASY_ALPHABETS)[0],
-    answer: clean || pool[Math.floor(Math.random() * pool.length)],
-    shift : s >= 1 && s <= 25 ? s : 3 + Math.floor(Math.random() * 8),
-  };
+/** How many of the word's letters the codex leaves out, by difficulty. */
+const hiddenCount = (difficulty, distinct) =>
+  difficulty === 'hard' ? Math.ceil(distinct / 2) : difficulty === 'medium' ? Math.min(2, distinct - 2) : 0;
+
+function _makeCipher(difficulty, { lang, customWord } = {}) {
+  const clean  = String(customWord ?? '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
+  const pool   = CIPHER_WORDS[difficulty] ?? CIPHER_WORDS.easy;
+  const answer = clean || pool[Math.floor(Math.random() * pool.length)];
+  const pick   = list => list.splice(Math.floor(Math.random() * list.length), 1)[0];
+  const known  = [...new Set(answer.replace(/ /g, ''))];
+  const hidden = [];
+  for (let n = hiddenCount(difficulty, known.length); n > 0 && known.length; n--) hidden.push(pick(known));
+  // Medium and hard: the word's other letters, padded with letters it does not use (null: all 26).
+  let codex = null;
+  if (difficulty === 'medium' || difficulty === 'hard') {
+    const others = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].filter(l => !answer.includes(l));
+    while (known.length < (difficulty === 'hard' ? 12 : 14) && others.length) known.push(pick(others));
+    codex = known.sort();
+  }
+  return { lang: FANTASY_ALPHABETS[lang] ? lang : Object.keys(FANTASY_ALPHABETS)[0], answer, hidden, codex };
 }
 
 class CipherPuzzle extends PuzzleBase {
   static KEY  = 'cipher';
   static NAME = 'Cipher';
   static ICON = 'fa-scroll';
+  static TITLE = 'Cipher';
+  static WIDTH = 560;
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
     const c = opts.answer ? opts : _makeCipher(difficulty, opts);
     this.answer   = c.answer;
-    this.shift    = c.shift;
+    this.hidden   = new Set(c.hidden ?? []);
+    this.codex    = c.codex ? new Set(c.codex) : null;      // the letters the codex lists (null: all)
     this.langData = FANTASY_ALPHABETS[c.lang] ?? Object.values(FANTASY_ALPHABETS)[0];
-
-    // English → fantasy glyph
     this.engToFan = {};
     for (const [fan, eng] of Object.entries(this.langData.map)) this.engToFan[eng] ??= fan;
-
-    this.caesarText  = this._caesar(this.answer, this.shift);
-    this.fantasyText = [...this.caesarText].map(ch => ch === ' ' ? ' ' : (this.engToFan[ch] ?? ch)).join('');
-    this._guesses    = new Map();   // userId → { typing, last }
+    this._guesses = new Map();   // userId → { typing, last }
   }
 
-  _caesar(text, shift) {
-    return [...text].map(ch => ch === ' ' ? ' '
-      : String.fromCharCode(((ch.charCodeAt(0) - 65 + shift) % 26) + 65)).join('');
+  /** The inscription: words of glyph tiles, each with a slot (filled in for the GM watching). */
+  _inscriptionHTML({ slots = true, reveal = false } = {}) {
+    let i = 0;
+    const words = this.answer.split(' ').map(word => `<span class="lpm-ins-word">${[...word].map(ch => {
+      const g = this.engToFan[ch] ?? ch, at = i++, unknown = this.hidden.has(ch) ? ' is-unknown' : '';
+      const slot = !slots ? ''
+        : reveal ? `<span class="lpm-ins-slot is-answer">${ch}</span>`
+        : `<input class="lpm-ins-slot" data-i="${at}" data-g="${g}" maxlength="2" autocomplete="off" spellcheck="false" aria-label="Letter ${at + 1}">`;
+      return `<span class="lpm-ins-tile${unknown}" data-g="${g}"><span class="lpm-ins-glyph">${g}</span>${slot}</span>`;
+    }).join('')}</span>`);
+    return `<div class="lpm-inscription">${words.join('')}</div>`;
   }
 
-  static TITLE = 'Cipher';
-  static WIDTH = 540;
-  static DEFAULT_OPTIONS = { window: { resizable: true } };
+  /** The codex: its glyphs over their letters, A to Z. */
+  _codexHTML() {
+    return `<div class="lpm-codex">${Object.entries(this.langData.map)
+      .filter(([, eng]) => !this.hidden.has(eng) && (!this.codex || this.codex.has(eng)))
+      .map(([g, eng]) => `<div class="lpm-codex-entry" data-g="${g}" data-l="${eng}">`
+        + `<span class="lpm-codex-glyph">${g}</span><span class="lpm-codex-letter">${eng}</span></div>`).join('')}</div>`;
+  }
 
   contentHTML() {
-    const table = Object.entries(this.langData.map).map(([fan, eng]) =>
-      `<div class="lpm-cipher-pair"><span class="lpm-coded">${fan}</span><span class="lpm-plain">${eng}</span></div>`
-    ).join('');
-    const encoded = `<div class="lpm-cipher-encoded lpm-fantasy">${this.fantasyText}</div>`;
+    const lang = _esc(this.langData.name);
+    const missing = this.hidden.size;
+    const codex = `<section class="lpm-cipher-panel">
+        <div class="lpm-cipher-label">Codex <span>${lang} → English</span></div>
+        ${this._codexHTML()}
+        ${missing ? `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> The codex lacks ${missing === 1 ? 'the glyph' : `the ${missing} glyphs`} shown in orange — work ${missing === 1 ? 'it' : 'them'} out from the word.</p>` : ''}
+      </section>`;
+    const live = label => `<section class="lpm-cipher-panel">
+        <div class="lpm-cipher-label">${label}</div>
+        <div class="lpm-cipher-live"><div class="lpm-cipher-row lpm-dim">${this._spectator ? 'Waiting for the first letter…' : 'Nobody else is typing yet'}</div></div>
+      </section>`;
 
     if (this._spectator) {
       // Players may watch too ("Others can watch"): the answer stays with the GM.
-      return `<div class="lpm-cipher-wrap">
+      return `<div class="lpm-cipher">
         ${this._headerHTML()}
-        ${game.user.isGM ? `<div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label"><i class="fa-solid fa-key"></i> Answer (GM only) · shift ${this.shift}</div>
-          <div class="lpm-cipher-encoded lpm-cipher-answer">${_esc(this.answer)}</div>
-        </div>` : ''}
-        <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">Encoded text</div>
-          ${encoded}
-        </div>
-        <div class="lpm-cipher-step">
-          <div class="lpm-cipher-step-label">${this.shared ? 'The party is typing' : 'Players are typing'}</div>
-          <div class="lpm-cipher-live"><div class="lpm-cipher-row lpm-dim">— waiting —</div></div>
-        </div>
+        <section class="lpm-cipher-panel">
+          <div class="lpm-cipher-label">Inscription <span>${lang}</span>${game.user.isGM ? '<em><i class="fa-solid fa-eye"></i> answer shown to the GM only</em>' : ''}</div>
+          ${this._inscriptionHTML({ slots: game.user.isGM, reveal: true })}
+        </section>
+        ${codex}
+        ${live(this.shared ? 'The party is typing' : 'Players are typing')}
       </div>`;
     }
 
-    const showTable = this.difficulty !== 'hard';
-    return `<div class="lpm-cipher-wrap">
+    return `<div class="lpm-cipher">
       ${this._headerHTML()}
-      <div class="lpm-cipher-step">
-        <div class="lpm-cipher-step-label">Step 1 — Decode the ${this.langData.name} alphabet</div>
-        ${encoded}
-        ${showTable
-          ? `<div class="lpm-cipher-sublabel">${this.langData.name} → English table:</div>
-             <div class="lpm-cipher-table">${table}</div>`
-          : '<p class="lpm-puzzle-hint">No table provided — find the pattern.</p>'}
-      </div>
-      <div class="lpm-cipher-step">
-        <div class="lpm-cipher-step-label">Step 2 — Caesar cipher</div>
-        <p class="lpm-puzzle-hint">${this.difficulty === 'hard'
-          ? 'The shift is unknown. Find the pattern.'
-          : `Each letter is shifted <strong>${this.shift}</strong> positions forward in the alphabet. Subtract ${this.shift} to get the original.`}</p>
-      </div>
-      ${this.shared ? `<div class="lpm-cipher-step">
-        <div class="lpm-cipher-step-label">Your party</div>
-        <div class="lpm-cipher-live"><div class="lpm-cipher-row lpm-dim">Nobody else is typing yet</div></div>
-      </div>` : ''}
-      <div class="lpm-cipher-answer-box">
-        <div class="lpm-cipher-input" contenteditable="true" spellcheck="false"
-             data-placeholder="Type your answer in English…" data-empty="1"></div>
-        <button type="button" class="lpm-cipher-check"><i class="fa-solid fa-check"></i> Check</button>
-      </div>
-      <div class="lpm-cipher-feedback"></div>
+      <section class="lpm-cipher-panel">
+        <div class="lpm-cipher-label">Inscription <span>${lang}</span></div>
+        ${this._inscriptionHTML()}
+        <div class="lpm-cipher-actions">
+          <span class="lpm-cipher-feedback"></span>
+          <button type="button" class="lpm-cipher-check"><i class="fa-solid fa-check"></i> Check</button>
+        </div>
+      </section>
+      ${codex}
+      ${this.shared ? live('Your party') : ''}
+      <p class="lpm-puzzle-hint">Type a letter under each glyph — the same glyph is always the same letter. Click a codex entry to write its letter.</p>
     </div>`;
   }
 
   _afterRender(root) {
-    if (this._spectator) return;
-    const input = root.querySelector('.lpm-cipher-input');
-    const check = root.querySelector('.lpm-cipher-check');
-    const text  = () => input.innerText.toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
-
-    input.addEventListener('input', () => {
-      input.dataset.empty = input.innerText.trim() === '' ? '1' : '0';
-      this._emit('state', { state: { typing: text() } });
+    // Pointing at a glyph lights its codex entry and its twins in the inscription, and the other way round.
+    const light = g => root.querySelectorAll('[data-g]').forEach(el => el.classList.toggle('is-lit', g !== null && el.dataset.g === g));
+    root.querySelectorAll('.lpm-ins-tile, .lpm-codex-entry').forEach(el => {
+      el.addEventListener('pointerenter', () => light(el.dataset.g));
+      el.addEventListener('pointerleave', () => light(null));
     });
+    if (this._spectator) return;
 
-    // contenteditable keys must not reach core's KeyboardManager (hotkeys).
+    const slots = [...root.querySelectorAll('input.lpm-ins-slot')];
+    this._slots = slots;
+    let current = slots[0];
+    const focus = s => { if (s) { current = s; s.focus(); s.select(); } };
+    const next = from => slots.slice(slots.indexOf(from) + 1).find(s => !s.value) ?? slots.find(s => !s.value) ?? from;
+    /** Write a letter under glyph g everywhere, then go on to the next empty slot. */
+    const write = (from, letter) => {
+      for (const s of slots) if (s.dataset.g === from.dataset.g) { s.value = letter; s.classList.remove('is-wrong'); }
+      if (letter) Sfx.key();
+      this._emit('state', { state: { typing: this._guess() } });
+      if (!letter) return;
+      if (slots.every(s => s.value)) { this._check(); return; }
+      focus(next(from));
+    };
+
+    for (const s of slots) {
+      s.addEventListener('focus', () => { current = s; s.select(); });
+      s.addEventListener('input', () => {
+        const letter = (s.value.toUpperCase().match(/[A-Z]/g) ?? []).pop() ?? '';
+        write(s, letter);
+      });
+    }
+    // The codex as a keyboard: click an entry to write its letter where you are.
+    root.querySelectorAll('.lpm-codex-entry').forEach(el => el.addEventListener('click', () => {
+      if (el.dataset.l && current) write(current, el.dataset.l);
+    }));
+    root.querySelector('.lpm-cipher-check').addEventListener('click', () => this._check());
+
+    // Keys typed in a slot must not reach core's hotkeys (WASD would pan the canvas); arrows,
+    // Backspace and Enter are handled here, letters reach the slot as input.
     const capture = e => {
-      if (document.activeElement !== input) return;
+      const s = document.activeElement;
+      if (!slots.includes(s)) return;
       e.stopImmediatePropagation();
       if (e.type !== 'keydown') return;
-      if (e.key === 'Enter') { e.preventDefault(); this._check(text()); }
-      else if (e.key.length === 1) Sfx.key();
+      const i = slots.indexOf(s);
+      if (e.key === 'Enter') { e.preventDefault(); this._check(); }
+      else if (e.key === 'ArrowLeft')  { e.preventDefault(); focus(slots[Math.max(0, i - 1)]); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); focus(slots[Math.min(slots.length - 1, i + 1)]); }
+      else if (e.key === 'Backspace' && !s.value) { e.preventDefault(); const p = slots[Math.max(0, i - 1)]; focus(p); write(p, ''); }
+      else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); write(s, ''); }
     };
     for (const ev of ['keydown', 'keyup', 'keypress']) window.addEventListener(ev, capture, true);
     this._capture = capture;
-
-    check.addEventListener('click', () => this._check(text()));
-    this._later(() => input.focus(), 200);
+    this._later(() => focus(slots[0]), 200);
   }
 
   _teardown() {
@@ -992,19 +1036,31 @@ class CipherPuzzle extends PuzzleBase {
     this._capture = null;
   }
 
-  _check(guess) {
-    if (this._ended || !guess) return;
+  /** What is written so far: letters, '·' for an empty slot, spaces between words. */
+  _guess() {
+    let i = 0;
+    return this.answer.split(' ').map(w => [...w].map(() => this._slots?.[i++]?.value || '·').join('')).join(' ');
+  }
+
+  _check() {
+    if (this._ended || !this._slots) return;
+    const guess = this._guess();
+    const fb = this.root?.querySelector('.lpm-cipher-feedback');
+    if (guess.includes('·')) { if (fb) fb.textContent = 'Fill in every glyph first.'; return; }
     if (guess === this.answer) {
       this._emit('win', { state: { typing: guess } });
       Sfx.solved();
       this._finish(true, 'Cipher Solved', `The word was <b>${_esc(this.answer)}</b>`, { post: true });
       return;
     }
+    // Wrong: mark the letters that are not right, so the next try can build on the rest.
+    const want = this.answer.replace(/ /g, '');
+    let wrong = 0;
+    this._slots.forEach((s, i) => { const bad = s.value !== want[i]; s.classList.toggle('is-wrong', bad); if (bad) wrong++; });
     Sfx.fail();
     this._emit('attempt', { guess });
-    const fb = this.root?.querySelector('.lpm-cipher-feedback');
-    if (fb) fb.textContent = `“${guess}” is not it — try again.`;
-    const box = this.root?.querySelector('.lpm-cipher-answer-box');
+    if (fb) fb.textContent = `${wrong} ${wrong === 1 ? 'letter is' : 'letters are'} not right yet.`;
+    const box = this.root?.querySelector('.lpm-inscription');
     if (box) { box.classList.remove('lpm-shake'); void box.offsetWidth; box.classList.add('lpm-shake'); }
   }
 
@@ -1022,7 +1078,7 @@ class CipherPuzzle extends PuzzleBase {
     const rows = [...this._guesses].filter(([id]) => this._spectator || id !== game.user.id).map(([id, g]) => {
       const p = this._peers.get(id);
       const st = p?.status === 'solved' ? ' is-solved' : p?.status === 'left' ? ' is-left' : '';
-      const last = g.last ? `<span class="lpm-cipher-last"><i class="fa-solid fa-xmark"></i> ${_esc(g.last)}</span>` : '';
+      const last = g.last ? `<span class="lpm-cipher-last" title="Last wrong try"><i class="fa-solid fa-xmark"></i> ${_esc(g.last)}</span>` : '';
       return `<div class="lpm-cipher-row${st}"><span class="lpm-cipher-who">${_esc(p?.name ?? '?')}</span>`
            + `<span class="lpm-cipher-typing">${_esc(g.typing) || '…'}</span>${last}</div>`;
     });

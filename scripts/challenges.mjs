@@ -7,8 +7,8 @@ export const CHALLENGES = {
   lock: {
     group: 'Lockpicking', title: 'Pick the Lock', icon: 'fa-key',
     ask: 'is asked to pick', on: 'the lock on', none: 'a lock',
-    button: 'Roll &amp; pick the lock', busy: 'is picking the lock…', done: 'Picked by', failed: 'The lock held',
-    blurb: 'Thieves’ Tools check (or Dexterity without the tools), then the lockpicking game.',
+    button: 'Roll &amp; pick the lock', busy: 'is picking the lock…', done: 'Picked by', failed: 'The pick snapped — the lock held',
+    blurb: 'A Sleight of Hand check, then the lockpicking game. No tools needed.',
     placeholder: 'e.g. Iron-bound chest',
   },
   ward: {

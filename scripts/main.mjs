@@ -6,7 +6,6 @@
  */
 
 import { generation } from './compat.mjs';
-import { TOOL_MODES } from './tools.mjs';
 import { openMenu } from './menu.mjs';
 import { requestChallenge, requestLockpick, decorateRequestCard, onRequestStateMessage,
          releaseDroppedAttempts, arcanaAppClass } from './requests.mjs';
@@ -18,15 +17,6 @@ export const MODULE_ID = 'lockpick-minigame';
 Hooks.once('init', () => {
   console.log(`%c${MODULE_ID} | LOADED ✓`, 'color:lime;font-weight:bold');
 
-  // Systems ship Thieves' Tools, not "lockpicks" — the GM picks what is needed.
-  // (Replaces the old 'breakOnMiss' setting, which nothing ever read.)
-  game.settings.register(MODULE_ID, 'toolMode', {
-    name: 'Tool needed to pick a lock',
-    hint: "By default anyone can try: Thieves' Tools add their proficiency, without them it is a plain Dexterity check. "
-        + "Thieves' Tools are never used up; lockpicks are, a failed attempt snaps one.",
-    scope: 'world', config: true, type: String, default: 'none',
-    choices: TOOL_MODES,
-  });
   game.settings.register(MODULE_ID, 'defaultDC', {
     name: 'Default DC',
     hint: 'Pre-filled in the Puzzles & Challenges menu, for locks and Arcana challenges alike.',
@@ -143,7 +133,6 @@ function _registerSocket() {
         dc         : data.dc,
         hideDC     : data.hideDC,
         rollResult : data.rollResult,
-        tool       : data.tool,
         label      : data.label,
         spectator  : true,
         playerName : data.playerName,
