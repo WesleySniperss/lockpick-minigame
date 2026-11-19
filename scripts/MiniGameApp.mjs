@@ -22,6 +22,7 @@
 
 import { GameWindow, frameGap } from './app-window.mjs';
 import { drawResultOverlay } from './overlay.mjs';
+import { fontsReady } from './arcane-art.mjs';
 import { esc } from './cards.mjs';
 
 const MODULE_ID = 'lockpick-minigame';
@@ -174,6 +175,9 @@ export class MiniGameApp extends GameWindow {
       this.bindInput(this.canvas, root);
     }
     root.querySelector('.lpm-leave-btn').addEventListener('click', () => this.close());
+
+    // Cinzel may still be on its way: once it is in, the layers with words on them are drawn again.
+    fontsReady.then(() => { if (!this._dead) { this._static = null; this._boardKey = null; } });
 
     this._last = performance.now();
     this._raf = requestAnimationFrame(this._boundTick);

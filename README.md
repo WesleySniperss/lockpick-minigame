@@ -37,6 +37,10 @@ challenge whenever the story needs it.
    (*Unwoven by …* / *The ward held* and so on for Arcana). After a failure the
    GM can **Allow another try**.
 
+Every game ends on the board itself: a framed plate with the outcome
+(*Success* / *Failure*), its name in carved capitals and a line of what happened,
+with light breaking out on a win and cracks spreading on a loss.
+
 The cards have no colours of their own: they sit on your chat's message card
 and take its theme (core, the game system, Carolingian UI and its colour
 scheme), with the outcome shown by the icon's colour.
@@ -123,12 +127,16 @@ generated from a seed, so spectators see exactly the same board.
 
 ### Unweave the Ward
 
-The goal is written on the board: **line up the gaps to light the crystal**. The
-core at the centre shoots a straight beam at a crystal on the rim. Between them
-sit stone rings, each a solid wall with one **gap** in it, and the beam stops at
-the first ring whose gap is off its line; that gap pulses amber. Turn the ring
-until its gap is on the beam and the light runs on to the next ring. When every
-gap is on the line, the crystal lights and the ward comes apart.
+The goal is written on the board: **set every gap on the line of light**. A line
+is etched into the stone from the core at the centre to a crystal on the rim.
+It is rarely straight: between two rings it may bend one step along the groove,
+and it points a different way every time (one ward never starts the way the last
+one did on that table). Between core and crystal sit stone rings, each a solid
+wall with one **gap** in it. The light runs along the line and stops at the
+first ring whose gap is off it; that gap pulses amber, and a dotted trace shows
+the rest of the way. Turn the ring until its gap is on the line and the light
+runs on to the next ring. When every gap is on the line, the crystal lights and
+the ward comes apart.
 
 **Drag** a ring to turn it (a click turns it one step clockwise, a right-click
 one step back, the mouse wheel works too). Turning is free. Some rings are
@@ -249,21 +257,40 @@ again for 4 s of mana; tracing waits until it is over); a natural 20 gives two.
 Open **VTools → Puzzles & Challenges** and pick a puzzle under **What**:
 Sudoku, Sliding tiles, Cipher or Rune sequence, each in three difficulties.
 
-**Cipher:** a word or phrase is written in a fantasy script (Infernal, Abyssal or
-Elvish), one big glyph per letter with a slot under it. Type a letter under a
+**Cipher:** a word or a phrase is written in a fantasy script (Infernal, Abyssal
+or Elvish), one big glyph per letter with a slot under it. Type a letter under a
 glyph and it fills in under every copy of that glyph; click a codex entry to
-write its letter; when every slot is filled the answer is checked, and wrong
-letters turn red. Pointing at a glyph lights its codex entry. Easy gives the
-whole alphabet; Medium a codex of 14 letters that lacks two of the word's glyphs,
-Hard a codex of 12 that lacks about half of them. The missing glyphs glow orange
-in the inscription and are worked out from the word itself. The GM can set the
-word and the script in the menu.
+write its letter. Pointing at a glyph lights its codex entry. After a check,
+wrong letters turn red. The glyphs the codex lacks are worked out from the words
+themselves.
+
+| | Easy | Medium | Hard |
+|---|---|---|---|
+| Text | one word | a short phrase | a longer phrase |
+| Codex | the whole alphabet | 14 letters, lacks 2 of the text's | 12 letters, lacks up to 4 of the text's |
+| Glyphs the codex lacks | glow orange | glow orange | not marked |
+| Caesar wheel | — | turned; the inscription says how far | turned; nobody knows how far |
+| Checks | any, as soon as every slot is filled | any, as soon as every slot is filled | 3 (press **Check**); then the cipher holds |
+
+**The wheel:** from Medium the scribe turned a Caesar wheel before writing, so
+every glyph stands for a letter some places further along the alphabet. Turn
+your wheel (under the codex) and the codex letters move with it; at the right
+setting the codex reads true. On Medium the inscription tells you the setting;
+on Hard, turn until the words make sense.
+
+**Riddle** (checkbox in the menu, any difficulty): the inscription is a riddle.
+Once it is read, the riddle is asked under it, and only its answer opens the
+way (on Hard a wrong answer costs a check too). The GM can write their own
+riddle under **Your riddle** with its **Answer** (several answers that also
+count are separated by "/"); left empty, an old riddle is picked. The GM can
+also set the word or phrase and the script.
 
 - **Send to** — all connected players, one player, or **Only me** (the GM solves
   it; also used automatically when no player is connected).
 - **Solve together** (checkbox) — *checked*: one shared puzzle, every move by
-  anyone appears for everyone and one solve ends it for all; *unchecked*: each
-  player gets their own copy of the same puzzle.
+  anyone appears for everyone and one solve ends it for all (a Hard cipher's
+  three checks are the party's, and one reader opens the riddle for all);
+  *unchecked*: each player gets their own copy of the same puzzle.
 - **Others can watch** (checkbox) — when the puzzle goes to one player, or the GM
   solves it alone, everyone else online gets a read-only window and can follow it
   live. Only the GM sees a cipher's answer, and only the GM can join in.
@@ -293,6 +320,12 @@ word and the script in the menu.
 - dnd5e system **v3.0+**
 - Level Up Advanced 5e (a5e) system
 - No dependencies. VTools adds the toolbar button; without it use the macro API (`api.openMenu()`).
+
+### Credits
+
+The carved capitals on the boards and end screens are **Cinzel** (© 2020 The
+Cinzel Project Authors), shipped with the module under the SIL Open Font
+License 1.1 — see [`styles/fonts/Cinzel-OFL.txt`](styles/fonts/Cinzel-OFL.txt).
 
 ### Foundry versions
 

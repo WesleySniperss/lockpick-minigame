@@ -20,7 +20,7 @@ const MODULE_ID = 'lockpick-minigame';
 const PUZZLE_BLURBS = {
   sudoku : 'Classic 9×9 sudoku. Sent straight to the players you pick.',
   sliding: 'Slide the stone tiles back into the picture. Sent straight to the players you pick.',
-  cipher : 'Decode a word written in a fantasy alphabet with its codex. Harder difficulties leave glyphs out of the codex.',
+  cipher : 'Decode an inscription in a fantasy alphabet with its codex. Medium adds a Caesar wheel and a partial codex; Hard hides the wheel setting and allows three checks. Tick Riddle for a riddle to answer once it is read.',
   simon  : 'Memorise a sequence of runes, then repeat it.',
 };
 
@@ -93,8 +93,18 @@ export async function openMenu(what) {
             <div class="form-fields"><select name="plang">${langOpts}</select></div>
           </div>
           <div class="form-group">
-            <label>Word / phrase</label>
+            <label>Riddle</label>
+            <div class="form-fields"><input type="checkbox" name="priddle"></div>
+            <p class="hint lpm-riddle-hint"></p>
+          </div>
+          <div class="form-group">
+            <label class="lpm-word-label">Word / phrase</label>
             <div class="form-fields"><input type="text" name="pword" placeholder="Leave empty for random" autocomplete="off" spellcheck="false"></div>
+          </div>
+          <div class="form-group lpm-answer-group">
+            <label>Answer</label>
+            <div class="form-fields"><input type="text" name="panswer" placeholder="e.g. fire / flame" autocomplete="off" spellcheck="false"></div>
+            <p class="hint">Needed for your own riddle. Separate answers that also count with “/”.</p>
           </div>
         </div>
         <div class="form-group">
@@ -158,7 +168,17 @@ function wire(dialog, players) {
     const label = go.querySelector('span') ?? go, icon = go.querySelector('i');
     label.textContent = challenge ? 'Send to chat' : 'Open';
     if (icon) icon.className = challenge ? 'fa-solid fa-paper-plane' : 'fa-solid fa-puzzle-piece';
-    go.disabled = challenge && !f.actor;
+    // The cipher's riddle: the same game with one more step, and the GM's own riddle needs its answer.
+    const riddle = what === 'cipher' && f.priddle.checked;
+    root.querySelector('.lpm-riddle-hint').textContent = riddle
+      ? 'Once the inscription is read, it asks a riddle, and only its answer opens the way.'
+      : 'Tick to make the inscription a riddle to answer once it is read.';
+    root.querySelector('.lpm-word-label').textContent = riddle ? 'Your riddle' : 'Word / phrase';
+    f.pword.placeholder = riddle ? 'Leave empty for a random riddle' : 'Leave empty for random';
+    root.querySelector('.lpm-answer-group').hidden = !riddle;
+    const noAnswer = riddle && f.pword.value.trim() && !f.panswer.value.trim();
+    f.panswer.classList.toggle('lpm-needed', !!noAnswer);
+    go.disabled = (challenge && !f.actor) || !!noAnswer;
     // Explain "Solve together" in terms of what the players will actually get.
     const group = f.ptarget.value === 'all' && players.length > 1;
     f.pshared.disabled = !group;
@@ -177,7 +197,8 @@ function wire(dialog, players) {
       : 'The other players get a read-only window and can follow every move live.';
     dialog.setPosition({ height: 'auto' });
   };
-  for (const el of [f.what, f.ptarget, f.pshared]) el.addEventListener('change', sync);
+  for (const el of [f.what, f.ptarget, f.pshared, f.priddle]) el.addEventListener('change', sync);
+  for (const el of [f.pword, f.panswer]) el.addEventListener('input', sync);
   sync();
 }
 
@@ -210,6 +231,8 @@ async function submit(f) {
   const opts = generatePuzzleOpts(what, diff, {
     lang      : f.plang.value || undefined,
     customWord: f.pword.value || undefined,
+    riddle    : !!f.priddle?.checked,
+    riddleAnswer: f.panswer?.value || undefined,
     shared,
     recipients: recipients.map(u => ({ id: u.id, name: u.name })),
   });

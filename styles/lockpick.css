@@ -5,6 +5,15 @@
    orange borders inside these dark panels. Literal colours keep the intended
    look identical on every core version and theme. */
 
+/* Cinzel (SIL Open Font License, see fonts/Cinzel-OFL.txt): titles, labels and the words on the boards */
+@font-face {
+  font-family: "LPM Cinzel";
+  src: url("fonts/Cinzel.ttf") format("truetype");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Window chrome */
 .lpm-lock .window-content,
 .lpm-puzzle .window-content { padding:0; background:#111; }
@@ -31,7 +40,7 @@
 }
 /* Result typography — core fonts only (Modesto Condensed, Signika, Amiri) */
 .lockpick-minigame, .lpm-card, .lpm-flavor {
-  --lpm-font-display: "Modesto Condensed", "Signika", Georgia, serif;
+  --lpm-font-display: "LPM Cinzel", "Cinzel", "Modesto Condensed", Georgia, serif;
   --lpm-font-body: "Signika", ui-sans-serif, system-ui, sans-serif;
   --lpm-font-serif: "Amiri", Georgia, "Times New Roman", serif;
 }
@@ -39,8 +48,8 @@
 /* Misses left: little brass pins, spent ones are empty sockets */
 .lpm-attempts { display:flex; align-items:center; gap:8px; }
 .lpm-attempts-label {
-  font:700 10px/1 var(--lpm-font-body); text-transform:uppercase; letter-spacing:.14em;
-  color:#a89d84; cursor:help;
+  font:700 11px/1 var(--lpm-font-display); text-transform:uppercase; letter-spacing:.1em;
+  color:#c9b98e; cursor:help;
 }
 .lpm-pips { display:flex; gap:5px; cursor:help; }
 .lpm-pip {
@@ -63,13 +72,13 @@
 .lpm-roll--secret { --lpm-roll:#c3cbe0; }
 .lpm-roll__die { font-size:17px; color:var(--lpm-roll); filter:drop-shadow(0 1px 1px rgba(0,0,0,.8)); }
 .lpm-roll__total {
-  font:700 27px/1 var(--lpm-font-display); color:var(--lpm-roll);
+  font:700 26px/1 var(--lpm-font-display); color:var(--lpm-roll);
   text-shadow:0 1px 2px rgba(0,0,0,.9); min-width:1.3em; text-align:center;
 }
 .lpm-roll__meta { display:flex; flex-direction:column; gap:1px; line-height:1.15; }
 .lpm-roll__vs   { font:600 11px var(--lpm-font-body); color:#cfc5ad; letter-spacing:.04em; }
 .lpm-roll__note {
-  font:700 9.5px var(--lpm-font-body); text-transform:uppercase; letter-spacing:.12em; color:var(--lpm-roll);
+  font:700 10px var(--lpm-font-display); text-transform:uppercase; letter-spacing:.08em; color:var(--lpm-roll);
 }
 
 /* Puzzle windows
@@ -110,8 +119,12 @@
   box-shadow:0 0 0 3px #b38e45, 0 0 0 4px rgba(0,0,0,.6), 0 5px 16px rgba(0,0,0,.65), inset 0 2px 6px rgba(0,0,0,.85);
 }
 .lpm-result__title {
-  font:700 34px/1.05 var(--lpm-font-display); letter-spacing:.04em; color:var(--lpm-result);
-  text-shadow:0 2px 3px rgba(0,0,0,.85);
+  font:700 32px/1.1 var(--lpm-font-display); letter-spacing:.05em; color:var(--lpm-result);
+  text-shadow:0 2px 3px rgba(0,0,0,.85), 0 0 18px color-mix(in srgb, var(--lpm-result) 35%, transparent);
+}
+.lpm-result__kicker {
+  font:700 11px var(--lpm-font-display); letter-spacing:.3em; text-transform:uppercase;
+  color:color-mix(in srgb, var(--lpm-result) 75%, #fff); opacity:.85;
 }
 .lpm-result__rule {
   position:relative; width:190px; height:1px; margin:5px 0 3px;
@@ -121,7 +134,7 @@
   position:absolute; left:50%; top:50%; width:6px; height:6px;
   background:var(--lpm-result); transform:translate(-50%,-50%) rotate(45deg);
 }
-.lpm-result__sub { font:italic 400 16px/1.35 var(--lpm-font-serif); color:#ddd3bb; max-width:330px; }
+.lpm-result__sub { font:italic 400 18px/1.4 var(--lpm-font-serif); color:#e6dcc2; max-width:360px; }
 .lpm-result__sub b { font:700 13px var(--lpm-font-body); letter-spacing:.14em; color:#f3e4bd; font-style:normal; }
 @keyframes lpm-pop {
   from{transform:scale(.6);opacity:0} 70%{transform:scale(1.08)} to{transform:scale(1);opacity:1}
@@ -196,7 +209,7 @@
 
 /* Sliding puzzle - stone tiles */
 .lpm-sliding-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
-.lpm-sliding-moves { font:700 11px var(--lpm-font-body); letter-spacing:.16em; text-transform:uppercase; color:#aab4d0; }
+.lpm-sliding-moves { font:700 12px var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#c9cfe0; }
 .lpm-sliding-grid {
   display:grid; grid-template-columns:repeat(var(--sz),1fr);
   gap:4px; width:380px; height:380px;
@@ -256,7 +269,7 @@
 }
 .lpm-cipher-label {
   display:flex; align-items:baseline; gap:8px; margin:0 0 9px;
-  font:700 11px/1 var(--lpm-font-body); letter-spacing:.16em; text-transform:uppercase; color:#aab4d0;
+  font:700 12px/1 var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#c9cfe0;
 }
 .lpm-cipher-label span { font-weight:600; letter-spacing:.1em; color:#d9b866; }
 .lpm-cipher-label em { margin-left:auto; font:600 11px var(--lpm-font-body); letter-spacing:.02em; text-transform:none; font-style:normal; color:#8fd29a; }
@@ -301,6 +314,59 @@
 .lpm-codex-glyph { font-size:23px; color:#ecc970; }
 .lpm-codex-letter { font:700 15px/1 var(--lpm-font-body); color:#e3e8f5; }
 .lpm-cipher-note { margin:9px 0 0; font:600 12px var(--lpm-font-body); color:#d9b866; }
+.lpm-cipher-note b { color:#f3e2b0; }
+.lpm-cipher-label em.lpm-cipher-tag {
+  margin-left:6px; font:italic 400 14px var(--lpm-font-serif); letter-spacing:0; color:#c9b6ff;
+}
+/* long inscriptions: smaller tiles, so a phrase or a riddle fits in a few rows */
+.lpm-inscription.is-long { gap:10px 18px; }
+.lpm-inscription.is-long .lpm-ins-word { gap:4px; }
+.lpm-inscription.is-long .lpm-ins-tile { width:36px; gap:5px; padding-top:4px; }
+.lpm-inscription.is-long .lpm-ins-glyph { font-size:26px; height:30px; }
+.lpm-puzzle .lpm-inscription.is-long input.lpm-ins-slot, .lpm-inscription.is-long .lpm-ins-slot {
+  width:33px; height:36px; font-size:18px; line-height:34px;
+}
+.lpm-puzzle input.lpm-ins-slot:disabled { color:#ecc970; border-bottom-color:#9a7a3e; opacity:1; }
+/* the Caesar wheel under the codex */
+.lpm-wheel {
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px;
+  margin-top:11px; padding-top:11px; border-top:1px solid #23273a;
+}
+.lpm-wheel-label { font:700 12px var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#d9b866; }
+.lpm-puzzle button.lpm-wheel-btn {
+  width:32px; height:32px; flex:0 0 auto; margin:0; padding:0; border-radius:50%; cursor:pointer;
+  font-size:13px; color:#f3dc9a; background:radial-gradient(circle at 35% 30%, #4d3d1f, #1c150a);
+  border:1px solid #a4823f; box-shadow:inset 0 1px 0 rgba(255,230,170,.18), 0 2px 5px rgba(0,0,0,.5);
+}
+.lpm-puzzle button.lpm-wheel-btn:hover:not([disabled]) { filter:brightness(1.25); }
+.lpm-puzzle button.lpm-wheel-btn[disabled] { opacity:.45; cursor:default; }
+.lpm-wheel-val {
+  min-width:40px; padding:4px 8px; border-radius:6px; text-align:center;
+  font:700 20px/1.1 var(--lpm-font-display); color:#f6e6b6;
+  background:#0b0c12; border:1px solid #4a3f22; box-shadow:inset 0 1px 4px rgba(0,0,0,.8);
+}
+.lpm-wheel-say { flex:1 1 230px; font:600 12px/1.4 var(--lpm-font-body); color:#aab4d0; }
+.lpm-wheel-say b { color:#f3e2b0; }
+/* checks left (hard) */
+.lpm-cipher-checks { display:flex; align-items:center; gap:4px; }
+.lpm-cipher-checks span { margin-right:4px; font:700 11px var(--lpm-font-display); letter-spacing:.1em; text-transform:uppercase; color:#c9b98e; }
+.lpm-cipher-checks .lpm-pip {
+  width:11px; height:11px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #fff3c4 0%, #f0c25a 35%, #9a6a1c 80%, #5e4214 100%);
+  box-shadow:0 0 0 1px rgba(0,0,0,.65), 0 0 6px rgba(240,194,90,.45);
+}
+.lpm-cipher-checks .lpm-pip.used { background:#201c16; box-shadow:inset 0 1px 3px rgba(0,0,0,.85), 0 0 0 1px rgba(255,236,190,.12); }
+/* the riddle, once the inscription is read */
+.lpm-riddle { margin-top:12px; padding-top:12px; border-top:1px solid #2a2e3d; }
+.lpm-riddle-text { margin:0 0 12px; text-align:center; font:italic 400 20px/1.4 var(--lpm-font-serif); color:#f1e5c6; }
+.lpm-riddle-row { display:flex; align-items:center; gap:10px; }
+.lpm-puzzle input.lpm-riddle-input {
+  flex:1 1 auto; height:40px; margin:0; padding:0 12px; box-sizing:border-box;
+  font:600 17px var(--lpm-font-body); color:#eef2ff; background:#0a0b10;
+  border:1px solid #343b54; border-bottom:2px solid #5d6995; border-radius:6px; outline:none;
+}
+.lpm-puzzle input.lpm-riddle-input:focus { border-color:#86ecff; box-shadow:0 0 0 3px rgba(134,236,255,.18); }
+.lpm-riddle-feedback { margin-top:8px; }
 .lpm-cipher-note i { margin-right:5px; }
 
 /* live list of what each player has written (GM view, shared mode) */
@@ -562,7 +628,8 @@
 .lpm-menu-dialog .lpm-dc-fields { flex-wrap:nowrap; gap:12px; }
 .lpm-menu-dialog input[name="dc"] { flex:1 1 0; min-width:0; }
 .lpm-menu-dialog .lpm-menu-none { opacity:.7; font-style:italic; }
-.lpm-menu-form > div[hidden], .lpm-menu-form .lpm-cipher-opts[hidden] { display:none; }
+.lpm-menu-form > div[hidden], .lpm-menu-form .lpm-cipher-opts[hidden], .lpm-menu-form .lpm-answer-group[hidden] { display:none; }
+.lpm-menu-dialog input.lpm-needed { border-color:#d98a3a; box-shadow:0 0 0 1px rgba(217,138,58,.6); }
 .lpm-shared-group.lpm-disabled label, .lpm-watch-group.lpm-disabled label { opacity: .55; }
 
 /* ── GM results panel ─────────────────────────────────────── */

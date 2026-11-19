@@ -14,7 +14,7 @@
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateWeave, WeaveGame, SAMPLES, RING_TIME, GLINT } from './echo-logic.mjs';
-import { ARC, TAU, layer, blit, backdrop, engrave, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, INK, layer, blit, backdrop, engrave, spark, hexA, note } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
@@ -314,45 +314,23 @@ export class EchoApp extends MiniGameApp {
    * bottom-right, how soon an undone knot ties again. Part of the static layer.
    */
   drawFixedNotes(ctx) {
-    const letters = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px; };
-    ctx.save();
-    ctx.font = '700 10px "Signika", sans-serif';
-    letters('1.6px');
-    ctx.fillStyle = 'rgba(200,212,240,0.8)';
-    ctx.fillText('CALL INTO THE DARK', 14, 22);
-    ctx.fillText('AND UNDO EVERY KNOT', 14, 36);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = hexA(CALL, 0.85);
-    ctx.fillText('CALLS LEFT', W - 14, 22);
-    ctx.textAlign = 'left';
-    ctx.font = '700 9px "Signika", sans-serif';
-    letters('1px');
-    ctx.fillStyle = hexA(THREAD, 0.9);
-    ctx.fillText('THREADS THICKEN', 14, 411);
-    ctx.fillText('TOWARD THEIR KNOT', 14, 424);
+    note(ctx, 'CALL INTO THE DARK', 14, 24, { size: 12 });
+    note(ctx, 'AND UNDO EVERY KNOT', 14, 40, { size: 12 });
+    note(ctx, 'CALLS LEFT', W - 14, 24, { size: 11, align: 'right', color: hexA(CALL, 0.9) });
+    note(ctx, 'THREADS THICKEN', 14, 409, { size: 11, color: hexA(THREAD, 0.95) });
+    note(ctx, 'TOWARD THEIR KNOT', 14, 425, { size: 11, color: hexA(THREAD, 0.95) });
     const every = this.weave.params.retie;
     if (every) {
-      ctx.textAlign = 'right';
-      ctx.fillStyle = hexA(ARC.violet, 0.95);
-      ctx.fillText('AN UNDONE KNOT TIES', W - 14, 411);
-      ctx.fillText(`AGAIN AFTER ${Math.round(every)} s`, W - 14, 424);
+      note(ctx, 'AN UNDONE KNOT', W - 14, 409, { size: 11, align: 'right', color: hexA(ARC.violet, 0.98) });
+      note(ctx, `TIES AGAIN IN ${Math.round(every)} s`, W - 14, 425, { size: 11, align: 'right', color: hexA(ARC.violet, 0.98) });
     }
-    ctx.restore();
   }
 
   /** How many knots are undone, and how many calls are left. */
   drawNotes(ctx) {
     const g = this.game, done = g.undoneCount(), all = this.weave.knots.length;
-    ctx.save();
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
-    ctx.font = '700 12px "Signika", sans-serif';
-    ctx.fillStyle = done ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
-    ctx.fillText(`${done} / ${all} ${all === 1 ? 'KNOT' : 'KNOTS'} UNDONE`, 14, 56);
-    ctx.textAlign = 'right';
-    ctx.font = '700 18px "Signika", sans-serif';
-    ctx.fillStyle = g.left <= 1 ? '#ff8aa2' : 'rgba(225,232,250,0.92)';
-    ctx.fillText(String(g.left), W - 14, 42);
-    ctx.restore();
+    note(ctx, `${done} / ${all} ${all === 1 ? 'KNOT' : 'KNOTS'} UNDONE`, 14, 62, { size: 13, color: done ? hexA(ARC.gold, 0.98) : INK.label });
+    note(ctx, String(g.left), W - 14, 50, { size: 24, align: 'right', color: g.left <= 1 ? '#ff8aa2' : '#f1e9d2' });
   }
 
   renderEnding(ctx, t, success) {
