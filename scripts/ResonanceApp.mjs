@@ -13,7 +13,7 @@
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateResonance, ResonanceGame, RUNE_COUNT } from './resonance-logic.mjs';
-import { ARC, TAU, RUNES, layer, blit, ringCells, blitCells, discSprite, ArcMeter, backdrop, drawRune, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, RUNES, INK, layer, blit, ringCells, blitCells, discSprite, ArcMeter, backdrop, drawRune, engrave, glow, spark, hexA, note } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
@@ -279,29 +279,15 @@ export class ResonanceApp extends MiniGameApp {
 
   /** What never changes: what to do top-left, what fights back bottom-left. Part of the static layer. */
   drawFixedNotes(ctx) {
-    ctx.save();
-    ctx.font = '700 10px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
-    ctx.fillStyle = 'rgba(200,212,240,0.78)';
-    ctx.fillText('KEEP THE LIGHT', 14, 22);
-    ctx.fillText('IN YOUR FOCUS', 14, 36);
-    ctx.font = '700 9px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1px';
-    ctx.fillStyle = 'rgba(200,212,240,0.72)';
-    ctx.fillText('THE RING TIGHTENS', 14, 411);
-    ctx.fillStyle = hexA(AMBER, 0.9);
-    ctx.fillText('A FLARE: IT SURGES', 14, 424);
-    ctx.restore();
+    note(ctx, 'KEEP THE LIGHT', 14, 24, { size: 12 });
+    note(ctx, 'IN YOUR FOCUS', 14, 40, { size: 12 });
+    note(ctx, 'THE RING TIGHTENS', 14, 409, { size: 11, color: INK.dim });
+    note(ctx, 'A FLARE: IT SURGES', 14, 425, { size: 11, color: hexA(AMBER, 0.95) });
   }
 
   /** How many runes are awake. */
   drawGoal(ctx, awake) {
-    ctx.save();
-    ctx.font = '700 12px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '1.6px';
-    ctx.fillStyle = awake ? hexA(ARC.gold, 0.95) : 'rgba(200,212,240,0.85)';
-    ctx.fillText(`${awake} / ${RUNE_COUNT} RUNES AWAKE`, 14, 56);
-    ctx.restore();
+    note(ctx, `${awake} / ${RUNE_COUNT} RUNES AWAKE`, 14, 62, { size: 13, color: awake ? hexA(ARC.gold, 0.98) : INK.label });
   }
 
   renderEnding(ctx, t, success) {

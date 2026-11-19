@@ -310,6 +310,7 @@ class PuzzleBase extends GameWindow {
       const icon = ok ? this.constructor.ICON : 'fa-xmark';
       content.innerHTML = `<div class="lpm-result lpm-result--${ok ? 'win' : 'fail'}">`
         + `<div class="lpm-result__medal"><i class="fa-solid ${icon}"></i></div>`
+        + `<div class="lpm-result__kicker">${ok ? 'Success' : 'Failure'}</div>`
         + `<div class="lpm-result__title">${_esc(title)}</div>`
         + `<div class="lpm-result__rule"><span></span></div>`
         + (sub ? `<div class="lpm-result__sub">${sub}</div>` : '')
@@ -828,10 +829,12 @@ class SlidingPuzzle extends PuzzleBase {
 //
 // An inscription in a fantasy script, one big glyph per letter with a slot
 // under it, and the codex that says which glyph is which letter. Type a letter
-// under a glyph and it goes under every copy of that glyph. Easy gives the
-// whole alphabet; medium and hard a codex of 14 and 12 letters that leaves two
-// of the word's glyphs out (hard: about half), to be worked out from the word.
-// The codex is partial anyway, so what it lacks says nothing about them.
+// under a glyph and it goes under every copy of that glyph. Easy: a word and
+// the whole alphabet. Medium: a short phrase, a codex of 14 letters lacking two
+// of its glyphs (they glow orange), and a Caesar wheel the scribe turned to a
+// number the inscription gives. Hard: a longer phrase, a codex of 12 lacking
+// three or four glyphs (not marked), a wheel setting nobody knows, three checks.
+// Any difficulty can be a riddle: once read, its answer is the key.
 
 // Fantasy alphabets: glyph → English letter
 const FANTASY_ALPHABETS = {
@@ -866,30 +869,74 @@ const FANTASY_ALPHABETS = {
 
 const CIPHER_WORDS = {
   easy:   ['DOOR', 'LOCK', 'GOLD', 'FIRE', 'WOLF', 'MOON', 'STAR', 'KING', 'DARK', 'IRON'],
-  medium: ['DRAGON', 'CASTLE', 'WIZARD', 'SHIELD', 'PORTAL', 'GOBLIN', 'SHADOW', 'TEMPLE'],
-  hard:   ['DUNGEON MASTER', 'ANCIENT RUNES', 'FORBIDDEN TOME', 'DRAGONS HOARD'],
+  medium: ['OPEN THE GATE', 'SEEK THE TOWER', 'FIRE AND IRON', 'THE KING SLEEPS', 'BEWARE THE DARK',
+           'GOLD LIES BELOW', 'BLOOD OPENS DOORS', 'ASH AND BONE'],
+  hard:   ['THE DEAD KEEP THEIR WORD', 'ONLY THE WORTHY MAY PASS', 'BENEATH THE SECOND STAIR',
+           'THE DRAGON NEVER SLEEPS', 'TRUST NOT THE SILVER DOOR', 'THE KEY LIES WITH THE KING'],
 };
 
-/** How many of the word's letters the codex leaves out, by difficulty. */
-const hiddenCount = (difficulty, distinct) =>
-  difficulty === 'hard' ? Math.ceil(distinct / 2) : difficulty === 'medium' ? Math.min(2, distinct - 2) : 0;
+/** Old riddles: the inscription asks, the answer opens the way. */
+const CIPHER_RIDDLES = [
+  { text: 'I SPEAK WITHOUT A MOUTH AND HEAR WITHOUT EARS', answers: ['ECHO'] },
+  { text: 'THE MORE YOU TAKE THE MORE YOU LEAVE BEHIND', answers: ['FOOTSTEPS', 'STEPS', 'FOOTPRINTS'] },
+  { text: 'I HAVE CITIES BUT NO HOUSES AND RIVERS BUT NO WATER', answers: ['MAP'] },
+  { text: 'FEED ME AND I LIVE GIVE ME DRINK AND I DIE', answers: ['FIRE', 'FLAME'] },
+  { text: 'WHAT HAS ONE EYE BUT CANNOT SEE', answers: ['NEEDLE'] },
+  { text: 'WHAT CAN FILL A ROOM BUT TAKES NO SPACE', answers: ['LIGHT'] },
+  { text: 'THE MORE OF ME THERE IS THE LESS YOU SEE', answers: ['DARKNESS', 'DARK'] },
+  { text: 'WHAT BREAKS WHEN YOU SAY ITS NAME', answers: ['SILENCE'] },
+];
 
-function _makeCipher(difficulty, { lang, customWord } = {}) {
-  const clean  = String(customWord ?? '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
-  const pool   = CIPHER_WORDS[difficulty] ?? CIPHER_WORDS.easy;
-  const answer = clean || pool[Math.floor(Math.random() * pool.length)];
-  const pick   = list => list.splice(Math.floor(Math.random() * list.length), 1)[0];
+const ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+/** A letter moved n places along the alphabet (wrapping). */
+const shiftLetter = (ch, n) => ABC[(((ABC.indexOf(ch) + n) % 26) + 26) % 26];
+/** A riddle as a sentence: "What has one eye but cannot see?" / "I speak without a mouth…. What am I?" */
+const riddleLine = text => {
+  const s = text.charAt(0) + text.slice(1).toLowerCase().replace(/\bi\b/g, 'I');
+  return /^(WHAT|WHO|WHERE|WHEN)\b/.test(text) ? `${s}?` : `${s}. What am I?`;
+};
+/** An answer as typed: capitals, single spaces, no "a" / "the" in front. */
+const normAnswer = s => String(s ?? '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^(A|AN|THE) /, '');
+
+/**
+ * Per difficulty: how many of the text's letters the codex leaves out, how many
+ * letters it lists (null: all 26), whether the missing glyphs glow, whether the
+ * wheel was turned (and whether the inscription says how far), how many checks.
+ */
+const CIPHER_RULES = {
+  easy:   { hide: () => 0, codex: null, mark: true, wheel: null, checks: Infinity },
+  medium: { hide: () => 2, codex: 14, mark: true, wheel: 'told', checks: Infinity },
+  hard:   { hide: n => Math.min(4, Math.ceil(n / 4) + 1), codex: 12, mark: false, wheel: 'lost', checks: 3 },
+};
+
+function _makeCipher(difficulty, { lang, customWord, riddle = false, riddleAnswer } = {}) {
+  const rules = CIPHER_RULES[difficulty] ?? CIPHER_RULES.easy;
+  const pick  = list => list.splice(Math.floor(Math.random() * list.length), 1)[0];
+  const clean = String(customWord ?? '').toUpperCase().replace(/[^A-Z ]/g, '').replace(/\s+/g, ' ').trim();
+  let answer, answers = null;
+  if (riddle) {
+    const own = String(riddleAnswer ?? '').split(/[\/,;|]/).map(normAnswer).filter(Boolean);
+    const r = clean && own.length ? { text: clean, answers: own } : CIPHER_RIDDLES[Math.floor(Math.random() * CIPHER_RIDDLES.length)];
+    answer = r.text; answers = r.answers;
+  } else {
+    const pool = CIPHER_WORDS[difficulty] ?? CIPHER_WORDS.easy;
+    answer = clean || pool[Math.floor(Math.random() * pool.length)];
+  }
   const known  = [...new Set(answer.replace(/ /g, ''))];
   const hidden = [];
-  for (let n = hiddenCount(difficulty, known.length); n > 0 && known.length; n--) hidden.push(pick(known));
-  // Medium and hard: the word's other letters, padded with letters it does not use (null: all 26).
+  for (let n = Math.min(rules.hide(known.length), known.length - 2); n > 0; n--) hidden.push(pick(known));
+  // A partial codex: the text's other letters, padded with letters it does not use.
   let codex = null;
-  if (difficulty === 'medium' || difficulty === 'hard') {
-    const others = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].filter(l => !answer.includes(l));
-    while (known.length < (difficulty === 'hard' ? 12 : 14) && others.length) known.push(pick(others));
+  if (rules.codex) {
+    const others = [...ABC].filter(l => !answer.includes(l));
+    while (known.length < rules.codex && others.length) known.push(pick(others));
     codex = known.sort();
   }
-  return { lang: FANTASY_ALPHABETS[lang] ? lang : Object.keys(FANTASY_ALPHABETS)[0], answer, hidden, codex };
+  return {
+    lang: FANTASY_ALPHABETS[lang] ? lang : Object.keys(FANTASY_ALPHABETS)[0],
+    answer, hidden, codex, riddle: answers,
+    shift: rules.wheel ? 3 + Math.floor(Math.random() * 20) : 0,
+  };
 }
 
 class CipherPuzzle extends PuzzleBase {
@@ -897,80 +944,131 @@ class CipherPuzzle extends PuzzleBase {
   static NAME = 'Cipher';
   static ICON = 'fa-scroll';
   static TITLE = 'Cipher';
-  static WIDTH = 560;
+  static WIDTH = 580;
 
   constructor(difficulty, opts = {}) {
     super(difficulty, opts);
     const c = opts.answer ? opts : _makeCipher(difficulty, opts);
+    this.rules    = CIPHER_RULES[difficulty] ?? CIPHER_RULES.easy;
     this.answer   = c.answer;
+    this.shift    = Number(c.shift) || 0;                    // how far the scribe turned the wheel
     this.hidden   = new Set(c.hidden ?? []);
-    this.codex    = c.codex ? new Set(c.codex) : null;      // the letters the codex lists (null: all)
+    this.codex    = c.codex ? new Set(c.codex) : null;      // the plain letters the codex lists (null: all)
+    this.riddle   = c.riddle ?? null;                       // accepted answers, when the text is a riddle
     this.langData = FANTASY_ALPHABETS[c.lang] ?? Object.values(FANTASY_ALPHABETS)[0];
     this.engToFan = {};
     for (const [fan, eng] of Object.entries(this.langData.map)) this.engToFan[eng] ??= fan;
-    this._guesses = new Map();   // userId → { typing, last }
+    this.wheel    = 0;                                      // where the reader's wheel stands
+    this.checksLeft = this.rules.checks;
+    this.stage    = 'decode';                               // decode → riddle (when there is one)
+    this._guesses = new Map();                              // userId → { typing, last }
+    // Joining a shared cipher already under way: the checks spent so far, and the riddle if it is read.
+    const st = opts.initialState;
+    if (Number.isFinite(st?.checksLeft)) this.checksLeft = st.checksLeft;
+    this._readOnJoin = st?.stage === 'riddle' && !!this.riddle;
   }
+
+  _snapshot() { return { checksLeft: Number.isFinite(this.checksLeft) ? this.checksLeft : null, stage: this.stage }; }
+
+  /** The glyph a plain letter is written with: moved along by the wheel, then put in the script. */
+  _glyph(ch) { return this.engToFan[shiftLetter(ch, this.shift)] ?? ch; }
 
   /** The inscription: words of glyph tiles, each with a slot (filled in for the GM watching). */
   _inscriptionHTML({ slots = true, reveal = false } = {}) {
     let i = 0;
+    const letters = this.answer.replace(/ /g, '').length;
     const words = this.answer.split(' ').map(word => `<span class="lpm-ins-word">${[...word].map(ch => {
-      const g = this.engToFan[ch] ?? ch, at = i++, unknown = this.hidden.has(ch) ? ' is-unknown' : '';
+      const g = this._glyph(ch), at = i++;
+      const unknown = this.hidden.has(ch) && (this.rules.mark || reveal) ? ' is-unknown' : '';
       const slot = !slots ? ''
         : reveal ? `<span class="lpm-ins-slot is-answer">${ch}</span>`
         : `<input class="lpm-ins-slot" data-i="${at}" data-g="${g}" maxlength="2" autocomplete="off" spellcheck="false" aria-label="Letter ${at + 1}">`;
       return `<span class="lpm-ins-tile${unknown}" data-g="${g}"><span class="lpm-ins-glyph">${g}</span>${slot}</span>`;
     }).join('')}</span>`);
-    return `<div class="lpm-inscription">${words.join('')}</div>`;
+    return `<div class="lpm-inscription${letters > 16 ? ' is-long' : ''}">${words.join('')}</div>`;
   }
 
-  /** The codex: its glyphs over their letters, A to Z. */
+  /** The codex: its glyphs over the letters they stand for, read through the wheel as it stands. */
   _codexHTML() {
-    return `<div class="lpm-codex">${Object.entries(this.langData.map)
-      .filter(([, eng]) => !this.hidden.has(eng) && (!this.codex || this.codex.has(eng)))
-      .map(([g, eng]) => `<div class="lpm-codex-entry" data-g="${g}" data-l="${eng}">`
-        + `<span class="lpm-codex-glyph">${g}</span><span class="lpm-codex-letter">${eng}</span></div>`).join('')}</div>`;
+    const entries = Object.entries(this.langData.map).filter(([, c]) => {
+      const plain = shiftLetter(c, -this.shift);
+      return !this.hidden.has(plain) && (!this.codex || this.codex.has(plain));
+    });
+    return `<div class="lpm-codex">${entries.map(([g, c]) => `<div class="lpm-codex-entry" data-g="${g}" data-c="${c}">`
+      + `<span class="lpm-codex-glyph">${g}</span><span class="lpm-codex-letter">${shiftLetter(c, -this.wheel)}</span></div>`).join('')}</div>`;
+  }
+
+  /** The wheel under the codex: turn it and every letter in the codex moves along. */
+  _wheelHTML(readonly = false) {
+    if (!this.rules.wheel) return '';
+    const off = readonly ? 'disabled' : '';
+    const say = readonly ? `The scribe turned the wheel to <b>${this.shift}</b>.`
+      : this.rules.wheel === 'told' ? `The scribe turned the wheel to <b>${this.shift}</b> — turn yours to match.`
+      : 'Nobody knows where the scribe set the wheel. Turn it until the words make sense.';
+    return `<div class="lpm-wheel">
+        <span class="lpm-wheel-label">Wheel</span>
+        <button type="button" class="lpm-wheel-btn" data-d="-1" ${off} aria-label="Turn back"><i class="fa-solid fa-rotate-left"></i></button>
+        <span class="lpm-wheel-val">${readonly ? this.shift : this.wheel}</span>
+        <button type="button" class="lpm-wheel-btn" data-d="1" ${off} aria-label="Turn on"><i class="fa-solid fa-rotate-right"></i></button>
+        <span class="lpm-wheel-say">${say}</span>
+      </div>`;
+  }
+
+  /** Checks left, as pins (hard only). */
+  _checksHTML() {
+    if (!Number.isFinite(this.rules.checks)) return '';
+    return `<span class="lpm-cipher-checks" title="Wrong checks before the cipher holds"><span>Checks</span>${
+      Array.from({ length: this.rules.checks }, (_, i) => `<i class="lpm-pip${i < this.checksLeft ? '' : ' used'}"></i>`).join('')}</span>`;
   }
 
   contentHTML() {
     const lang = _esc(this.langData.name);
     const missing = this.hidden.size;
-    const codex = `<section class="lpm-cipher-panel">
+    const note = !missing ? ''
+      : this.rules.mark
+        ? `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> The codex lacks ${missing === 1 ? 'the glyph' : `the ${missing} glyphs`} shown in orange — work ${missing === 1 ? 'it' : 'them'} out from the words.</p>`
+        : `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> Some glyphs are not in the codex — work them out from the words.</p>`;
+    const codex = (readonly = false) => `<section class="lpm-cipher-panel">
         <div class="lpm-cipher-label">Codex <span>${lang} → English</span></div>
         ${this._codexHTML()}
-        ${missing ? `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> The codex lacks ${missing === 1 ? 'the glyph' : `the ${missing} glyphs`} shown in orange — work ${missing === 1 ? 'it' : 'them'} out from the word.</p>` : ''}
+        ${this._wheelHTML(readonly)}
+        ${note}
       </section>`;
     const live = label => `<section class="lpm-cipher-panel">
         <div class="lpm-cipher-label">${label}</div>
         <div class="lpm-cipher-live"><div class="lpm-cipher-row lpm-dim">${this._spectator ? 'Waiting for the first letter…' : 'Nobody else is typing yet'}</div></div>
       </section>`;
+    const riddleTag = this.riddle ? '<em class="lpm-cipher-tag"><i class="fa-solid fa-feather"></i> a riddle</em>' : '';
 
     if (this._spectator) {
       // Players may watch too ("Others can watch"): the answer stays with the GM.
+      const gm = game.user.isGM;
       return `<div class="lpm-cipher">
         ${this._headerHTML()}
         <section class="lpm-cipher-panel">
-          <div class="lpm-cipher-label">Inscription <span>${lang}</span>${game.user.isGM ? '<em><i class="fa-solid fa-eye"></i> answer shown to the GM only</em>' : ''}</div>
-          ${this._inscriptionHTML({ slots: game.user.isGM, reveal: true })}
+          <div class="lpm-cipher-label">Inscription <span>${lang}</span>${riddleTag}${gm ? '<em><i class="fa-solid fa-eye"></i> answer shown to the GM only</em>' : ''}</div>
+          ${this._inscriptionHTML({ slots: gm, reveal: true })}
+          ${gm && this.riddle ? `<p class="lpm-cipher-note">The riddle's answer: <b>${_esc(this.riddle.join(' / '))}</b></p>` : ''}
         </section>
-        ${codex}
+        ${codex(gm)}
         ${live(this.shared ? 'The party is typing' : 'Players are typing')}
       </div>`;
     }
 
     return `<div class="lpm-cipher">
       ${this._headerHTML()}
-      <section class="lpm-cipher-panel">
-        <div class="lpm-cipher-label">Inscription <span>${lang}</span></div>
+      <section class="lpm-cipher-panel lpm-cipher-main">
+        <div class="lpm-cipher-label">Inscription <span>${lang}</span>${riddleTag}</div>
         ${this._inscriptionHTML()}
         <div class="lpm-cipher-actions">
           <span class="lpm-cipher-feedback"></span>
+          ${this._checksHTML()}
           <button type="button" class="lpm-cipher-check"><i class="fa-solid fa-check"></i> Check</button>
         </div>
       </section>
-      ${codex}
+      ${codex()}
       ${this.shared ? live('Your party') : ''}
-      <p class="lpm-puzzle-hint">Type a letter under each glyph — the same glyph is always the same letter. Click a codex entry to write its letter.</p>
+      <p class="lpm-puzzle-hint">Type a letter under each glyph — the same glyph is always the same letter. Click a codex entry to write its letter.${this.riddle ? ' Then answer the riddle.' : ''}</p>
     </div>`;
   }
 
@@ -990,11 +1088,21 @@ class CipherPuzzle extends PuzzleBase {
     const next = from => slots.slice(slots.indexOf(from) + 1).find(s => !s.value) ?? slots.find(s => !s.value) ?? from;
     /** Write a letter under glyph g everywhere, then go on to the next empty slot. */
     const write = (from, letter) => {
+      if (this.stage !== 'decode') return;
       for (const s of slots) if (s.dataset.g === from.dataset.g) { s.value = letter; s.classList.remove('is-wrong'); }
       if (letter) Sfx.key();
       this._emit('state', { state: { typing: this._guess() } });
       if (!letter) return;
-      if (slots.every(s => s.value)) { this._check(); return; }
+      if (slots.every(s => s.value)) {
+        // Where checks are counted, a full inscription waits for Check: fixing two letters must not cost two tries.
+        if (Number.isFinite(this.checksLeft)) {
+          const fb = root.querySelector('.lpm-cipher-feedback');
+          if (fb) fb.textContent = 'Every glyph is filled — Check when you are sure.';
+          return;
+        }
+        this._check();
+        return;
+      }
       focus(next(from));
     };
 
@@ -1005,9 +1113,16 @@ class CipherPuzzle extends PuzzleBase {
         write(s, letter);
       });
     }
-    // The codex as a keyboard: click an entry to write its letter where you are.
+    // The codex as a keyboard: click an entry to write its letter (as the wheel reads it) where you are.
     root.querySelectorAll('.lpm-codex-entry').forEach(el => el.addEventListener('click', () => {
-      if (el.dataset.l && current) write(current, el.dataset.l);
+      if (current) write(current, shiftLetter(el.dataset.c, -this.wheel));
+    }));
+    // The wheel: every letter of the codex moves along with it.
+    root.querySelectorAll('.lpm-wheel-btn').forEach(b => b.addEventListener('click', () => {
+      this.wheel = (this.wheel + Number(b.dataset.d) + 26) % 26;
+      root.querySelector('.lpm-wheel-val').textContent = this.wheel;
+      root.querySelectorAll('.lpm-codex-entry').forEach(el => { el.querySelector('.lpm-codex-letter').textContent = shiftLetter(el.dataset.c, -this.wheel); });
+      Sfx.key();
     }));
     root.querySelector('.lpm-cipher-check').addEventListener('click', () => this._check());
 
@@ -1015,9 +1130,11 @@ class CipherPuzzle extends PuzzleBase {
     // Backspace and Enter are handled here, letters reach the slot as input.
     const capture = e => {
       const s = document.activeElement;
-      if (!slots.includes(s)) return;
+      const riddle = s?.classList?.contains('lpm-riddle-input');
+      if (!slots.includes(s) && !riddle) return;
       e.stopImmediatePropagation();
       if (e.type !== 'keydown') return;
+      if (riddle) { if (e.key === 'Enter') { e.preventDefault(); this._answer(); } return; }
       const i = slots.indexOf(s);
       if (e.key === 'Enter') { e.preventDefault(); this._check(); }
       else if (e.key === 'ArrowLeft')  { e.preventDefault(); focus(slots[Math.max(0, i - 1)]); }
@@ -1027,6 +1144,7 @@ class CipherPuzzle extends PuzzleBase {
     };
     for (const ev of ['keydown', 'keyup', 'keypress']) window.addEventListener(ev, capture, true);
     this._capture = capture;
+    if (this._readOnJoin) { this._readOnJoin = false; this._toRiddle(); return; }
     this._later(() => focus(slots[0]), 200);
   }
 
@@ -1042,26 +1160,89 @@ class CipherPuzzle extends PuzzleBase {
     return this.answer.split(' ').map(w => [...w].map(() => this._slots?.[i++]?.value || '·').join('')).join(' ');
   }
 
+  _paintChecks() {
+    const pins = this.root?.querySelectorAll('.lpm-cipher-checks .lpm-pip') ?? [];
+    pins.forEach((p, i) => p.classList.toggle('used', i >= this.checksLeft));
+  }
+
+  /** A wrong check (or riddle answer) spends one where checks are counted; out of them, the cipher holds. */
+  _spendCheck() {
+    if (!Number.isFinite(this.checksLeft)) return false;
+    this.checksLeft--;
+    this._paintChecks();
+    if (this.checksLeft > 0) return false;
+    this._emit('fail');
+    Sfx.fail();
+    this._finish(false, 'The Cipher Holds', `It read <b>${_esc(this.answer)}</b>`);
+    return true;
+  }
+
   _check() {
-    if (this._ended || !this._slots) return;
+    if (this._ended || !this._slots || this.stage !== 'decode') return;
     const guess = this._guess();
     const fb = this.root?.querySelector('.lpm-cipher-feedback');
     if (guess.includes('·')) { if (fb) fb.textContent = 'Fill in every glyph first.'; return; }
     if (guess === this.answer) {
+      if (this.riddle) { this._emit('decoded', { state: { typing: guess } }); this._toRiddle(); return; }
       this._emit('win', { state: { typing: guess } });
       Sfx.solved();
-      this._finish(true, 'Cipher Solved', `The word was <b>${_esc(this.answer)}</b>`, { post: true });
+      this._finish(true, 'Cipher Solved', `The words were <b>${_esc(this.answer)}</b>`, { post: true });
       return;
     }
     // Wrong: mark the letters that are not right, so the next try can build on the rest.
     const want = this.answer.replace(/ /g, '');
     let wrong = 0;
     this._slots.forEach((s, i) => { const bad = s.value !== want[i]; s.classList.toggle('is-wrong', bad); if (bad) wrong++; });
-    Sfx.fail();
     this._emit('attempt', { guess });
+    if (this._spendCheck()) return;
+    Sfx.fail();
     if (fb) fb.textContent = `${wrong} ${wrong === 1 ? 'letter is' : 'letters are'} not right yet.`;
     const box = this.root?.querySelector('.lpm-inscription');
     if (box) { box.classList.remove('lpm-shake'); void box.offsetWidth; box.classList.add('lpm-shake'); }
+  }
+
+  /** The inscription is read: it turns out to be a riddle, and its answer is the key. */
+  _toRiddle() {
+    if (this.stage === 'riddle' || this._ended) return;
+    this.stage = 'riddle';
+    Sfx.solved();
+    const main = this.root?.querySelector('.lpm-cipher-main');
+    if (!main) return;
+    main.querySelectorAll('input.lpm-ins-slot').forEach((s, i) => { s.value = this.answer.replace(/ /g, '')[i]; s.disabled = true; s.classList.add('is-read'); });
+    main.querySelector('.lpm-cipher-actions')?.remove();
+    main.insertAdjacentHTML('beforeend', `<div class="lpm-riddle">
+        <div class="lpm-riddle-text">“${_esc(riddleLine(this.answer))}”</div>
+        <div class="lpm-riddle-row">
+          <input type="text" class="lpm-riddle-input" placeholder="The answer…" autocomplete="off" spellcheck="false">
+          ${this._checksHTML()}
+          <button type="button" class="lpm-cipher-check lpm-riddle-check"><i class="fa-solid fa-key"></i> Answer</button>
+        </div>
+        <div class="lpm-cipher-feedback lpm-riddle-feedback"></div>
+      </div>`);
+    const input = main.querySelector('.lpm-riddle-input');
+    main.querySelector('.lpm-riddle-check').addEventListener('click', () => this._answer());
+    input.addEventListener('input', () => this._emit('state', { state: { typing: `? ${normAnswer(input.value)}` } }));
+    this._later(() => input.focus(), 100);
+    this._fit();
+  }
+
+  _answer() {
+    if (this._ended || this.stage !== 'riddle') return;
+    const input = this.root?.querySelector('.lpm-riddle-input');
+    const said = normAnswer(input?.value);
+    if (!said) return;
+    if (this.riddle.some(a => normAnswer(a) === said)) {
+      this._emit('win', { state: { typing: `? ${said}` } });
+      Sfx.solved();
+      this._finish(true, 'Riddle Answered', `“${_esc(riddleLine(this.answer))}” — <b>${_esc(said)}</b>`, { post: true });
+      return;
+    }
+    this._emit('attempt', { guess: `? ${said}` });
+    if (this._spendCheck()) return;
+    Sfx.fail();
+    const fb = this.root?.querySelector('.lpm-riddle-feedback');
+    if (fb) fb.textContent = `“${said.toLowerCase()}” is not the answer.`;
+    input?.classList.remove('lpm-shake'); void input?.offsetWidth; input?.classList.add('lpm-shake');
   }
 
   _onPeerUpdate(peer, data) {
@@ -1087,10 +1268,14 @@ class CipherPuzzle extends PuzzleBase {
   }
 
   _applyRemote(data, peer) {
+    // One puzzle, one purse of checks: a teammate's wrong try spends one here too (their client calls the end).
+    if (data.event === 'attempt' && Number.isFinite(this.checksLeft) && this.checksLeft > 0) { this.checksLeft--; this._paintChecks(); }
+    if (data.event === 'decoded') this._toRiddle();
     if (data.event === 'win') {
       Sfx.solved();
-      this._finish(true, 'Cipher Solved', `<b>${_esc(this.answer)}</b> — cracked by ${_esc(peer.name)}`);
+      this._finish(true, this.riddle ? 'Riddle Answered' : 'Cipher Solved', `<b>${_esc(this.answer)}</b> — cracked by ${_esc(peer.name)}`);
     }
+    if (data.event === 'fail') this._finish(false, 'The Cipher Holds', `It read <b>${_esc(this.answer)}</b>`);
   }
 }
 

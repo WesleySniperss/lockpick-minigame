@@ -1,11 +1,13 @@
 /**
  * ward-logic.mjs — rules of "Unweave the Ward" (no DOM, no Foundry).
  *
- * A ward is a stack of concentric rune rings around a core, with a crystal on
- * the rim. The core shoots a straight beam at the crystal. Every ring is a
- * solid wall with one gap in it, and the beam stops at the first ring whose
- * gap is not on its line. Line up all the gaps and the light reaches the
- * crystal: the ward comes apart.
+ * A ward is a stack of concentric stone rings around a core, with a crystal on
+ * the rim. A line of light runs from the core to the crystal: out through a
+ * spot on each ring, along the groove between rings to the next one's spot (it
+ * may bend a sector either way there), and on to the crystal, at any angle.
+ * Every ring is a solid wall with one gap in it, and the light stops at the
+ * first ring whose gap is not on the line. Set every gap on the line and the
+ * light reaches the crystal: the ward comes apart.
  *
  * Rings turn one sector (of 8) at a time, freely. Some rings are linked:
  * turning one turns another as well, the same way or the other way. A link
@@ -16,13 +18,17 @@
  * links and all.
  *
  * A ring's rotation counts from its solved position: rot[i] = 0 means its gap
- * is on the beam. The start is scrambled with real moves, and one BFS from the
+ * is on the line. The start is scrambled with real moves, and one BFS from the
  * solved position over all ring positions (at most 8^5 = 32768) gives the exact
  * minimum number of turns from anywhere. The ward's own turns are real turns
  * too, so whatever it does can always be undone.
  */
 
 export const SECTORS = 8;
+const TAU = Math.PI * 2;
+
+/** The angle the line of light leaves the core at, for a seed: the generator draws it first. */
+export const wardAngle = seed => rng(seed)() * TAU;
 export const mod = (n, m = SECTORS) => ((n % m) + m) % m;
 
 /** Deterministic PRNG (mulberry32) — the player and spectators build the same ward from a seed. */
@@ -179,14 +185,18 @@ export function generateWard({ dc = 15, roll = {}, seed = 1 } = {}) {
   const p = wardParams(dc, roll);
   const n = p.rings;
   const randInt = m => Math.floor(R() * m);
-  const beam = randInt(SECTORS);                     // the sector the crystal sits in
+  const angle = R() * TAU;                            // where the line leaves the core (see wardAngle)
+  // Where it crosses each ring, in sectors from there: a step either way, or straight on.
+  const path = [0];
+  for (let i = 1; i < n; i++) path.push(path[i - 1] + [-1, -1, 0, 1, 1][randInt(5)]);
+  if (path.every(o => o === 0)) path[n - 1] = R() < 0.5 ? -1 : 1;    // never a straight line
   const rings = Array.from({ length: n }, () => ({}));
 
   // A loop leaves half the positions out of reach (fine: the ward only ever sits
   // in the reachable half); links that tie the rings tighter than that are drawn again.
   let ward, dist;
   for (let tries = 0; tries < 20; tries++) {
-    ward = { beam, rings, bindings: makeLinks(n, p.bindings, p.loops, R), params: p, seed, dc };
+    ward = { angle, path, rings, bindings: makeLinks(n, p.bindings, p.loops, R), params: p, seed, dc };
     dist = turnDistances(ward);
     let reach = 0;
     for (const d of dist) if (d >= 0) reach++;

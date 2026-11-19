@@ -23,6 +23,7 @@ import { docFromUuid } from './compat.mjs';
 import { rollArcana, rollLockpicking } from './rolls.mjs';
 import { resultCard, requestCard, esc } from './cards.mjs';
 import { CHALLENGES, isChallenge } from './challenges.mjs';
+import { wardAngle } from './ward-logic.mjs';
 
 const MODULE_ID = 'lockpick-minigame';
 const CHANNEL   = `module.${MODULE_ID}`;
@@ -330,6 +331,23 @@ export async function startLockpick({ actor, dc, hideDC = false, watch, label = 
   return app;
 }
 
+let _lastWardAngle = null;
+
+/**
+ * A seed for this attempt. For a ward, one whose line of light leaves the core
+ * well away (70° or more) from the last ward's on this client, so it never seems
+ * to point the same way twice running.
+ */
+function freshSeed(kind) {
+  const roll = () => Math.floor(Math.random() * 2 ** 31);
+  let seed = roll();
+  if (kind !== 'ward') return seed;
+  const apart = a => _lastWardAngle === null || Math.abs((((a - _lastWardAngle) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) >= 1.22;
+  for (let i = 0; i < 30 && !apart(wardAngle(seed)); i++) seed = roll();
+  _lastWardAngle = wardAngle(seed);
+  return seed;
+}
+
 // ─── Arcana ──────────────────────────────────────────────────────────────────
 
 /**
@@ -345,7 +363,7 @@ export async function startArcana({ kind, actor, dc, hideDC = false, watch, labe
   const sub = resultSub(label, 'Arcana', dc, hideDC);
   const speaker = ChatMessage.getSpeaker({ actor });
   const sessionId = foundry.utils.randomID();
-  const init = { seed: Math.floor(Math.random() * 2 ** 31), dc, roll: { margin: rollResult.margin, d20: rollResult.d20 } };
+  const init = { seed: freshSeed(kind), dc, roll: { margin: rollResult.margin, d20: rollResult.d20 } };
   let settled = false;
   const settle = outcome => { if (settled) return; settled = true; onSettled(outcome); };
   const watched = anyoneWatching(watch);

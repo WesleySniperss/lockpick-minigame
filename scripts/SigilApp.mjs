@@ -10,7 +10,7 @@
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateSigil, SigilGame, NODES } from './sigil-logic.mjs';
-import { ARC, TAU, layer, blit, ArcMeter, backdrop, engrave, glow, spark, hexA } from './arcane-art.mjs';
+import { ARC, TAU, INK, layer, blit, ArcMeter, backdrop, engrave, glow, spark, hexA, note } from './arcane-art.mjs';
 import { ARCANE_ICONS } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
@@ -282,15 +282,9 @@ export class SigilApp extends MiniGameApp {
       glow(ctx, () => { ctx.beginPath(); ctx.arc(p.x, p.y, 8 + pl.t * 40, 0, TAU); }, { color: ARC.gold, width: 1.6, intensity: k, core: false });
     }
 
-    // Phase caption, engraved under the circle
-    ctx.save();
-    ctx.font = '700 10px "Signika", sans-serif';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '3px';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(190,200,235,0.7)';
+    // Phase caption, under the circle
     const cap = g.phase === 'memorize' ? 'MEMORISE THE SIGIL' : this.show.recall ? 'RECALLING' : `TRACE IT — ${g.progress} / ${this.path.length}`;
-    ctx.fillText(cap, CX, H - 10);
-    ctx.restore();
+    note(ctx, cap, CX, H - 10, { size: 13, align: 'center', spacing: 2, color: g.phase === 'memorize' || this.show.recall ? hexA(ARC.gold, 0.95) : INK.label });
   }
 
   renderEnding(ctx, t, success) {
