@@ -307,17 +307,23 @@ class PuzzleBase extends GameWindow {
     if (post) this._postSuccess();
     const content = this.root;
     if (content) {
-      const icon = ok ? this.constructor.ICON : 'fa-xmark';
+      const scene = this._resultScene(ok);
       content.innerHTML = `<div class="lpm-result lpm-result--${ok ? 'win' : 'fail'}">`
-        + `<div class="lpm-result__medal"><i class="fa-solid ${icon}"></i></div>`
+        + (scene ? `<div class="lpm-result__scene">${scene}</div>` : '')
         + `<div class="lpm-result__kicker">${ok ? 'Success' : 'Failure'}</div>`
         + `<div class="lpm-result__title">${_esc(title)}</div>`
         + `<div class="lpm-result__rule"><span></span></div>`
         + (sub ? `<div class="lpm-result__sub">${sub}</div>` : '')
         + `</div>`;
+      this._afterResult(content);
     }
     this._later(() => this.close(), 2600);
   }
+
+  /** The end picture: a small view of what was done (HTML), or '' for none. */
+  _resultScene(ok) { return ''; }
+  /** Draws whatever the picture needs once it is in the page (canvases). */
+  _afterResult(root) {}
 
   _postSuccess() {
     const what = `the “${this.constructor.NAME}” puzzle`;
@@ -504,9 +510,9 @@ class SudokuPuzzle extends PuzzleBase {
       ? (this.shared ? 'Read-only — the party’s board.' : 'Read-only — click a name to see their board.')
       : (this.shared ? 'One board for everyone — click a cell, then 1–9 or the pad.'
                      : 'Click a cell → type 1–9 or use the pad (Delete / 0 clears)');
-    // The GM watching may turn the answers on: right digits green, wrong red, missing ones faint.
+    // The GM watching may turn the answers on: right digits gold, wrong red, missing ones faint silver.
     const answers = this._spectator && game.user.isGM
-      ? `<label class="lpm-answers-toggle" title="Green: right · red: wrong · faint: what belongs in an empty cell">
+      ? `<label class="lpm-answers-toggle" title="Gold: right · red: wrong · faint silver: what belongs in an empty cell">
            <input type="checkbox" class="lpm-answers" ${this._answers ? 'checked' : ''}> Show the answers</label>` : '';
     return `<div class="lpm-sudoku-wrap">
       ${this._headerHTML()}
@@ -650,6 +656,15 @@ class SudokuPuzzle extends PuzzleBase {
   _solved() { return this.board.every((v, i) => v === this.solution[i]); }
 
   _snapshot() { return { board: [...this.board] }; }
+
+  /** The end picture: the finished grid, the given digits pale and the ones filled in gold. */
+  _resultScene() {
+    return `<div class="lpm-scene-sudoku">${this.solution.map((d, i) => {
+      const c = i % 9, r = Math.floor(i / 9);
+      const cls = [this.given[i] ? 'g' : '', c % 3 === 2 && c < 8 ? 'r3' : '', r % 3 === 2 && r < 8 ? 'b3' : ''].filter(Boolean).join(' ');
+      return `<span class="${cls}">${d}</span>`;
+    }).join('')}</div>`;
+  }
 
   _applyRemote(data, peer) {
     // Cell-level ops: two players filling different cells at once both land.
@@ -795,6 +810,18 @@ class SlidingPuzzle extends PuzzleBase {
 
   _snapshot() { return { tiles: [...this.tiles], moves: this.moves, v: this._v, by: this._by }; }
 
+  /** The end picture: the stone picture whole again, the missing square back in its place. */
+  _resultScene() {
+    const n = this.size;
+    let cells = '';
+    for (let home = 0; home < n * n; home++) {
+      const gr = Math.floor(home / n), gc = home % n;
+      const px = n * STONE_ASPECT > 1 ? gc / (n * STONE_ASPECT - 1) * 100 : 0, py = n > 1 ? gr / (n - 1) * 100 : 0;
+      cells += `<i class="lpm-scene-tile" style="background-size:100% 100%,auto ${n * 100}%;background-position:0 0,${px.toFixed(2)}% ${py.toFixed(2)}%"></i>`;
+    }
+    return `<div class="lpm-scene-sliding" style="--sz:${n}">${cells}</div>`;
+  }
+
   _adopt(s) {
     const blankBefore = this.tiles.indexOf(0);
     this.tiles = [...s.tiles];
@@ -831,7 +858,7 @@ class SlidingPuzzle extends PuzzleBase {
 // under it, and the codex that says which glyph is which letter. Type a letter
 // under a glyph and it goes under every copy of that glyph. Easy: a word and
 // the whole alphabet. Medium: a short phrase, a codex of 14 letters lacking two
-// of its glyphs (they glow orange), and a Caesar wheel the scribe turned to a
+// of its glyphs (they glow silver), and a Caesar wheel the scribe turned to a
 // number the inscription gives. Hard: a longer phrase, a codex of 12 lacking
 // three or four glyphs (not marked), a wheel setting nobody knows, three checks.
 // Any difficulty can be a riddle: once read, its answer is the key.
@@ -970,6 +997,12 @@ class CipherPuzzle extends PuzzleBase {
 
   _snapshot() { return { checksLeft: Number.isFinite(this.checksLeft) ? this.checksLeft : null, stage: this.stage }; }
 
+  /** The end picture: the inscription with what it says under every glyph (gone silver when it held). */
+  _resultScene() {
+    return `<div class="lpm-scene-cipher">${this.answer.split(' ').map(w => `<span class="w">${[...w].map(ch =>
+      `<span class="c"><i>${_esc(this._glyph(ch))}</i><b>${ch}</b></span>`).join('')}</span>`).join('')}</div>`;
+  }
+
   /** The glyph a plain letter is written with: moved along by the wheel, then put in the script. */
   _glyph(ch) { return this.engToFan[shiftLetter(ch, this.shift)] ?? ch; }
 
@@ -1026,7 +1059,7 @@ class CipherPuzzle extends PuzzleBase {
     const missing = this.hidden.size;
     const note = !missing ? ''
       : this.rules.mark
-        ? `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> The codex lacks ${missing === 1 ? 'the glyph' : `the ${missing} glyphs`} shown in orange — work ${missing === 1 ? 'it' : 'them'} out from the words.</p>`
+        ? `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> The codex lacks ${missing === 1 ? 'the glyph' : `the ${missing} glyphs`} shown in silver — work ${missing === 1 ? 'it' : 'them'} out from the words.</p>`
         : `<p class="lpm-cipher-note"><i class="fa-solid fa-circle-question"></i> Some glyphs are not in the codex — work them out from the words.</p>`;
     const codex = (readonly = false) => `<section class="lpm-cipher-panel">
         <div class="lpm-cipher-label">Codex <span>${lang} → English</span></div>
@@ -1284,10 +1317,11 @@ class CipherPuzzle extends PuzzleBase {
 // ═════════════════════════════════════════════════════════════════════════════
 
 const SIMON_COLORS = [
-  { id: 0, hex: '#2ecc71', dark: '#061409', border: '#1a6b3a', label: 'Algiz'  },  // emerald
-  { id: 1, hex: '#e74c3c', dark: '#160606', border: '#6b1a1a', label: 'Tiwaz'  },  // ruby
-  { id: 2, hex: '#3498db', dark: '#060e18', border: '#1a4a6b', label: 'Isa'    },  // sapphire
-  { id: 3, hex: '#f39c12', dark: '#160e00', border: '#6b4800', label: 'Othala' },  // amber
+  // the module's two metals, crosswise: gold top-left and bottom-right, silver the other two
+  { id: 0, hex: '#f0c75e', dark: '#140f05', border: '#6b5420', label: 'Algiz'  },  // gold
+  { id: 1, hex: '#d5dbe4', dark: '#0e1013', border: '#50565f', label: 'Tiwaz'  },  // silver
+  { id: 2, hex: '#d5dbe4', dark: '#0e1013', border: '#50565f', label: 'Isa'    },  // silver
+  { id: 3, hex: '#f0c75e', dark: '#140f05', border: '#6b5420', label: 'Othala' },  // gold
 ];
 
 // Elder Futhark rune paths — coords in 0-1 space (wide, bold shapes)
@@ -1582,6 +1616,35 @@ class SimonPuzzle extends PuzzleBase {
     }
 
     ctx.restore();
+  }
+
+  /** The end picture: the sequence, the runes played lit; on a failure the one missed, ringed in silver. */
+  _resultScene(ok) {
+    const upto = ok ? this.sequence.length : this.step;
+    return `<div class="lpm-scene-simon">${this.sequence.map((id, i) => {
+      const k = i < upto ? 'lit' : i === upto && !ok ? 'missed' : 'dim';
+      return `<canvas class="is-${k}" data-id="${id}" data-k="${k}" width="38" height="36"></canvas>`;
+    }).join('')}</div>`;
+  }
+
+  _afterResult(root) {
+    root.querySelectorAll('.lpm-scene-simon canvas').forEach(c => {
+      const ctx = c.getContext('2d'), w = c.width, h = c.height, col = SIMON_COLORS[Number(c.dataset.id)];
+      const lit = c.dataset.k !== 'dim';
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const segs = () => {
+        for (const seg of RUNES[Number(c.dataset.id)]) {
+          ctx.beginPath();
+          for (let j = 0; j < seg.length; j += 2) {
+            const x = 7 + seg[j] * (w - 14), y = 5 + seg[j + 1] * (h - 10);
+            j ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        }
+      };
+      if (lit) { ctx.shadowColor = col.hex; ctx.shadowBlur = 6; ctx.strokeStyle = col.hex; ctx.lineWidth = 2.2; segs(); }
+      else { ctx.strokeStyle = 'rgba(200,190,170,0.28)'; ctx.lineWidth = 1.6; segs(); }
+    });
   }
 
   _setStatus(msg) {

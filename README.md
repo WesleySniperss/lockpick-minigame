@@ -37,9 +37,20 @@ challenge whenever the story needs it.
    (*Unwoven by …* / *The ward held* and so on for Arcana). After a failure the
    GM can **Allow another try**.
 
-Every game ends on the board itself: a framed plate with the outcome
-(*Success* / *Failure*), its name in carved capitals and a line of what happened,
-with light breaking out on a win and cracks spreading on a loss.
+Every game ends on the board itself, with a picture of what you actually did:
+the pins you set and the pick (whole, or snapped in two), the sigil as you
+traced it, the ward's rings as you left them and how far the light got, the
+runes you woke, the knots you undid; for a puzzle, the finished grid, the stone
+picture whole again, the inscription read, the runes played. A win lights it
+in gold with soft rays; a loss leaves it as it ended, gone cold and silver. Under it, a
+framed plate with the outcome (*Success* / *Failure*), its name in carved
+capitals and a line of what happened.
+
+The game windows are drawn in two metals on black, so a colour always means the
+same thing: **gold** is yours (the light, what to aim for, progress, buttons,
+success), **silver** is the working's own magic, what is still hidden and what
+went out, and the text is parchment. Red is only a small mark during play for
+a wrong move or something working against you.
 
 The cards have no colours of their own: they sit on your chat's message card
 and take its theme (core, the game system, Carolingian UI and its colour
@@ -87,7 +98,7 @@ With Dice So Nice the game opens once the die has landed.
 2. The **check** is rolled (see *The roll* above) — it sets how hard the game
    will be. No tools are needed or looked for: it is Dexterity (Sleight of Hand).
 3. The **mini-game opens** — a cutaway of the lock with the pick in the keyway.
-4. **Hold** the mouse to slide the pick, **release on green** under a pin to set
+4. **Hold** the mouse to slide the pick, **release on gold** under a pin to set
    it; releasing on red costs an attempt.
 5. Set all pins → **Lock Picked**. Three misses → **the pick snaps** and the
    game closes: the lock stays shut. That is only what the result says; nothing
@@ -113,7 +124,7 @@ start already set):
 **The roll decides how the pick handles.** The further the roll beats the DC,
 the slower and steadier the pick moves; a roll under the DC makes it fast and
 jerky (higher DCs add speed too). A natural 20 gives the calmest pick, a
-natural 1 the wildest. The target zones never change size: a green zone under
+natural 1 the wildest. The target zones never change size: a gold zone under
 each pin, with a red band on both sides.
 
 ---
@@ -133,7 +144,7 @@ It is rarely straight: between two rings it may bend one step along the groove,
 and it points a different way every time (one ward never starts the way the last
 one did on that table). Between core and crystal sit stone rings, each a solid
 wall with one **gap** in it. The light runs along the line and stops at the
-first ring whose gap is off it; that gap pulses amber, and a dotted trace shows
+first ring whose gap is off it; that gap pulses gold, and a dotted trace shows
 the rest of the way. Turn the ring until its gap is on the line and the light
 runs on to the next ring. When every gap is on the line, the crystal lights and
 the ward comes apart.
@@ -148,12 +159,12 @@ pass the turn on), and a ring may turn two others. From DC 18 two rings may
 turn each other, one the same way and one the other way, so they can no longer
 be fixed one after the other.
 
-**How you lose:** the ward knits itself back together. A violet seam stitches
+**How you lose:** the ward knits itself back together. A silver seam stitches
 its way round the rim from the top, clockwise; when it closes the circle, the
 ward holds. The seconds count down in the corner of the board and in the footer
 (*Rim closes in*). From DC 13 the ward also **fights back**: every few seconds it
 turns its outermost open ring one step back (its links fire too). That ring
-glows violet for a moment first, and the interval is written in the corner.
+glows silver for a moment first, and the interval is written in the corner.
 
 | DC | ≤ 12 | 13–17 | 18–21 | 22+ |
 |----|------|-------|-------|-----|
@@ -179,7 +190,7 @@ one and a clean fifth sounds over the hum. Outside the ring the attunement
 fades. Wake all nine runes before your **Concentration** runs out.
 
 Two things fight back. **The ring tightens** with every rune that wakes (a faint
-circle shows where it began). And **the light surges**: an amber ring closes on
+circle shows where it began). And **the light surges**: a red ring closes on
 it, it flares, then it darts away for 0.7 s. The wave round the water shows how
 you are doing: wild while the light is outside, calm as it attunes.
 
@@ -214,7 +225,7 @@ the mirror, a dashed circle shows how far a call would reach.
 
 **How you lose:** the calls left are written in the corner of the board and in
 the footer; when none are left and a knot still holds, so does the weave. From
-DC 13 the weave also **ties itself again**: round an undone knot a violet seam
+DC 13 the weave also **ties itself again**: round an undone knot a silver seam
 closes, and when it meets, the knot is back (one more call to undo it). It is
 usually best to find every knot first and strike them one after the other.
 
@@ -268,7 +279,7 @@ themselves.
 |---|---|---|---|
 | Text | one word | a short phrase | a longer phrase |
 | Codex | the whole alphabet | 14 letters, lacks 2 of the text's | 12 letters, lacks up to 4 of the text's |
-| Glyphs the codex lacks | glow orange | glow orange | not marked |
+| Glyphs the codex lacks | glow silver | glow silver | not marked |
 | Caesar wheel | — | turned; the inscription says how far | turned; nobody knows how far |
 | Checks | any, as soon as every slot is filled | any, as soon as every slot is filled | 3 (press **Check**); then the cipher holds |
 
@@ -298,7 +309,7 @@ also set the word or phrase and the script.
   With own copies, click a name to see that player's board; **Join in / Solve a
   copy** lets the GM play too.
 - Watching a sudoku, the GM can tick **Show the answers**: the players' right
-  digits turn green, wrong ones red, and every empty cell shows its answer
+  digits turn gold, wrong ones red, and every empty cell shows its answer
   faintly. Only the GM's window shows it; the tick is remembered.
 
 ---
@@ -323,9 +334,9 @@ also set the word or phrase and the script.
 
 ### Credits
 
-The carved capitals on the boards and end screens are **Cinzel** (© 2020 The
-Cinzel Project Authors), shipped with the module under the SIL Open Font
-License 1.1 — see [`styles/fonts/Cinzel-OFL.txt`](styles/fonts/Cinzel-OFL.txt).
+The capitals on the boards and end screens are **Cormorant SC** (© 2015 the
+Cormorant Project Authors), shipped with the module under the SIL Open Font
+License 1.1 — see [`styles/fonts/CormorantSC-OFL.txt`](styles/fonts/CormorantSC-OFL.txt).
 
 ### Foundry versions
 

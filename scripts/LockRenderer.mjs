@@ -69,7 +69,7 @@ const MAT = {
   gold:   { edge: '#7c5a12', hi: '#fff4c8', mid: '#f2c24d', lo: '#a57a1c', rim: '#ffe28c' }, // встановлений
 };
 const ZONE = {
-  green: '#34b158', greenHi: '#a4f7bb', greenLo: '#166a38',
+  green: '#e8bd52', greenHi: '#fff0c0', greenLo: '#8a6420',   // the release zone: gold
   red:   '#c63b2c', redHi:   '#ff8f78', redLo:   '#6c190f',
 };
 
@@ -1348,7 +1348,7 @@ export class LockRenderer {
       g.setLineDash(DASH_GUIDE);
       for (const pin of pins) {
         if (target && pin.index === target.index) continue;
-        g.strokeStyle = pin.set ? 'rgba(214,176,90,0.22)' : 'rgba(150,255,180,0.16)';
+        g.strokeStyle = pin.set ? 'rgba(214,176,90,0.22)' : 'rgba(255,240,205,0.16)';
         g.beginPath();
         g.moveTo(pin.x + 0.5, 0);
         g.lineTo(pin.x + 0.5, bot - top);
@@ -1363,7 +1363,7 @@ export class LockRenderer {
       const x = TRACK_X + target.x + 0.5;
       const pulse = 0.5 + 0.5 * Math.sin(this._t * 4);
       ctx.lineWidth = 1;
-      ctx.strokeStyle = `rgba(140,255,170,${0.3 + 0.25 * pulse})`;
+      ctx.strokeStyle = `rgba(255,226,150,${0.3 + 0.25 * pulse})`;
       ctx.beginPath();
       ctx.moveTo(x, top);
       ctx.lineTo(x, bot);
@@ -1373,7 +1373,7 @@ export class LockRenderer {
     // Вертикаль від кінчика відмички до маркера
     const mx = TRACK_X + pickX + 0.5;
     ctx.strokeStyle = zone === 'red'   ? 'rgba(255,120,95,0.5)'
-                    : zone === 'green' ? 'rgba(150,255,180,0.6)'
+                    : zone === 'green' ? 'rgba(255,226,150,0.6)'
                     :                    'rgba(235,232,220,0.24)';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -1495,12 +1495,12 @@ export class LockRenderer {
     const redG = ctx.createLinearGradient(0, y, 0, y + h);
     redG.addColorStop(0, ZONE.redHi); redG.addColorStop(0.45, ZONE.red); redG.addColorStop(1, ZONE.redLo);
     const goldG = ctx.createLinearGradient(0, y, 0, y + h);
-    goldG.addColorStop(0, 'rgba(255,226,150,0.85)'); goldG.addColorStop(1, 'rgba(170,124,48,0.75)');
+    goldG.addColorStop(0, 'rgba(240,230,205,0.42)'); goldG.addColorStop(1, 'rgba(150,138,112,0.32)');
 
     for (const pin of pins) {
       const c = sx(pin.x);
       if (pin.set) {
-        // уже відкритий: тонка золота мітка, а не суцільний блок — інакше шкала
+        // уже відкритий: тонка бліда мітка (золото — це зона), а не суцільний блок — інакше шкала
         // перетворюється на «клавіатуру» і цілі губляться серед виконаного
         ctx.fillStyle = goldG;
         ctx.fillRect(c - 1.5, y + 2, 3, h - 4);
@@ -1511,7 +1511,7 @@ export class LockRenderer {
       ctx.fillRect(c + half, y, RED_W, h);
       ctx.fillStyle = greenG;
       ctx.fillRect(c - half, y, HIT_ZONE, h);
-      ctx.fillStyle = 'rgba(225,255,230,0.6)';     // центр цілі
+      ctx.fillStyle = 'rgba(255,250,232,0.7)';     // центр цілі
       ctx.fillRect(c - 0.6, y + 3, 1.2, h - 6);
       ctx.fillStyle = 'rgba(0,0,0,0.45)';          // межі емалі
       ctx.fillRect(c - half - 0.5, y, 1, h);
@@ -1569,7 +1569,7 @@ export class LockRenderer {
     const inGreen = zone === 'green', inRed = zone === 'red';
     if (inGreen || inRed) {
       const gl = ctx.createRadialGradient(mx, y + h / 2, 2, mx, y + h / 2, 22);
-      gl.addColorStop(0, inGreen ? 'rgba(130,255,160,0.55)' : 'rgba(255,100,80,0.55)');
+      gl.addColorStop(0, inGreen ? 'rgba(255,214,120,0.55)' : 'rgba(255,100,80,0.55)');
       gl.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = gl;
       ctx.fillRect(mx - 24, y - 12, 48, h + 24);
@@ -1577,7 +1577,7 @@ export class LockRenderer {
     // волосина візира
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.fillRect(mx - 1.5, y - 2, 3, h + 4);
-    ctx.fillStyle = inRed ? '#ffb3a5' : inGreen ? '#d8ffe2' : '#f3f1ea';
+    ctx.fillStyle = inRed ? '#ffb3a5' : inGreen ? '#fff2cc' : '#f3f1ea';
     ctx.fillRect(mx - 0.75, y - 2, 1.5, h + 4);
     // голівки бігунка зверху і знизу
     for (const [hy, dir] of [[y - 3, -1], [y + h + 3, 1]]) {
@@ -1600,7 +1600,7 @@ export class LockRenderer {
       ctx.lineWidth = 0.8;
       ctx.stroke();
       if (inGreen || inRed) {
-        ctx.fillStyle = inGreen ? 'rgba(120,255,150,0.8)' : 'rgba(255,110,90,0.8)';
+        ctx.fillStyle = inGreen ? 'rgba(255,214,120,0.85)' : 'rgba(255,110,90,0.8)';
         ctx.fillRect(mx - 3, hy + dir * 5.5 - 0.75, 6, 1.5);
       }
     }
@@ -1609,51 +1609,76 @@ export class LockRenderer {
   // ── Фінальний оверлей ─────────────────────────────────────────────────
 
   /**
-   * Result screen over the lock: brass medallion with an icon, title in
-   * Modesto Condensed, subtitle in Amiri (both are core fonts).
-   * Two outcomes: picked, or the pick snaps (in words only: nothing is used up).
+   * Result screen over the lock: a cutaway of this lock's pins as they were
+   * left (the set ones gold on the shear line, the rest still blocking it) and
+   * the pick in the keyway — whole, or snapped in two (in words and picture
+   * only: nothing is used up).
+   * @param {boolean[]} set  which pins were set, left to right
    */
-  drawEndOverlay(success) {
+  drawEndOverlay(success, set = []) {
     if (!this.ctx) return;
     drawResultOverlay(this.ctx, {
       W: this.W, H: this.H, dpr: this._dpr, success,
       title: success ? 'Lock Picked' : 'Pick Snapped',
       sub  : success ? 'The mechanism gives way' : 'The pick breaks in the keyway',
-      icon : (ctx, x, y, tone) => this._drawResultIcon(ctx, x, y, success ? 'open' : 'snapped', tone),
+      scene: (ctx, x, y, R) => this._drawResultScene(ctx, x, y, R, success, set),
     });
   }
 
-  /** Icons inside the result medallion: an open padlock, or a snapped pick. */
-  _drawResultIcon(ctx, x, y, kind, tone) {
+  _drawResultScene(ctx, x0, y0, R, success, set) {
     ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    const metal = ctx.createLinearGradient(x - 12, y - 14, x + 12, y + 14);
-    metal.addColorStop(0, tone.hi); metal.addColorStop(1, tone.mid);
-    if (kind === 'snapped') {
-      ctx.strokeStyle = metal; ctx.lineWidth = 3.4;
-      ctx.beginPath(); ctx.moveTo(x - 15, y + 9); ctx.lineTo(x - 3, y + 2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(x + 3, y - 1); ctx.lineTo(x + 11, y - 6); ctx.lineTo(x + 12, y - 13); ctx.stroke();
-      ctx.strokeStyle = tone.accent; ctx.lineWidth = 1.4;
-      for (const [dx, dy] of [[0, -9], [-6, -6], [6, 7], [-1, 9]]) {
-        ctx.beginPath(); ctx.moveTo(x, y + 0.5); ctx.lineTo(x + dx * 0.6, y + dy * 0.6); ctx.stroke();
-      }
-      ctx.restore();
-      return;
+    ctx.translate(x0, y0); ctx.scale(R / 62, R / 62);       // drawn for a picture of radius 62
+    const x = 0, y = 0;
+    const n = Math.max(1, set.length || 7), L = x - 58, Rt = x + 58, shear = y + 6;
+    const pitch = (Rt - L - 12) / n;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // housing above the shear line, plug below it
+    const house = ctx.createLinearGradient(0, y - 44, 0, shear);
+    house.addColorStop(0, '#7a5e2a'); house.addColorStop(1, '#3e2f14');
+    rr(ctx, L, y - 44, Rt - L, shear - (y - 44), 1); ctx.fillStyle = house; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,150,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+    const plug = ctx.createLinearGradient(0, shear, 0, y + 34);
+    plug.addColorStop(0, '#5a4520'); plug.addColorStop(1, '#2a1f0d');
+    rr(ctx, L, shear, Rt - L, 28, 1); ctx.fillStyle = plug; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,150,0.22)'; ctx.stroke();
+    // the keyway
+    ctx.fillStyle = '#0d0a06';
+    rr(ctx, L - 2, y + 17, Rt - L - 8, 9, 1); ctx.fill();
+    // chambers and pins
+    for (let i = 0; i < n; i++) {
+      const cx = L + 6 + pitch * (i + 0.5), up = !!set[i] || success;
+      ctx.fillStyle = '#120d06';
+      ctx.fillRect(cx - 5, y - 38, 10, shear - (y - 38) + 9);
+      const top = up ? y - 30 : y - 18, bottom = up ? shear - 1 : shear + 9;
+      const g = ctx.createLinearGradient(cx - 4, 0, cx + 4, 0);
+      if (up) { g.addColorStop(0, '#8a6420'); g.addColorStop(0.45, '#fff0c0'); g.addColorStop(1, '#a87a22'); }
+      else    { g.addColorStop(0, '#3a3c42'); g.addColorStop(0.45, '#a9adb6'); g.addColorStop(1, '#45484f'); }
+      rr(ctx, cx - 3.8, top, 7.6, bottom - top, 3.6); ctx.fillStyle = g; ctx.fill();
+      // the spring above it
+      ctx.strokeStyle = 'rgba(190,190,195,0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, y - 38); ctx.lineTo(cx, top - 1); ctx.stroke();
     }
-    // Дужка
-    ctx.strokeStyle = metal; ctx.lineWidth = 3.4;
-    ctx.beginPath();
-    if (kind === 'open') { ctx.moveTo(x - 7, y - 2); ctx.lineTo(x - 7, y - 9); ctx.arc(x, y - 9, 7, Math.PI, 0); ctx.lineTo(x + 7, y - 13); }
-    else                 { ctx.moveTo(x - 7, y - 2); ctx.lineTo(x - 7, y - 8); ctx.arc(x, y - 8, 7, Math.PI, 0); ctx.lineTo(x + 7, y - 2); }
-    ctx.stroke();
-    // Корпус з щілиною
-    rr(ctx, x - 11, y - 3, 22, 17, 3);
-    ctx.fillStyle = metal; ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 0.8; ctx.stroke();
-    ctx.fillStyle = 'rgba(20,14,6,0.85)';
-    ctx.beginPath(); ctx.arc(x, y + 4, 2.4, 0, TAU); ctx.fill();
-    ctx.fillRect(x - 1, y + 4, 2, 5);
+    // the shear line: clear and lit when every pin sits on it
+    ctx.save();
+    if (success) { ctx.globalCompositeOperation = 'lighter'; ctx.shadowColor = 'rgba(255,214,120,0.9)'; ctx.shadowBlur = 8 * this._dpr; }
+    ctx.strokeStyle = success ? 'rgba(255,230,160,0.95)' : 'rgba(255,230,160,0.25)'; ctx.lineWidth = success ? 1.4 : 1;
+    ctx.beginPath(); ctx.moveTo(L + 2, shear); ctx.lineTo(Rt - 2, shear); ctx.stroke();
+    ctx.restore();
+    // the pick, in from the left: whole with its hook up, or snapped and the tip fallen
+    const steel = ctx.createLinearGradient(0, y + 19, 0, y + 25);
+    steel.addColorStop(0, '#eef1f6'); steel.addColorStop(1, '#6d727c');
+    ctx.strokeStyle = steel; ctx.lineWidth = 3;
+    const tipX = L + 6 + pitch * (n - 0.5);
+    if (success) {
+      ctx.beginPath(); ctx.moveTo(x - 82, y + 22); ctx.lineTo(tipX - 4, y + 22); ctx.lineTo(tipX + 1, y + 15); ctx.stroke();
+    } else {
+      const breakX = x - 4;
+      ctx.beginPath(); ctx.moveTo(x - 82, y + 22); ctx.lineTo(breakX - 3, y + 22); ctx.stroke();
+      ctx.save();
+      ctx.translate(breakX + 4, y + 23); ctx.rotate(0.12); ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tipX - breakX - 10, 0); ctx.lineTo(tipX - breakX - 5, -6); ctx.stroke();
+      ctx.restore();
+    }
     ctx.restore();
   }
 }

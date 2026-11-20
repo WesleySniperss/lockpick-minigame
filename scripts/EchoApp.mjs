@@ -8,20 +8,20 @@
  * go; a knot shows itself (three loops of light) when a call comes close.
  * Click a knot to undo it: it flares gold and its threads unravel. Every call
  * costs one; undo every knot before they run out. From DC 13 an undone knot
- * ties itself again: a violet seam closes round it, and when it meets, the
+ * ties itself again: a silver seam closes round it, and when it meets, the
  * knot is back.
  */
 
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateWeave, WeaveGame, SAMPLES, RING_TIME, GLINT } from './echo-logic.mjs';
 import { ARC, TAU, INK, layer, blit, backdrop, engrave, spark, hexA, note } from './arcane-art.mjs';
-import { ARCANE_ICONS } from './overlay.mjs';
+import { fit, lightStroke, bloom } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
 
 const W = 520, H = 440, CX = 260, CY = 222;
 const FR = 172, RIM_OUT = 200;                     // the mirror's radius, and the rim round it
-const THREAD = '#c9b6ff', CALL = '#bfefff';
+const THREAD = '#cfd3da', CALL = '#fff0cc';   // silver threads, an ivory call
 const BANDS = 6;                                   // a thread drawn in six widths, thick at its knot
 const UNRAVEL = 1.2;                               // seconds an undone knot's threads take to fall away
 const fx = x => CX + x * FR, fy = y => CY + y * FR;
@@ -54,7 +54,7 @@ export class EchoApp extends MiniGameApp {
 
   hintHTML() {
     return '<strong>Click</strong> to call into the dark'
-      + ' &middot; <span class="lpm-hint-violet">threads</span> thicken toward their <span class="lpm-hint-amber">knot</span>'
+      + ' &middot; <span class="lpm-hint-silver">threads</span> thicken toward their <span class="lpm-hint-gold">knot</span>'
       + ' &middot; click the knot to undo it';
   }
 
@@ -148,7 +148,7 @@ export class EchoApp extends MiniGameApp {
     bands.forEach((segs, b) => {
       if (!segs.length) return;
       const path = () => { ctx.beginPath(); for (let j = 0; j < segs.length; j += 2) { ctx.moveTo(fx(segs[j].x), fy(segs[j].y)); ctx.lineTo(fx(segs[j + 1].x), fy(segs[j + 1].y)); } };
-      ctx.strokeStyle = hexA(ARC.violet, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; path(); ctx.stroke();
+      ctx.strokeStyle = hexA(ARC.silver, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; path(); ctx.stroke();
       ctx.strokeStyle = hexA(THREAD, 0.75 * bandA(b)); ctx.lineWidth = bandW(b); path(); ctx.stroke();
     });
     // where you have called
@@ -191,10 +191,10 @@ export class EchoApp extends MiniGameApp {
         }
         if (!any) continue;
         if (hot) {
-          ctx.strokeStyle = hexA(ARC.violet, 0.4 * bandA(b)); ctx.lineWidth = bandW(b) * 4; ctx.stroke();
+          ctx.strokeStyle = hexA(ARC.silver, 0.4 * bandA(b)); ctx.lineWidth = bandW(b) * 4; ctx.stroke();
           ctx.strokeStyle = hexA('#ffffff', 0.95 * bandA(b)); ctx.lineWidth = bandW(b) * 0.9; ctx.stroke();
         } else {
-          ctx.strokeStyle = hexA(ARC.violet, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; ctx.stroke();
+          ctx.strokeStyle = hexA(ARC.silver, 0.17 * bandA(b)); ctx.lineWidth = bandW(b) * 3.4; ctx.stroke();
           ctx.strokeStyle = hexA(THREAD, 0.75 * bandA(b)); ctx.lineWidth = bandW(b); ctx.stroke();
         }
       }
@@ -286,9 +286,9 @@ export class EchoApp extends MiniGameApp {
         const late = share > 0.75, beat = late ? 0.6 + 0.4 * Math.sin(t * 12) : 1;
         ctx.save();
         ctx.lineCap = 'round';
-        ctx.strokeStyle = hexA(ARC.violet, 0.25 * beat); ctx.lineWidth = 5;
+        ctx.strokeStyle = hexA(ARC.silver, 0.25 * beat); ctx.lineWidth = 5;
         ctx.beginPath(); ctx.arc(x, y, size * 1.9, -Math.PI / 2, -Math.PI / 2 + TAU * share); ctx.stroke();
-        ctx.strokeStyle = hexA(late ? '#e0b8ff' : ARC.violet, 0.9 * beat); ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = hexA(late ? '#ffffff' : ARC.silver, 0.9 * beat); ctx.lineWidth = 1.5; ctx.stroke();
         ctx.restore();
       }
       return;
@@ -298,13 +298,13 @@ export class EchoApp extends MiniGameApp {
     // a flash as it shows itself or ties again
     const fresh = Math.max(0, 1 - (t - Math.max(g.knotSeen[ki], this.retied[ki])) / 0.9);
     const breathe = 0.8 + 0.2 * Math.sin(t * 2.4 + ki);
-    spark(ctx, x, y, size * 2.6 + 18 * fresh, this.retied[ki] >= 0 && fresh > 0 ? ARC.violet : THREAD, 0.45 * breathe + 0.5 * fresh);
+    spark(ctx, x, y, size * 2.6 + 18 * fresh, this.retied[ki] >= 0 && fresh > 0 ? ARC.silver : THREAD, 0.45 * breathe + 0.5 * fresh);
     const bed = ctx.createRadialGradient(x, y, size * 0.5, x, y, size * 1.25);
-    bed.addColorStop(0, 'rgba(6,5,16,0.92)'); bed.addColorStop(1, 'rgba(6,5,16,0)');
+    bed.addColorStop(0, 'rgba(6,6,8,0.92)'); bed.addColorStop(1, 'rgba(6,6,8,0)');
     ctx.fillStyle = bed; ctx.beginPath(); ctx.arc(x, y, size * 1.25, 0, TAU); ctx.fill();
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    loops(0.42, ARC.violet, 0.7, 4.5);
-    loops(0.42, '#f2ecff', 0.95 * breathe, 1.7);
+    loops(0.42, ARC.silver, 0.7, 4.5);
+    loops(0.42, '#f1f3f6', 0.95 * breathe, 1.7);
     ctx.restore();
     spark(ctx, x, y, 6, '#ffffff', 1);
   }
@@ -321,8 +321,8 @@ export class EchoApp extends MiniGameApp {
     note(ctx, 'TOWARD THEIR KNOT', 14, 425, { size: 11, color: hexA(THREAD, 0.95) });
     const every = this.weave.params.retie;
     if (every) {
-      note(ctx, 'AN UNDONE KNOT', W - 14, 409, { size: 11, align: 'right', color: hexA(ARC.violet, 0.98) });
-      note(ctx, `TIES AGAIN IN ${Math.round(every)} s`, W - 14, 425, { size: 11, align: 'right', color: hexA(ARC.violet, 0.98) });
+      note(ctx, 'AN UNDONE KNOT', W - 14, 409, { size: 11, align: 'right', color: hexA(ARC.silver, 0.98) });
+      note(ctx, `TIES AGAIN IN ${Math.round(every)} s`, W - 14, 425, { size: 11, align: 'right', color: hexA(ARC.silver, 0.98) });
     }
   }
 
@@ -330,7 +330,7 @@ export class EchoApp extends MiniGameApp {
   drawNotes(ctx) {
     const g = this.game, done = g.undoneCount(), all = this.weave.knots.length;
     note(ctx, `${done} / ${all} ${all === 1 ? 'KNOT' : 'KNOTS'} UNDONE`, 14, 62, { size: 13, color: done ? hexA(ARC.gold, 0.98) : INK.label });
-    note(ctx, String(g.left), W - 14, 50, { size: 24, align: 'right', color: g.left <= 1 ? '#ff8aa2' : '#f1e9d2' });
+    note(ctx, String(g.left), W - 14, 50, { size: 24, align: 'right', color: g.left <= 1 ? '#ff9c84' : '#f1e9d2' });
   }
 
   renderEnding(ctx, t, success) {
@@ -352,9 +352,40 @@ export class EchoApp extends MiniGameApp {
   }
 
   endScreen(success) {
+    const scene = (c, x, y, R) => this.endScene(c, x, y, R, success);
     return success
-      ? { title: 'Weave Undone', sub: 'The last knot slips — the working falls apart', icon: (c, x, y, tone) => ARCANE_ICONS.knot(c, x, y, tone, true) }
-      : { title: 'The Weave Holds', sub: 'Your voice gives out in the dark', icon: (c, x, y, tone) => ARCANE_ICONS.knot(c, x, y, tone, false) };
+      ? { title: 'Weave Undone', sub: 'The last knot slips — the working falls apart', scene }
+      : { title: 'The Weave Holds', sub: 'Your voice gives out in the dark', scene };
+  }
+
+  /** The end picture: the mirror and this weave — knots slipped loose in gold, or still tied in silver. */
+  endScene(ctx, x, y, R, success) {
+    const px = fit(ctx, x, y, R, RIM_OUT, CX, CY);
+    ctx.strokeStyle = '#2a292e'; ctx.lineWidth = RIM_OUT - FR;
+    ctx.beginPath(); ctx.arc(CX, CY, (FR + RIM_OUT) / 2, 0, TAU); ctx.stroke();
+    const glass = ctx.createRadialGradient(CX, CY - FR * 0.3, FR * 0.1, CX, CY, FR);
+    glass.addColorStop(0, '#18181d'); glass.addColorStop(1, '#050506');
+    ctx.fillStyle = glass;
+    ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.fill();
+    this.weave.knots.forEach((k, ki) => {
+      const undone = success || this.game.undone[ki] !== null;
+      for (const th of k.threads) {
+        ctx.beginPath();
+        th.forEach((p, i) => (i ? ctx.lineTo(fx(p.x), fy(p.y)) : ctx.moveTo(fx(p.x), fy(p.y))));
+        if (undone) {
+          ctx.save(); ctx.setLineDash([2 * px, 5 * px]); ctx.lineCap = 'round';
+          ctx.strokeStyle = 'rgba(242,214,142,0.4)'; ctx.lineWidth = 1.1 * px; ctx.stroke();
+          ctx.restore();
+        } else lightStroke(ctx, px, THREAD, 1.3, '#f4f5f7');
+      }
+      const cx = fx(k.x), cy = fy(k.y), d = (undone ? 6 : 3.2) * px;
+      bloom(ctx, cx, cy, 13 * px, undone ? 'rgba(242,214,142,A)' : 'rgba(205,210,220,A)', undone ? 0.7 : 0.55);
+      ctx.strokeStyle = undone ? '#fff1c4' : '#eef0f3'; ctx.lineWidth = 1.3 * px;
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + i * TAU / 3;
+        ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 3.6 * px, 0, TAU); ctx.stroke();
+      }
+    });
   }
 
   /** Backdrop, the stone rim and the black mirror with its mist. */
@@ -365,15 +396,15 @@ export class EchoApp extends MiniGameApp {
     // the rim
     const rim = () => { ctx.beginPath(); ctx.arc(CX, CY, RIM_OUT, 0, TAU); ctx.arc(CX, CY, FR, 0, TAU, true); };
     const stone = ctx.createRadialGradient(CX, CY, FR, CX, CY, RIM_OUT);
-    stone.addColorStop(0, '#2a2e3a'); stone.addColorStop(0.5, '#323745'); stone.addColorStop(1, '#22252f');
+    stone.addColorStop(0, '#2d2d32'); stone.addColorStop(0.5, '#37373d'); stone.addColorStop(1, '#242428');
     rim(); ctx.fillStyle = stone; ctx.fill();
     const light = ctx.createLinearGradient(CX - RIM_OUT, CY - RIM_OUT, CX + RIM_OUT, CY + RIM_OUT);
-    light.addColorStop(0, 'rgba(210,225,255,0.10)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
+    light.addColorStop(0, 'rgba(255,238,205,0.09)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
     rim(); ctx.fillStyle = light; ctx.fill();
     for (const rr of [RIM_OUT, FR + 1, (FR + RIM_OUT) / 2]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, rr, 0, TAU); }, rr === (FR + RIM_OUT) / 2 ? 0.8 : 1.4, rr === (FR + RIM_OUT) / 2 ? 0.6 : 1);
     // the black mirror
     const glass = ctx.createRadialGradient(CX - 40, CY - 50, 10, CX, CY, FR);
-    glass.addColorStop(0, '#11142a'); glass.addColorStop(0.6, '#080a16'); glass.addColorStop(1, '#030409');
+    glass.addColorStop(0, '#151519'); glass.addColorStop(0.6, '#09090c'); glass.addColorStop(1, '#040405');
     ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.fillStyle = glass; ctx.fill();
     ctx.save();
     ctx.beginPath(); ctx.arc(CX, CY, FR, 0, TAU); ctx.clip();
@@ -381,19 +412,19 @@ export class EchoApp extends MiniGameApp {
     const R = rng(this.weave.seed + 51);
     for (let i = 0; i < 6; i++) {
       const x = CX + (R() - 0.5) * FR * 1.6, y = CY + (R() - 0.5) * FR * 1.6, r = 50 + R() * 90;
-      const col = i % 3 === 0 ? '120,200,255' : '160,130,255';
+      const col = i % 3 === 0 ? '242,214,142' : '200,205,214';   // a gold breath, the rest silver
       const m = ctx.createRadialGradient(x, y, 0, x, y, r);
       m.addColorStop(0, `rgba(${col},0.1)`); m.addColorStop(1, `rgba(${col},0)`);
       ctx.fillStyle = m; ctx.fillRect(x - r, y - r, r * 2, r * 2);
     }
     for (let i = 0; i < 70; i++) {
       const a = R() * TAU, rr = Math.sqrt(R()) * FR, s = R();
-      ctx.fillStyle = `rgba(210,220,255,${0.08 + 0.25 * s * s})`;
+      ctx.fillStyle = `rgba(228,230,236,${0.08 + 0.25 * s * s})`;
       ctx.fillRect(CX + Math.cos(a) * rr, CY + Math.sin(a) * rr, 1, 1);
     }
     // a sheen across the glass, and its edge sinking into shadow
     const sheen = ctx.createLinearGradient(CX - FR, CY - FR, CX + FR * 0.2, CY + FR * 0.4);
-    sheen.addColorStop(0, 'rgba(200,215,255,0.06)'); sheen.addColorStop(0.5, 'rgba(200,215,255,0)');
+    sheen.addColorStop(0, 'rgba(222,226,234,0.06)'); sheen.addColorStop(0.5, 'rgba(222,226,234,0)');
     ctx.fillStyle = sheen; ctx.fillRect(CX - FR, CY - FR, FR * 2, FR * 2);
     const edge = ctx.createRadialGradient(CX, CY, FR * 0.72, CX, CY, FR);
     edge.addColorStop(0, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(0,0,0,0.65)');

@@ -5,13 +5,36 @@
    orange borders inside these dark panels. Literal colours keep the intended
    look identical on every core version and theme. */
 
-/* Cinzel (SIL Open Font License, see fonts/Cinzel-OFL.txt): titles, labels and the words on the boards */
+/* Cormorant SC Bold (SIL Open Font License, see fonts/CormorantSC-OFL.txt): titles, labels and the words on the boards */
 @font-face {
-  font-family: "LPM Cinzel";
-  src: url("fonts/Cinzel.ttf") format("truetype");
+  font-family: "LPM Display";
+  src: url("fonts/CormorantSC-Bold.ttf") format("truetype");
   font-weight: 400 900;
   font-style: normal;
   font-display: swap;
+}
+
+/* Two metals on black, in every game window. Gold is what is yours (the light,
+   the aim, progress, buttons, success); silver is the working's own magic, what is
+   hidden and what went out (a failure); parchment is text. Red is only a small
+   in-play mark for "wrong / against you", never an end screen. The chat cards keep
+   the theme's colours. */
+.lockpick-minigame {
+  --lpm-ink:#ebe1c8; --lpm-ink-dim:#b3a78b; --lpm-ink-faint:#7d7563;
+  --lpm-gold:#e0bc66; --lpm-gold-hi:#f6dc96; --lpm-gold-lo:#9a7a3e;
+  --lpm-silver:#b9bec8; --lpm-silver-hi:#e3e6eb;
+  --lpm-ember:#e8674e; --lpm-ember-hi:#ff9c84;
+  --lpm-well:#0c0c0f; --lpm-line:#2d2b31;
+}
+/* Brass buttons, one look in every window */
+.lpm-puzzle button.lpm-btn, .lpm-puzzle button.lpm-cipher-check, .lpm-arcana .lpm-arcana-btn {
+  color:var(--lpm-ink);
+  background:linear-gradient(180deg, #3b301b, #1e180e); border:1px solid #8a6a32;
+  box-shadow:inset 0 1px 0 rgba(255,230,170,.14), 0 1px 4px rgba(0,0,0,.5);
+}
+.lpm-puzzle button.lpm-btn:hover, .lpm-puzzle button.lpm-cipher-check:hover, .lpm-arcana .lpm-arcana-btn:hover:not([disabled]) {
+  filter:none; border-color:var(--lpm-gold); color:#fff6dc;
+  background:linear-gradient(180deg, #4a3c20, #261e10);
 }
 
 /* Window chrome */
@@ -23,24 +46,24 @@
 .application.lockpick-minigame .window-content { backdrop-filter:none; -webkit-backdrop-filter:none; }
 
 /* Lockpick root */
-.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,'Cinzel',serif); }
+.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,serif); }
 .lpm-canvas { display:block; width:100%; cursor:crosshair; }
 .lpm-footer {
   display:flex; flex-direction:column; gap:7px;
   padding:9px 12px 10px;
-  background:#0e0e18;
-  border-top:1px solid #333;
+  background:#0f0f13;
+  border-top:1px solid var(--lpm-line);
 }
 .lpm-footer-top, .lpm-footer-bottom {
   display:flex; align-items:center; justify-content:space-between; gap:12px;
 }
 .lpm-footer-top {
   padding-bottom:7px;
-  border-bottom:1px solid #222;
+  border-bottom:1px solid #222126;
 }
 /* Result typography — core fonts only (Modesto Condensed, Signika, Amiri) */
 .lockpick-minigame, .lpm-card, .lpm-flavor {
-  --lpm-font-display: "LPM Cinzel", "Cinzel", "Modesto Condensed", Georgia, serif;
+  --lpm-font-display: "LPM Display", "Cormorant SC", Georgia, serif;
   --lpm-font-body: "Signika", ui-sans-serif, system-ui, sans-serif;
   --lpm-font-serif: "Amiri", Georgia, "Times New Roman", serif;
 }
@@ -65,11 +88,11 @@
 
 /* Roll badge in the lockpick footer */
 .lpm-roll { display:flex; align-items:center; gap:8px; white-space:nowrap; }
-.lpm-roll--beat   { --lpm-roll:#86dc96; }
-.lpm-roll--miss   { --lpm-roll:#eaa65e; }
-.lpm-roll--crit   { --lpm-roll:#f4d06c; }
-.lpm-roll--fumble { --lpm-roll:#ef6b5b; }
-.lpm-roll--secret { --lpm-roll:#c3cbe0; }
+.lpm-roll--beat   { --lpm-roll:var(--lpm-gold); }
+.lpm-roll--miss   { --lpm-roll:var(--lpm-silver); }
+.lpm-roll--crit   { --lpm-roll:var(--lpm-gold-hi); }
+.lpm-roll--fumble { --lpm-roll:#8f949d; }
+.lpm-roll--secret { --lpm-roll:var(--lpm-ink-dim); }
 .lpm-roll__die { font-size:17px; color:var(--lpm-roll); filter:drop-shadow(0 1px 1px rgba(0,0,0,.8)); }
 .lpm-roll__total {
   font:700 26px/1 var(--lpm-font-display); color:var(--lpm-roll);
@@ -87,22 +110,19 @@
    --color-cool-5 to #0b0a13, i.e. black-on-black — the digits vanished. These
    panels have their own fixed dark palette so contrast never depends on core. */
 .lpm-puzzle .window-content {
-  padding:12px 14px; color:#e2e6f3; font-family:var(--lpm-font-body);
-  background:radial-gradient(ellipse at 50% 0%, #1a1c27 0%, #0d0e12 72%);
+  padding:12px 14px; color:var(--lpm-ink); font-family:var(--lpm-font-body);
+  background:radial-gradient(ellipse at 50% 0%, #1d1b20 0%, #0d0d10 72%);
 }
 
 .lpm-puzzle-hint {
   font:500 12px/1.4 var(--lpm-font-body); text-align:center; margin:6px 0 0;
-  color:#8f9ab8;
+  color:var(--lpm-ink-dim);
 }
-/* One button look for every puzzle: the Arcana games' violet stone */
+/* Button size for every puzzle (the look is the brass one above) */
 .lpm-puzzle button.lpm-btn, .lpm-puzzle button.lpm-cipher-check {
-  width:auto; flex:0 0 auto; height:auto; margin:0; padding:7px 16px; border-radius:6px; cursor:pointer;
-  font:700 13px/1.2 var(--lpm-font-body); letter-spacing:.06em; color:#ece4ff;
-  background:linear-gradient(180deg, #34295c, #1f1838); border:1px solid #6150a8;
-  box-shadow:inset 0 1px 0 rgba(220,200,255,.15), 0 0 8px rgba(150,110,255,.22);
+  width:auto; flex:0 0 auto; height:auto; margin:0; padding:7px 16px; border-radius:2px; cursor:pointer;
+  font:700 13px/1.2 var(--lpm-font-body); letter-spacing:.06em;
 }
-.lpm-puzzle button.lpm-btn:hover, .lpm-puzzle button.lpm-cipher-check:hover { filter:brightness(1.18); }
 .lpm-puzzle button.lpm-btn i, .lpm-puzzle button.lpm-cipher-check i { margin-right:5px; }
 
 .lpm-result {
@@ -111,16 +131,46 @@
   animation:lpm-pop .35s ease;
 }
 .lpm-result--win  { --lpm-result:#ecc96c; }
-.lpm-result--fail { --lpm-result:#ec7a62; }
-.lpm-result__medal {
-  width:66px; height:66px; border-radius:50%; margin-bottom:8px;
-  display:grid; place-items:center; font-size:27px; color:var(--lpm-result);
-  background:radial-gradient(circle at 38% 32%, #30291c, #100d08 70%);
-  box-shadow:0 0 0 3px #b38e45, 0 0 0 4px rgba(0,0,0,.6), 0 5px 16px rgba(0,0,0,.65), inset 0 2px 6px rgba(0,0,0,.85);
+.lpm-result--fail { --lpm-result:#c4c8cf; }
+/* The end picture: a small view of what was done */
+.lpm-result__scene {
+  display:flex; justify-content:center; margin:0 0 10px; padding:12px 16px; border-radius:12px;
+  background:radial-gradient(ellipse at 50% 50%, rgba(0,0,0,.55) 0%, rgba(0,0,0,.25) 60%, transparent 75%);
 }
+.lpm-result--win .lpm-result__scene > * { filter:drop-shadow(0 0 12px rgba(224,188,102,.28)); }
+.lpm-result--fail .lpm-result__scene > * { filter:grayscale(1) brightness(.85); }
+.lpm-scene-sudoku {
+  display:grid; grid-template-columns:repeat(9,16px); grid-auto-rows:16px;
+  border:2px solid var(--lpm-gold-lo); border-radius:0; background:#0f0f12;
+}
+.lpm-scene-sudoku span {
+  display:grid; place-items:center; font:700 10px/1 var(--lpm-font-body); color:var(--lpm-gold-hi);
+  border-right:1px solid #26242a; border-bottom:1px solid #26242a;
+}
+.lpm-scene-sudoku span.g  { color:#f6efdc; background:#1b1a1f; }
+.lpm-scene-sudoku span.r3 { border-right:1px solid var(--lpm-gold-lo); }
+.lpm-scene-sudoku span.b3 { border-bottom:1px solid var(--lpm-gold-lo); }
+.lpm-scene-sliding {
+  display:grid; grid-template-columns:repeat(var(--sz),1fr); gap:2px; width:150px; height:150px; padding:2px;
+  border-radius:0; background:#6f5a34; box-shadow:0 0 0 1px rgba(0,0,0,.6);
+}
+.lpm-scene-tile { display:block; border-radius:0; background-image:linear-gradient(rgba(0,0,0,.1),rgba(0,0,0,.1)), url("stone.jpg"); background-repeat:no-repeat; }
+.lpm-scene-cipher { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 16px; max-width:440px; }
+.lpm-scene-cipher .w { display:flex; gap:3px; }
+.lpm-scene-cipher .c { display:flex; flex-direction:column; align-items:center; width:21px; }
+.lpm-scene-cipher .c i {
+  font-style:normal; font-size:22px; line-height:1.1; color:#ecc970; text-shadow:0 0 10px rgba(236,201,112,.35);
+  font-family:"Segoe UI Historic","Noto Sans Gothic","Noto Sans Runic","Segoe UI Symbol",serif;
+}
+.lpm-scene-cipher .c b { font:700 13px/1.4 var(--lpm-font-body); color:var(--lpm-gold-hi); }
+.lpm-result--fail .lpm-scene-cipher .c i { color:#9da2ab; text-shadow:none; }
+.lpm-result--fail .lpm-scene-cipher .c b { color:var(--lpm-silver-hi); }
+.lpm-scene-simon { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; max-width:420px; }
+.lpm-scene-simon canvas { width:38px; height:36px; border-radius:2px; background:#0d0d10; border:1px solid #2d2b31; }
+.lpm-scene-simon canvas.is-missed { border-color:var(--lpm-silver-hi); box-shadow:0 0 8px rgba(220,224,232,.4); }
 .lpm-result__title {
   font:700 32px/1.1 var(--lpm-font-display); letter-spacing:.05em; color:var(--lpm-result);
-  text-shadow:0 2px 3px rgba(0,0,0,.85), 0 0 18px color-mix(in srgb, var(--lpm-result) 35%, transparent);
+  text-shadow:0 2px 2px rgba(0,0,0,.85);
 }
 .lpm-result__kicker {
   font:700 11px var(--lpm-font-display); letter-spacing:.3em; text-transform:uppercase;
@@ -156,38 +206,38 @@
 .lpm-sudoku-grid {
   display:grid; grid-template-columns:repeat(9,1fr);
   width:378px; height:378px;
-  border:3px solid #9a7a3e; border-radius:4px;
-  background:#101118;
+  border:3px solid #9a7a3e; border-radius:2px;
+  background:#0f0f12;
   box-shadow:0 0 0 1px rgba(0,0,0,.7), 0 6px 18px rgba(0,0,0,.5);
 }
 .lpm-sudoku-cell {
   display:flex; align-items:center; justify-content:center;
   font:700 21px/1 var(--lpm-font-body); cursor:pointer;
-  border:1px solid #2a2d3a;
-  color:#d7dbe8; background:#101118;
+  border:1px solid #2b2a30;
+  color:var(--lpm-ink); background:#0f0f12;
   transition:background .1s;
   user-select:none;
 }
-.lpm-sudoku-cell.given     { color:#f4f1e6; font-weight:700; background:#1c1e29; }
-.lpm-sudoku-cell.player    { color:#86ecff; font-weight:700; background:#101118; }
+.lpm-sudoku-cell.given     { color:#f6efdc; font-weight:700; background:#1e1c22; }
+.lpm-sudoku-cell.player    { color:var(--lpm-gold-hi); font-weight:700; background:#0f0f12; }
 .lpm-sudoku-cell.selected  { background:#3a3016 !important; color:#fff6d8; box-shadow:inset 0 0 0 2px #e0b85a; }
-.lpm-sudoku-cell.related   { background:#171925; }
-.lpm-sudoku-cell.given.related { background:#222533; }
+.lpm-sudoku-cell.related   { background:#18171b; }
+.lpm-sudoku-cell.given.related { background:#25232a; }
 .lpm-sudoku-cell.same      { box-shadow:inset 0 0 0 2px rgba(200,168,78,.45); }
-.lpm-sudoku-cell.error     { color:#ff6b6b; background:#2a1010; }
-.lpm-sudoku-cell.correct   { color:#6ee07a; background:#0f2412; }
+.lpm-sudoku-cell.error     { color:var(--lpm-ember-hi); background:#2a1410; }
+.lpm-sudoku-cell.correct   { color:var(--lpm-gold-hi); background:#2a210c; }
 /* GM watching with "Show the answers": what belongs in an empty cell, faint */
-.lpm-sudoku-cell.answer::after { content:attr(data-answer); color:#6ee07a; opacity:.42; font-weight:600; }
+.lpm-sudoku-cell.answer::after { content:attr(data-answer); color:var(--lpm-silver-hi); opacity:.5; font-weight:600; }
 .lpm-answers-toggle {
   display:flex; align-items:center; justify-content:center; gap:6px; margin:8px 0 0;
   font-size:12px; color:#d6cfbf; cursor:pointer; user-select:none;
 }
 .lpm-answers-toggle input { margin:0; }
-.lpm-sudoku-cell:hover:not(.given):not(.selected) { background:#2e2a3a; }
+.lpm-sudoku-cell:hover:not(.given):not(.selected) { background:#29251d; }
 /* a teammate (or the watched player) just changed this cell */
 .lpm-sudoku-cell.remote    { animation:lpm-cell-remote 1.1s ease-out; }
 @keyframes lpm-cell-remote {
-  0%   { box-shadow:inset 0 0 0 3px #7fb4ff, 0 0 12px rgba(127,180,255,.6); }
+  0%   { box-shadow:inset 0 0 0 3px var(--lpm-silver), 0 0 12px rgba(200,205,214,.5); }
   100% { box-shadow:inset 0 0 0 0 transparent; }
 }
 .lpm-sudoku-cell.border-top    { border-top:   2px solid #9a7a3e; }
@@ -200,16 +250,16 @@
 .lpm-puzzle .lpm-sudoku-pad button {
   width:32px; height:32px; flex:0 0 auto; margin:0; padding:0;
   font:700 16px/1 var(--lpm-font-body);
-  color:#ece4ff; background:linear-gradient(180deg, #2a2346, #1a1530);
-  border:1px solid #4f4290; border-radius:6px; cursor:pointer;
+  color:var(--lpm-ink); background:linear-gradient(180deg, #352b18, #1d180e);
+  border:1px solid #6f5528; border-radius:2px; cursor:pointer;
   transition:filter .12s, border-color .12s;
 }
-.lpm-puzzle .lpm-sudoku-pad button:hover { filter:brightness(1.25); border-color:#8f7be0; }
+.lpm-puzzle .lpm-sudoku-pad button:hover { filter:brightness(1.2); border-color:var(--lpm-gold); }
 .lpm-puzzle .lpm-sudoku-pad button.wide { width:50px; font-size:12px; letter-spacing:.04em; }
 
 /* Sliding puzzle - stone tiles */
 .lpm-sliding-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
-.lpm-sliding-moves { font:700 12px var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#c9cfe0; }
+.lpm-sliding-moves { font:700 12px var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:var(--lpm-gold); }
 .lpm-sliding-grid {
   display:grid; grid-template-columns:repeat(var(--sz),1fr);
   gap:4px; width:380px; height:380px;
@@ -217,7 +267,7 @@
 .lpm-tile {
   position:relative; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
-  border-radius:4px; cursor:pointer; transition:transform .1s, filter .1s;
+  border-radius:2px; cursor:pointer; transition:transform .1s, filter .1s;
   background-color:#4a3f35;
   background-image:
     repeating-linear-gradient(73deg, transparent 0 18px, rgba(0,0,0,.07) 18px 19px),
@@ -250,10 +300,10 @@
 .lpm-tile.just-moved { animation:lpm-tile-in .16s ease-out; }
 @keyframes lpm-tile-in { from { transform:scale(.9); filter:brightness(1.4); } to { transform:scale(1); } }
 .lpm-tile.placed:not(.empty) {
-  background-image:linear-gradient(rgba(40,150,60,.26),rgba(20,90,30,.30)), url("stone.jpg");
-  box-shadow:inset 0 2px 1px rgba(100,255,80,.14),0 0 10px rgba(40,180,40,.18),0 3px 6px rgba(0,0,0,.55);
+  background-image:linear-gradient(rgba(190,150,60,.20),rgba(120,88,28,.28)), url("stone.jpg");
+  box-shadow:inset 0 0 0 1px rgba(224,188,102,.45),inset 0 2px 1px rgba(255,225,150,.16),0 3px 6px rgba(0,0,0,.55);
 }
-.lpm-tile.placed .lpm-tile-num { color:rgba(190,255,170,.92); }
+.lpm-tile.placed .lpm-tile-num { color:var(--lpm-gold-hi); }
 .lpm-tile.empty {
   background:rgba(0,0,0,.35) !important; border:1px dashed rgba(80,60,40,.35) !important;
   box-shadow:inset 0 2px 8px rgba(0,0,0,.6) !important; cursor:default;
@@ -263,16 +313,16 @@
 /* Cipher: an inscription with a slot under each glyph, and the codex below it */
 .lpm-cipher { display:flex; flex-direction:column; gap:10px; }
 .lpm-cipher-panel {
-  padding:10px 12px 12px; border-radius:8px;
-  background:linear-gradient(180deg, #161822, #0f1016);
-  border:1px solid #272b3a; box-shadow:inset 0 1px 0 rgba(200,215,255,.04), 0 2px 8px rgba(0,0,0,.35);
+  padding:10px 12px 12px; border-radius:2px;
+  background:linear-gradient(180deg, #18171c, #0f0f12);
+  border:1px solid var(--lpm-line); box-shadow:inset 0 1px 0 rgba(255,240,210,.04), 0 2px 8px rgba(0,0,0,.35);
 }
 .lpm-cipher-label {
   display:flex; align-items:baseline; gap:8px; margin:0 0 9px;
-  font:700 12px/1 var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#c9cfe0;
+  font:700 12px/1 var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:var(--lpm-ink);
 }
 .lpm-cipher-label span { font-weight:600; letter-spacing:.1em; color:#d9b866; }
-.lpm-cipher-label em { margin-left:auto; font:600 11px var(--lpm-font-body); letter-spacing:.02em; text-transform:none; font-style:normal; color:#8fd29a; }
+.lpm-cipher-label em { margin-left:auto; font:600 11px var(--lpm-font-body); letter-spacing:.02em; text-transform:none; font-style:normal; color:var(--lpm-gold); }
 .lpm-cipher-label em i { margin-right:4px; }
 .lpm-ins-glyph, .lpm-codex-glyph {
   font-family:"Segoe UI Historic","Noto Sans Gothic","Noto Sans Runic","Segoe UI Symbol",serif; line-height:1;
@@ -282,11 +332,11 @@
 .lpm-ins-word { display:flex; gap:6px; }
 .lpm-ins-tile {
   display:flex; flex-direction:column; align-items:center; gap:6px;
-  width:46px; padding:6px 0 0; border-radius:7px; transition:background .12s;
+  width:46px; padding:6px 0 0; border-radius:2px; transition:background .12s;
 }
 .lpm-ins-tile.is-lit { background:rgba(217,184,102,.12); }
 /* a glyph the codex does not give: to be worked out from the word */
-.lpm-ins-tile.is-unknown .lpm-ins-glyph { color:#ffa36b; text-shadow:0 0 12px rgba(255,163,107,.4), 0 1px 2px rgba(0,0,0,.9); }
+.lpm-ins-tile.is-unknown .lpm-ins-glyph { color:#dfe2e8; text-shadow:0 0 12px rgba(210,215,224,.45), 0 1px 2px rgba(0,0,0,.9); }
 .lpm-ins-glyph {
   display:flex; align-items:center; height:38px; font-size:34px; color:#ecc970;
   text-shadow:0 0 12px rgba(236,201,112,.35), 0 1px 2px rgba(0,0,0,.9);
@@ -294,29 +344,29 @@
 .lpm-puzzle input.lpm-ins-slot, .lpm-ins-slot {
   display:block; width:42px; height:42px; box-sizing:border-box; margin:0; padding:0;
   text-align:center; font:700 22px/40px var(--lpm-font-body); text-transform:uppercase;
-  color:#eef2ff; caret-color:transparent;
-  background:#0a0b10; border:1px solid #343b54; border-bottom:2px solid #5d6995; border-radius:6px;
+  color:#f6efdc; caret-color:transparent;
+  background:var(--lpm-well); border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:2px;
   outline:none; box-shadow:none;
 }
-.lpm-puzzle input.lpm-ins-slot:focus { border-color:#86ecff; border-bottom-color:#86ecff; background:#0d1520; box-shadow:0 0 0 3px rgba(134,236,255,.18); }
-.lpm-puzzle input.lpm-ins-slot.is-wrong { color:#ff9a8a; border-color:#8e3a33; border-bottom-color:#ff6a55; }
-.lpm-ins-slot.is-answer { color:#93e6a0; border-color:#2f6b3b; border-bottom-color:#4cb862; }
+.lpm-puzzle input.lpm-ins-slot:focus { border-color:var(--lpm-gold); border-bottom-color:var(--lpm-gold-hi); background:#17130b; box-shadow:0 0 0 3px rgba(224,188,102,.2); }
+.lpm-puzzle input.lpm-ins-slot.is-wrong { color:var(--lpm-ember-hi); border-color:#7a3328; border-bottom-color:var(--lpm-ember); }
+.lpm-ins-slot.is-answer { color:var(--lpm-silver-hi); border-color:#4d525a; border-bottom-color:var(--lpm-silver); }
 .lpm-cipher-actions { display:flex; align-items:center; gap:12px; margin-top:12px; }
-.lpm-cipher-feedback { flex:1 1 auto; min-height:18px; font:600 13px var(--lpm-font-body); color:#ff9a8a; }
+.lpm-cipher-feedback { flex:1 1 auto; min-height:18px; font:600 13px var(--lpm-font-body); color:var(--lpm-ember-hi); }
 
 .lpm-codex { display:grid; grid-template-columns:repeat(9, 1fr); gap:5px; }
 .lpm-codex-entry {
   display:flex; flex-direction:column; align-items:center; gap:4px; padding:7px 0 6px;
-  border-radius:6px; background:#0b0c12; border:1px solid #21252f; cursor:pointer; user-select:none;
+  border-radius:2px; background:var(--lpm-well); border:1px solid #29272d; cursor:pointer; user-select:none;
   transition:border-color .12s, background .12s;
 }
 .lpm-codex-entry:hover, .lpm-codex-entry.is-lit { border-color:#d9b866; background:#1b1810; }
 .lpm-codex-glyph { font-size:23px; color:#ecc970; }
-.lpm-codex-letter { font:700 15px/1 var(--lpm-font-body); color:#e3e8f5; }
+.lpm-codex-letter { font:700 15px/1 var(--lpm-font-body); color:var(--lpm-ink); }
 .lpm-cipher-note { margin:9px 0 0; font:600 12px var(--lpm-font-body); color:#d9b866; }
 .lpm-cipher-note b { color:#f3e2b0; }
 .lpm-cipher-label em.lpm-cipher-tag {
-  margin-left:6px; font:italic 400 14px var(--lpm-font-serif); letter-spacing:0; color:#c9b6ff;
+  margin-left:6px; font:italic 400 14px var(--lpm-font-serif); letter-spacing:0; color:var(--lpm-silver-hi);
 }
 /* long inscriptions: smaller tiles, so a phrase or a riddle fits in a few rows */
 .lpm-inscription.is-long { gap:10px 18px; }
@@ -330,7 +380,7 @@
 /* the Caesar wheel under the codex */
 .lpm-wheel {
   display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px;
-  margin-top:11px; padding-top:11px; border-top:1px solid #23273a;
+  margin-top:11px; padding-top:11px; border-top:1px solid var(--lpm-line);
 }
 .lpm-wheel-label { font:700 12px var(--lpm-font-display); letter-spacing:.12em; text-transform:uppercase; color:#d9b866; }
 .lpm-puzzle button.lpm-wheel-btn {
@@ -341,11 +391,11 @@
 .lpm-puzzle button.lpm-wheel-btn:hover:not([disabled]) { filter:brightness(1.25); }
 .lpm-puzzle button.lpm-wheel-btn[disabled] { opacity:.45; cursor:default; }
 .lpm-wheel-val {
-  min-width:40px; padding:4px 8px; border-radius:6px; text-align:center;
+  min-width:40px; padding:4px 8px; border-radius:2px; text-align:center;
   font:700 20px/1.1 var(--lpm-font-display); color:#f6e6b6;
-  background:#0b0c12; border:1px solid #4a3f22; box-shadow:inset 0 1px 4px rgba(0,0,0,.8);
+  background:var(--lpm-well); border:1px solid #4a3f22; box-shadow:inset 0 1px 4px rgba(0,0,0,.8);
 }
-.lpm-wheel-say { flex:1 1 230px; font:600 12px/1.4 var(--lpm-font-body); color:#aab4d0; }
+.lpm-wheel-say { flex:1 1 230px; font:600 12px/1.4 var(--lpm-font-body); color:var(--lpm-ink-dim); }
 .lpm-wheel-say b { color:#f3e2b0; }
 /* checks left (hard) */
 .lpm-cipher-checks { display:flex; align-items:center; gap:4px; }
@@ -357,15 +407,15 @@
 }
 .lpm-cipher-checks .lpm-pip.used { background:#201c16; box-shadow:inset 0 1px 3px rgba(0,0,0,.85), 0 0 0 1px rgba(255,236,190,.12); }
 /* the riddle, once the inscription is read */
-.lpm-riddle { margin-top:12px; padding-top:12px; border-top:1px solid #2a2e3d; }
+.lpm-riddle { margin-top:12px; padding-top:12px; border-top:1px solid var(--lpm-line); }
 .lpm-riddle-text { margin:0 0 12px; text-align:center; font:italic 400 20px/1.4 var(--lpm-font-serif); color:#f1e5c6; }
 .lpm-riddle-row { display:flex; align-items:center; gap:10px; }
 .lpm-puzzle input.lpm-riddle-input {
   flex:1 1 auto; height:40px; margin:0; padding:0 12px; box-sizing:border-box;
-  font:600 17px var(--lpm-font-body); color:#eef2ff; background:#0a0b10;
-  border:1px solid #343b54; border-bottom:2px solid #5d6995; border-radius:6px; outline:none;
+  font:600 17px var(--lpm-font-body); color:#f6efdc; background:var(--lpm-well);
+  border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:2px; outline:none;
 }
-.lpm-puzzle input.lpm-riddle-input:focus { border-color:#86ecff; box-shadow:0 0 0 3px rgba(134,236,255,.18); }
+.lpm-puzzle input.lpm-riddle-input:focus { border-color:var(--lpm-gold); box-shadow:0 0 0 3px rgba(224,188,102,.2); }
 .lpm-riddle-feedback { margin-top:8px; }
 .lpm-cipher-note i { margin-right:5px; }
 
@@ -373,24 +423,24 @@
 .lpm-cipher-live { display:flex; flex-direction:column; gap:4px; max-height:132px; overflow-y:auto; }
 .lpm-cipher-row {
   display:flex; align-items:baseline; gap:12px; padding:5px 10px;
-  background:#0b0c12; border:1px solid #23273a; border-radius:6px; font:600 12px var(--lpm-font-body);
+  background:var(--lpm-well); border:1px solid var(--lpm-line); border-radius:2px; font:600 12px var(--lpm-font-body);
 }
-.lpm-cipher-row.lpm-dim { color:#7d86a4; justify-content:center; }
-.lpm-cipher-row.is-solved { border-color:#2f7a3c; background:#0f1f12; }
+.lpm-cipher-row.lpm-dim { color:var(--lpm-ink-faint); justify-content:center; }
+.lpm-cipher-row.is-solved { border-color:#8a6a32; background:#1d170b; }
 .lpm-cipher-row.is-left   { opacity:.5; }
-.lpm-cipher-who    { flex:0 0 auto; min-width:76px; font-weight:700; color:#d6dbe8; }
-.lpm-cipher-typing { flex:1 1 auto; font:700 16px var(--lpm-font-body); letter-spacing:.3em; color:#eef2ff; }
-.lpm-cipher-last   { flex:0 0 auto; font:600 12px var(--lpm-font-body); letter-spacing:.12em; color:#ff9a8a; }
+.lpm-cipher-who    { flex:0 0 auto; min-width:76px; font-weight:700; color:var(--lpm-ink); }
+.lpm-cipher-typing { flex:1 1 auto; font:700 16px var(--lpm-font-body); letter-spacing:.3em; color:#f6efdc; }
+.lpm-cipher-last   { flex:0 0 auto; font:600 12px var(--lpm-font-body); letter-spacing:.12em; color:var(--lpm-ember-hi); }
 
 /* Simon Says */
 .lpm-simon-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
 .lpm-simon-status {
   font:600 14px var(--lpm-font-body); text-align:center; min-height:20px;
-  color:#d6dbe8;
+  color:var(--lpm-ink);
 }
 .lpm-simon-progress { display:flex; gap:5px; min-height:16px; }
-.lpm-simon-dot      { font-size:13px; color:#5c5c5c; transition:color .2s; }
-.lpm-simon-dot.done { color:#4caf50; text-shadow:0 0 6px currentColor; }
+.lpm-simon-dot      { font-size:13px; color:#4d4a44; transition:color .2s; }
+.lpm-simon-dot.done { color:var(--lpm-gold); text-shadow:0 0 6px currentColor; }
 
 /* 2×2 grid of arcane tablets */
 .lpm-simon-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:320px; height:330px; }
@@ -402,7 +452,7 @@
   justify-content: center;
   gap: 6px;
   padding: 10px 6px 8px;
-  border-radius: 8px;
+  border-radius:2px;
   cursor: pointer;
   user-select: none;
   position: relative;
@@ -445,7 +495,7 @@
 /* Config section injected into WallConfig */
 .lpm-config-section {
   border:1px solid #555;
-  border-radius:4px; padding:8px 10px 10px;
+  border-radius:2px; padding:8px 10px 10px;
   margin:8px 0 4px;
   background:#111;
 }
@@ -457,8 +507,8 @@
 
 /* ── Ready button ─────────────────────────────────────────── */
 @keyframes lpm-ready-pulse {
-  0%, 100% { box-shadow: 0 0 8px 2px rgba(80,220,120,.35), 0 0 0 0 rgba(80,220,120,.0), inset 0 1px 0 rgba(255,255,255,.12); }
-  50%       { box-shadow: 0 0 22px 6px rgba(80,220,120,.55), 0 0 36px 10px rgba(80,220,120,.18), inset 0 1px 0 rgba(255,255,255,.12); }
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(224,188,102,.28), inset 0 1px 0 rgba(255,230,170,.14); }
+  50%       { box-shadow: 0 0 18px 4px rgba(224,188,102,.45), inset 0 1px 0 rgba(255,230,170,.14); }
 }
 
 .lpm-puzzle button.lpm-simon-ready-btn,
@@ -470,15 +520,15 @@
   line-height: 1.25;
   padding: 12px 10px;
   margin-top: 10px;
-  background: linear-gradient(160deg, #1a3326 0%, #0f2218 55%, #0a1a10 100%);
-  color: #7effa8;
-  border: 1.5px solid #3a9c60;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #3b301b 0%, #1e180e 100%);
+  color: var(--lpm-gold-hi);
+  border: 1.5px solid #8a6a32;
+  border-radius:2px;
   cursor: pointer;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: .06em;
-  text-shadow: 0 0 10px rgba(100,255,140,.6), 0 1px 3px rgba(0,0,0,.9);
+  text-shadow: 0 0 10px rgba(246,220,150,.45), 0 1px 3px rgba(0,0,0,.9);
   font-family: var(--lpm-font-body);
   animation: lpm-ready-pulse 2.2s ease-in-out infinite;
   transition: background .18s, border-color .18s, color .18s, transform .1s;
@@ -494,16 +544,16 @@
   border-radius: inherit;
 }
 .lpm-simon-ready-btn:hover {
-  background: linear-gradient(160deg, #204a34 0%, #163322 55%, #0d2016 100%);
-  border-color: #5dce80;
-  color: #afffcc;
-  text-shadow: 0 0 14px rgba(130,255,170,.75), 0 1px 3px rgba(0,0,0,.9);
+  background: linear-gradient(180deg, #4a3c20 0%, #261e10 100%);
+  border-color: var(--lpm-gold);
+  color: #fff6dc;
+  text-shadow: 0 0 14px rgba(246,220,150,.6), 0 1px 3px rgba(0,0,0,.9);
   transform: translateY(-1px);
 }
 .lpm-simon-ready-btn:active {
   transform: translateY(1px) scale(.98);
   animation: none;
-  box-shadow: 0 0 8px 2px rgba(80,220,120,.25), inset 0 2px 6px rgba(0,0,0,.5);
+  box-shadow: 0 0 8px 2px rgba(224,188,102,.22), inset 0 2px 6px rgba(0,0,0,.5);
 }
 
 /* ── GM spectator banner (LockpickApp) ───────────────────── */
@@ -511,10 +561,10 @@
   text-align: center;
   padding: 6px 10px;
   margin: -4px 0 6px;
-  border-radius: 4px;
-  background: rgba(30, 10, 60, 0.85);
-  border: 1px solid rgba(160, 100, 255, 0.35);
-  color: rgba(210, 175, 255, 0.95);
+  border-radius:2px;
+  background: rgba(26, 21, 11, 0.92);
+  border: 1px solid rgba(224, 188, 102, 0.35);
+  color: var(--lpm-gold-hi);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .08em;
@@ -527,34 +577,34 @@
   margin: 0 0 8px; text-align: left;
 }
 .lpm-join {
-  flex: 0 0 auto; padding: 3px 10px; border-radius: 4px; cursor: pointer;
-  background: rgba(120, 70, 220, .35); border: 1px solid rgba(190, 150, 255, .6);
-  color: #f1e6ff; letter-spacing: .06em; text-decoration: none;
+  flex: 0 0 auto; padding: 3px 10px; border-radius:2px; cursor: pointer;
+  background: rgba(150, 112, 46, .35); border: 1px solid rgba(224, 188, 102, .6);
+  color: #fff4d8; letter-spacing: .06em; text-decoration: none;
 }
-.lpm-join:hover { background: rgba(140, 90, 240, .6); color: #fff; }
+.lpm-join:hover { background: rgba(176, 134, 58, .6); color: #fff; }
 
 /* ── Roster: who got the puzzle and how they are doing ───── */
 .lpm-roster { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin: 0 0 8px; min-height: 22px; }
-.lpm-roster-empty { font-size: 11px; color: #77778f; font-style: italic; }
+.lpm-roster-empty { font-size: 11px; color: var(--lpm-ink-faint); font-style: italic; }
 .lpm-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 2px 9px 2px 7px; border-radius: 11px;
+  padding: 2px 9px 2px 7px; border-radius:2px;
   font-size: 11px; font-weight: 700; line-height: 17px; letter-spacing: .03em;
-  color: #d6d0c0; background: #1b1a22; border: 1px solid #3b3846;
+  color: var(--lpm-ink); background: #1b1a1f; border: 1px solid #3a3730;
   user-select: none; white-space: nowrap;
 }
 .lpm-chip i { font-style: normal; font-size: 11px; opacity: .85; }
 .lpm-chip em { font-weight: 400; opacity: .7; }
-.lpm-chip.is-waiting { color: #8d8a99; }
-.lpm-chip.is-solving { border-color: #5a6fa8; color: #cfdcff; }
-.lpm-chip.is-solved  { border-color: #3f9a52; color: #9ff0ad; background: #102216; }
-.lpm-chip.is-failed  { border-color: #a4443c; color: #ffaaa2; background: #2a1210; }
+.lpm-chip.is-waiting { color: var(--lpm-ink-faint); }
+.lpm-chip.is-solving { border-color: #6f5528; color: var(--lpm-ink); }
+.lpm-chip.is-solved  { border-color: var(--lpm-gold); color: var(--lpm-gold-hi); background: #221b0c; }
+.lpm-chip.is-failed  { border-color: #5a5e66; color: var(--lpm-silver); background: #19191c; }
 .lpm-chip.is-left    { opacity: .5; text-decoration: line-through; }
 .lpm-chip.pickable   { cursor: pointer; }
 .lpm-chip.pickable:hover { border-color: #c8a84e; }
 .lpm-chip.watched    { box-shadow: 0 0 0 2px #c8a84e; }
 .lpm-chip.pulse      { animation: lpm-chip-pulse .7s ease-out; }
-@keyframes lpm-chip-pulse { from { box-shadow: 0 0 0 0 rgba(127,180,255,.9); } to { box-shadow: 0 0 0 7px rgba(127,180,255,0); } }
+@keyframes lpm-chip-pulse { from { box-shadow: 0 0 0 0 rgba(224,188,102,.9); } to { box-shadow: 0 0 0 7px rgba(224,188,102,0); } }
 
 /* Icons inside status lines and buttons */
 .lpm-simon-status i, .lpm-spectator-banner i { margin-right:4px; opacity:.9; }
@@ -636,7 +686,7 @@
 .lpm-simon-results {
   background: #181818;
   border: 1px solid #333;
-  border-radius: 4px;
+  border-radius:2px;
   padding: 6px 10px;
   margin-top: 6px;
   font-size: 12px;
@@ -659,12 +709,14 @@
   font-style: normal;
   font-size: 11px;
   line-height: 1.35;
-  color: #9a9a9a;
+  color: var(--lpm-ink-dim);
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
 }
-.lpm-hint strong   { color: #e8e8e8; font-weight: 700; }
-.lpm-hint-green { color:#5fd17a; font-weight:700; }
-.lpm-hint-red   { color:#e05545; font-weight:700; }
+.lpm-hint strong { color: var(--lpm-ink); font-weight: 700; }
+/* a word that names something on the board takes its colour: gold, silver or red */
+.lpm-hint-gold   { color:var(--lpm-gold); font-weight:700; }
+.lpm-hint-silver { color:var(--lpm-silver-hi); font-weight:700; }
+.lpm-hint-red    { color:var(--lpm-ember); font-weight:700; }
 
 /* Leave button — must NOT stretch (Foundry forces button{width:100%}) */
 .lpm-lock .lpm-footer .lpm-leave-btn,
@@ -673,10 +725,10 @@
   width: auto;
   align-self: center;
   padding: 5px 18px;
-  background: #15151f;
-  color: #aaa;
-  border: 1px solid #4a4a4a;
-  border-radius: 4px;
+  background: #17161b;
+  color: var(--lpm-ink-dim);
+  border: 1px solid #4a4538;
+  border-radius:2px;
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
@@ -686,9 +738,9 @@
   transition: color .15s, border-color .15s, background .15s;
 }
 .lpm-leave-btn:hover {
-  color: #eee;
-  background: #20202c;
-  border-color: #777;
+  color: var(--lpm-ink);
+  background: #221f19;
+  border-color: #8a6a32;
 }
 
 
@@ -699,32 +751,26 @@
 /* Footer meter: a slim crystal bar with a number */
 .lpm-meter { gap:8px; }
 .lpm-bar {
-  position:relative; width:120px; height:9px; border-radius:5px; overflow:hidden;
-  background:#15161d; box-shadow:inset 0 1px 3px rgba(0,0,0,.9), 0 0 0 1px rgba(150,175,230,.12);
+  position:relative; width:120px; height:9px; border-radius:1px; overflow:hidden;
+  background:#151418; box-shadow:inset 0 1px 3px rgba(0,0,0,.9), 0 0 0 1px rgba(224,188,102,.14);
 }
 .lpm-bar i {
-  position:absolute; left:0; top:0; bottom:0; border-radius:5px;
-  background:linear-gradient(180deg, #d6f8ff, #69d9ff 45%, #2f8fd6);
-  box-shadow:0 0 8px rgba(120,230,255,.55); transition:width .2s ease;
+  position:absolute; left:0; top:0; bottom:0; border-radius:1px;
+  background:linear-gradient(180deg, #fff0c4, #e8c46c 45%, #9a7230);
+  box-shadow:0 0 8px rgba(232,196,108,.45); transition:width .2s ease;
 }
 .lpm-bar.is-low i { background:linear-gradient(180deg, #ffd2c8, #ff8a72 45%, #b83a26); box-shadow:0 0 8px rgba(255,120,95,.55); }
-.lpm-bar__num { font:700 11px var(--lpm-font-body); color:#cfd8ee; min-width:3.6em; text-align:right; letter-spacing:.04em; }
+.lpm-bar__num { font:700 11px var(--lpm-font-body); color:var(--lpm-ink); min-width:3.6em; text-align:right; letter-spacing:.04em; }
 
 /* Controls row under the canvas (sigil recall) */
 .lpm-arcana-controls {
   display:flex; gap:14px; align-items:center; padding:10px 14px 8px;
-  background:linear-gradient(180deg, #11131a, #0d0e12); border-top:1px solid #1f2230;
+  background:linear-gradient(180deg, #141317, #0d0d10); border-top:1px solid #222126;
 }
 .lpm-arcana-controls .lpm-card__button { flex:0 0 auto; }
 .lpm-arcana .lpm-arcana-btn {
-  width:auto; flex:0 0 auto; margin:0; padding:5px 14px; border-radius:5px; cursor:pointer;
-  font:700 12px var(--lpm-font-body); letter-spacing:.06em; color:#e8e0ff;
-  background:linear-gradient(180deg, #33295a, #1f1838); border:1px solid #5d4aa0;
-  box-shadow:inset 0 1px 0 rgba(220,200,255,.15), 0 0 8px rgba(150,110,255,.25);
+  width:auto; flex:0 0 auto; margin:0; padding:5px 14px; border-radius:2px; cursor:pointer;
+  font:700 12px var(--lpm-font-body); letter-spacing:.06em;
 }
-.lpm-arcana .lpm-arcana-btn:hover { filter:brightness(1.15); }
 .lpm-arcana .lpm-arcana-btn[disabled] { opacity:.4; cursor:default; filter:none; }
-.lpm-hint-cyan   { color:#86ecff; font-weight:700; }
-.lpm-hint-violet { color:#c3a5ff; font-weight:700; }
-.lpm-hint-amber  { color:#f0b45a; font-weight:700; }
-.lpm-recall-note { font:600 11px var(--lpm-font-body); color:#9aa6c4; }
+.lpm-recall-note { font:600 11px var(--lpm-font-body); color:var(--lpm-ink-dim); }

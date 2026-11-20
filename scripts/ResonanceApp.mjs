@@ -14,14 +14,14 @@
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateResonance, ResonanceGame, RUNE_COUNT } from './resonance-logic.mjs';
 import { ARC, TAU, RUNES, INK, layer, blit, ringCells, blitCells, discSprite, ArcMeter, backdrop, drawRune, engrave, glow, spark, hexA, note } from './arcane-art.mjs';
-import { ARCANE_ICONS } from './overlay.mjs';
+import { fit, lightStroke, bloom } from './overlay.mjs';
 import { rng } from './ward-logic.mjs';
 import { Sfx } from './Sfx.mjs';
 
 const W = 520, H = 440, CX = 260, CY = 218;
 const POOL = 158, RIM_IN = 160, RIM_OUT = 200, RUNE_R = 180;
 const TRAIL = 22;
-const AMBER = '#f0b45a';
+const SURGE = '#e8674e';          // a surge works against you: the one red mark on this board
 const runeAngle = i => -Math.PI / 2 + i * TAU / RUNE_COUNT;
 
 /** A rune as a path only (glow() strokes it in several passes). */
@@ -57,9 +57,9 @@ export class ResonanceApp extends MiniGameApp {
   }
 
   hintHTML() {
-    return 'Move your <span class="lpm-hint-cyan">focus</span> with the mouse'
-      + ' &middot; keep the <span class="lpm-hint-violet">wandering light</span> inside it'
-      + ' &middot; wake every <span class="lpm-hint-amber">rune</span>';
+    return 'Move your <span class="lpm-hint-gold">focus</span> with the mouse'
+      + ' &middot; keep the <strong>wandering light</strong> inside it'
+      + ' &middot; wake every <span class="lpm-hint-gold">rune</span>';
   }
 
   // ── input ─────────────────────────────────────────────────────────────
@@ -185,17 +185,17 @@ export class ResonanceApp extends MiniGameApp {
     ctx.save();
     ctx.beginPath(); ctx.rect(CX - POOL, CY - POOL, POOL * 2, POOL * 2); ctx.clip();
     // the wisp lights the water around it
-    spark(ctx, wx, wy, 110, g.inside ? ARC.gold : ARC.violet, 0.22);
+    spark(ctx, wx, wy, 110, g.inside ? ARC.gold : ARC.silver, 0.22);
     // ripples spreading from it through the water
     ctx.lineWidth = 1 / this._dpr;                     // one device pixel: by far the cheapest line there is
     for (let k = 0; k < 2; k++) {
       const u = (t * 0.7 + k / 2) % 1;
-      ctx.strokeStyle = hexA(g.inside ? ARC.gold : '#c9b3ff', 0.3 * (1 - u));
+      ctx.strokeStyle = hexA(g.inside ? ARC.gold : '#cfd3da', 0.3 * (1 - u));
       ctx.beginPath(); ctx.arc(wx, wy, 14 + u * 60, 0, TAU); ctx.stroke();
     }
     // its trail, fading
     ctx.globalCompositeOperation = 'lighter';
-    const dot = discSprite(g.inside ? ARC.gold : '#c9b3ff');
+    const dot = discSprite(g.inside ? ARC.gold : '#cfd3da');
     this.trail.forEach((q, i) => {
       const k = (i + 1) / this.trail.length, rad = 1.5 + 4 * k;
       ctx.globalAlpha = 0.22 * k;
@@ -228,10 +228,10 @@ export class ResonanceApp extends MiniGameApp {
 
     // the wisp; a closing ring warns of the surge, and it burns amber through it
     if (warn > 0 && warn < 1) {
-      ctx.strokeStyle = hexA(AMBER, 0.3 + 0.6 * warn); ctx.lineWidth = 1.6;
+      ctx.strokeStyle = hexA(SURGE, 0.3 + 0.6 * warn); ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.arc(wx, wy, 12 + 34 * (1 - warn), 0, TAU); ctx.stroke();
     }
-    spark(ctx, wx, wy, 20 + 10 * warn, warn > 0 ? AMBER : g.inside ? ARC.gold : ARC.violet, 0.95);
+    spark(ctx, wx, wy, 20 + 10 * warn, warn > 0 ? SURGE : g.inside ? ARC.gold : ARC.silver, 0.95);
     spark(ctx, wx, wy, 7, '#ffffff', 1);
 
     // your focus: a ring of light with three motes running round it
@@ -273,7 +273,7 @@ export class ResonanceApp extends MiniGameApp {
       i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     }
     ctx.closePath();
-    ctx.strokeStyle = hexA(inside ? ARC.gold : ARC.violet, 0.75); ctx.lineWidth = 1 / this._dpr; ctx.stroke();
+    ctx.strokeStyle = hexA(inside ? ARC.gold : ARC.silver, 0.75); ctx.lineWidth = 1 / this._dpr; ctx.stroke();
     ctx.lineJoin = 'miter';
   }
 
@@ -282,7 +282,7 @@ export class ResonanceApp extends MiniGameApp {
     note(ctx, 'KEEP THE LIGHT', 14, 24, { size: 12 });
     note(ctx, 'IN YOUR FOCUS', 14, 40, { size: 12 });
     note(ctx, 'THE RING TIGHTENS', 14, 409, { size: 11, color: INK.dim });
-    note(ctx, 'A FLARE: IT SURGES', 14, 425, { size: 11, color: hexA(AMBER, 0.95) });
+    note(ctx, 'A FLARE: IT SURGES', 14, 425, { size: 11, color: hexA(SURGE, 0.95) });
   }
 
   /** How many runes are awake. */
@@ -309,9 +309,42 @@ export class ResonanceApp extends MiniGameApp {
   }
 
   endScreen(success) {
+    const scene = (c, x, y, R) => this.endScene(c, x, y, R, success);
     return success
-      ? { title: 'Resonance Attuned', sub: 'The hum falls silent — it answers to you', icon: (c, x, y, tone) => ARCANE_ICONS.wisp(c, x, y, tone, true) }
-      : { title: 'The Resonance Slips', sub: 'The light sinks back into the deep', icon: (c, x, y, tone) => ARCANE_ICONS.wisp(c, x, y, tone, false) };
+      ? { title: 'Resonance Attuned', sub: 'The hum falls silent — it answers to you', scene }
+      : { title: 'The Resonance Slips', sub: 'The light sinks back into the deep', scene };
+  }
+
+  /** The end picture: the pool and its nine runes, the woken ones gold; the light held in the focus, or sinking. */
+  endScene(ctx, x, y, R, success) {
+    const px = fit(ctx, x, y, R, RIM_OUT + 10, CX, CY);
+    const awake = success ? RUNE_COUNT : this.game.runes();
+    ctx.strokeStyle = '#26252a'; ctx.lineWidth = RIM_OUT - RIM_IN + 16;
+    ctx.beginPath(); ctx.arc(CX, CY, (RIM_IN + RIM_OUT) / 2 + 4, 0, TAU); ctx.stroke();
+    const water = ctx.createRadialGradient(CX, CY - POOL * 0.3, POOL * 0.1, CX, CY, POOL);
+    water.addColorStop(0, '#1a1a1f'); water.addColorStop(1, '#050506');
+    ctx.fillStyle = water;
+    ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.fill();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < RUNE_COUNT; i++) {
+      const a = runeAngle(i), rx = CX + Math.cos(a) * RUNE_R, ry = CY + Math.sin(a) * RUNE_R;
+      if (i < awake) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(242,214,142,0.3)'; ctx.lineWidth = 5 * px; drawRune(ctx, this.runeIds[i], rx, ry, 21, a + Math.PI / 2);
+        ctx.restore();
+        ctx.strokeStyle = '#fff1c4'; ctx.lineWidth = 1.6 * px;
+      } else {
+        ctx.strokeStyle = 'rgba(150,142,125,0.45)'; ctx.lineWidth = 1.3 * px;
+      }
+      drawRune(ctx, this.runeIds[i], rx, ry, 21, a + Math.PI / 2);
+    }
+    if (success) {
+      ctx.beginPath(); ctx.arc(CX, CY, POOL * 0.36, 0, TAU);
+      lightStroke(ctx, px, ARC.gold, 1.8);
+      bloom(ctx, CX, CY, 22 * px, 'rgba(255,240,204,A)', 1);
+    } else {
+      bloom(ctx, CX + POOL * 0.18, CY + POOL * 0.5, 16 * px, 'rgba(205,210,220,A)', 0.35);
+    }
   }
 
   /** Backdrop, the stone basin with its rune sockets, the dark water and its stars. */
@@ -322,10 +355,10 @@ export class ResonanceApp extends MiniGameApp {
     // stone basin
     const rim = () => { ctx.beginPath(); ctx.arc(CX, CY, RIM_OUT, 0, TAU); ctx.arc(CX, CY, RIM_IN, 0, TAU, true); };
     const stone = ctx.createRadialGradient(CX, CY, RIM_IN, CX, CY, RIM_OUT);
-    stone.addColorStop(0, '#2b2f3b'); stone.addColorStop(0.5, '#323745'); stone.addColorStop(1, '#22252f');
+    stone.addColorStop(0, '#2e2e33'); stone.addColorStop(0.5, '#37373d'); stone.addColorStop(1, '#242428');
     rim(); ctx.fillStyle = stone; ctx.fill();
     const light = ctx.createLinearGradient(CX - RIM_OUT, CY - RIM_OUT, CX + RIM_OUT, CY + RIM_OUT);
-    light.addColorStop(0, 'rgba(210,225,255,0.10)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
+    light.addColorStop(0, 'rgba(255,238,205,0.09)'); light.addColorStop(0.5, 'rgba(0,0,0,0)'); light.addColorStop(1, 'rgba(0,0,0,0.3)');
     rim(); ctx.fillStyle = light; ctx.fill();
     for (const rr of [RIM_OUT, RIM_IN]) engrave(ctx, () => { ctx.beginPath(); ctx.arc(CX, CY, rr, 0, TAU); }, 1.4, 1);
     // rune sockets, carved and dark until they wake
@@ -333,17 +366,17 @@ export class ResonanceApp extends MiniGameApp {
       const a = runeAngle(i), x = CX + Math.cos(a) * RUNE_R, y = CY + Math.sin(a) * RUNE_R;
       ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
       engrave(ctx, () => { ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU); }, 1, 0.8);
-      ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(190,205,240,0.10)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2); ctx.restore();
+      ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(230,215,180,0.10)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2); ctx.restore();
       ctx.strokeStyle = 'rgba(0,0,0,0.65)'; ctx.lineWidth = 1.5; drawRune(ctx, this.runeIds[i], x, y, 15, a + Math.PI / 2);
     }
     // the water: deep, with a drift of stars and two faint clouds
     const water = ctx.createRadialGradient(CX - 30, CY - 40, 10, CX, CY, POOL);
-    water.addColorStop(0, '#141a3a'); water.addColorStop(0.6, '#0a0d22'); water.addColorStop(1, '#04050c');
+    water.addColorStop(0, '#17171c'); water.addColorStop(0.6, '#0b0b0e'); water.addColorStop(1, '#040405');
     ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.fillStyle = water; ctx.fill();
     ctx.save();
     ctx.beginPath(); ctx.arc(CX, CY, POOL, 0, TAU); ctx.clip();
     const R = rng(this.res.seed + 99);
-    for (const [col, n] of [['rgba(150,110,255,', 2], ['rgba(90,200,255,', 2]]) {
+    for (const [col, n] of [['rgba(205,210,220,', 2], ['rgba(242,214,142,', 2]]) {
       for (let i = 0; i < n; i++) {
         const x = CX + (R() - 0.5) * POOL * 1.4, y = CY + (R() - 0.5) * POOL * 1.4, r = 50 + R() * 70;
         const cloud = ctx.createRadialGradient(x, y, 0, x, y, r);
@@ -353,7 +386,7 @@ export class ResonanceApp extends MiniGameApp {
     }
     for (let i = 0; i < 140; i++) {
       const a = R() * TAU, rr = Math.sqrt(R()) * POOL, s = R();
-      ctx.fillStyle = `rgba(220,230,255,${0.15 + 0.5 * s * s})`;
+      ctx.fillStyle = `rgba(232,234,238,${0.15 + 0.5 * s * s})`;
       ctx.fillRect(CX + Math.cos(a) * rr, CY + Math.sin(a) * rr, s > 0.92 ? 1.6 : 1, s > 0.92 ? 1.6 : 1);
     }
     // the edge of the water sinks into shadow
