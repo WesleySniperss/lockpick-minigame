@@ -8,13 +8,13 @@ import { rng } from './ward-logic.mjs';
 export const TAU = Math.PI * 2;
 
 export const ARC = {
-  energy  : '#86ecff',      // ley light
-  energyLo: '#2f8fd6',
-  violet  : '#b48cff',
+  energy  : '#fff0cc',      // the light of a working: ivory, like a candle seen through glass
+  energyLo: '#b8862e',
+  silver  : '#c4c9d2',      // the working's own magic, what is hidden, what went out
   gold    : '#f2d68e',
   brass   : '#c99a3c',
-  danger  : '#ff6a55',
-  ink     : 'rgba(150,175,230,',   // engraving colour prefix (append alpha + ')')
+  danger  : '#e8674e',
+  ink     : 'rgba(225,205,160,',   // engraving colour prefix (append alpha + ')')
 };
 
 /**
@@ -115,7 +115,7 @@ export function engrave(ctx, path, width = 1.2, alpha = 1) {
   ctx.save();
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.translate(0, 0.8);
-  path(); ctx.strokeStyle = `rgba(190,205,240,${0.10 * alpha})`; ctx.lineWidth = width; ctx.stroke();
+  path(); ctx.strokeStyle = `rgba(230,215,180,${0.10 * alpha})`; ctx.lineWidth = width; ctx.stroke();
   ctx.translate(0, -0.8);
   path(); ctx.strokeStyle = `rgba(0,0,0,${0.55 * alpha})`; ctx.lineWidth = width; ctx.stroke();
   ctx.restore();
@@ -272,9 +272,9 @@ export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H)
   const R = rng(seed);
 
   const g = ctx.createRadialGradient(cx, cy * 0.9, 20, cx, cy, Math.max(W, H) * 0.75);
-  g.addColorStop(0, '#20232e');
-  g.addColorStop(0.55, '#14161e');
-  g.addColorStop(1, '#090a0e');
+  g.addColorStop(0, '#212024');
+  g.addColorStop(0.55, '#151418');
+  g.addColorStop(1, '#09090b');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
@@ -283,13 +283,13 @@ export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H)
     const x = R() * W, y = R() * H, rad = 6 + R() * 34;
     const mg = ctx.createRadialGradient(x, y, 0, x, y, rad);
     const light = R() < 0.4;
-    mg.addColorStop(0, light ? 'rgba(150,165,200,0.035)' : 'rgba(0,0,0,0.10)');
+    mg.addColorStop(0, light ? 'rgba(210,190,150,0.035)' : 'rgba(0,0,0,0.10)');
     mg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = mg;
     ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
   for (let i = 0; i < Math.round(W * H / 90); i++) {
-    ctx.fillStyle = R() < 0.3 ? 'rgba(190,200,230,0.06)' : 'rgba(0,0,0,0.16)';
+    ctx.fillStyle = R() < 0.3 ? 'rgba(225,210,175,0.05)' : 'rgba(0,0,0,0.16)';
     ctx.fillRect(R() * W, R() * H, 1, 1);
   }
   // Hairline cracks
@@ -309,7 +309,7 @@ export function backdrop(W, H, dpr, { cx = W / 2, cy = H / 2, r = Math.min(W, H)
   for (let i = 0; i < count; i++) {
     const a = -Math.PI / 2 + i * TAU / count;
     const x = cx + Math.cos(a) * (r - 9), y = cy + Math.sin(a) * (r - 9);
-    ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(190,205,240,0.07)'; drawRune(ctx, i * 5 + 2, x, y, 9, a + Math.PI / 2); ctx.restore();
+    ctx.save(); ctx.translate(0, 0.7); ctx.strokeStyle = 'rgba(230,215,180,0.07)'; drawRune(ctx, i * 5 + 2, x, y, 9, a + Math.PI / 2); ctx.restore();
     ctx.strokeStyle = 'rgba(0,0,0,0.45)'; drawRune(ctx, i * 5 + 2, x, y, 9, a + Math.PI / 2);
   }
 

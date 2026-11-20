@@ -3,10 +3,10 @@
  * Жодного рендерингу чи DOM — тільки стан і правила.
  *
  * Scale model:
- *   Each UNSET pin has a green zone (target) of width HIT_ZONE, flanked by a
+ *   Each UNSET pin has a release zone (target, gold on the gauge; type id 'green') of width HIT_ZONE, flanked by a
  *   red zone of width RED_W on BOTH sides (forbidden). Everything else is neutral.
  *   Player holds → marker slides right. The outcome is decided ON RELEASE:
- *     - released on green   → pin is set
+ *     - released in the zone  → pin is set
  *     - released on red     → fail (−1 durability)
  *     - released on neutral → nothing, marker just slides back
  */
@@ -17,11 +17,11 @@ export const TRACK_W = 360;
 /** Пінів на механізмі завжди 7 — змінюється лише скільки з них уже відкриті */
 export const TOTAL_PINS = 7;
 
-/** Green zone width (px) — fixed, independent of the roll.
+/** Release zone width (px) — fixed, independent of the roll.
  *  Pin spacing is TRACK_W/(7+1)=45, so HIT_ZONE + 2*RED_W must be ≤45 (no overlap). */
 export const HIT_ZONE = 26;
 
-/** Red zone width on EACH side of the green (px) */
+/** Red zone width on EACH side of the release zone (px) */
 export const RED_W = 9;
 
 /** DC → скільки пінів треба відкрити САМОМУ (решта вже відкриті на старті) */

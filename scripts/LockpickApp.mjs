@@ -129,7 +129,7 @@ export class LockpickApp extends GameWindow {
           <div class="lpm-attempts"></div>
         </div>
         <div class="lpm-footer-bottom">
-          <div class="lpm-hint"><strong>Hold</strong> to slide &middot; <strong>release on <span class="lpm-hint-green">green</span></strong> &middot; avoid <span class="lpm-hint-red">red</span></div>
+          <div class="lpm-hint"><strong>Hold</strong> to slide &middot; <strong>release on <span class="lpm-hint-gold">gold</span></strong> &middot; avoid <span class="lpm-hint-red">red</span></div>
           <button type="button" class="lpm-leave-btn">Leave</button>
         </div>
       </div>
@@ -450,7 +450,7 @@ export class LockpickApp extends GameWindow {
     this._stopScrape();
     cancelAnimationFrame(this._raf);
     this._raf = null;
-    this.renderer?.drawEndOverlay(success);
+    this.renderer?.drawEndOverlay(success, this.controller.pins.map(p => p.set));
 
     // Tracked directly (not via _later) because _dead is already true. If the
     // player closes early, close() fires the outcome immediately instead.

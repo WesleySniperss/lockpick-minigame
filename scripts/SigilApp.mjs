@@ -11,7 +11,7 @@
 import { MiniGameApp, barHTML } from './MiniGameApp.mjs';
 import { generateSigil, SigilGame, NODES } from './sigil-logic.mjs';
 import { ARC, TAU, INK, layer, blit, ArcMeter, backdrop, engrave, glow, spark, hexA, note } from './arcane-art.mjs';
-import { ARCANE_ICONS } from './overlay.mjs';
+import { fit, lightStroke, bloom } from './overlay.mjs';
 import { Sfx } from './Sfx.mjs';
 
 const W = 520, H = 440, CX = 260, CY = 222, SCALE = 168;
@@ -197,7 +197,7 @@ export class SigilApp extends MiniGameApp {
     blit(ctx, this._static);
     if (shown > 0) {
       const path = () => this.linePath(ctx, 0, shown);
-      glow(ctx, path, { color: ARC.violet, width: 3.6 });
+      glow(ctx, path, { color: ARC.silver, width: 3.6 });
       glow(ctx, path, { color: ARC.gold, width: 1.4, intensity: 0.8, core: false });
     }
     if (traced > 1) glow(ctx, () => this.linePath(ctx, 0, traced - 1), { color: ARC.gold, width: 3.2 });
@@ -219,7 +219,7 @@ export class SigilApp extends MiniGameApp {
     if (g.phase === 'trace') {
       const f = g.mana / this.sigil.params.traceTime;
       const low = f < 0.25;
-      this._mana ??= new ArcMeter(this._dpr, SCALE + 26, { color: ARC.violet, width: 2.4 });
+      this._mana ??= new ArcMeter(this._dpr, SCALE + 26, { color: ARC.silver, width: 2.4 });
       this._manaLow ??= new ArcMeter(this._dpr, SCALE + 26, { color: ARC.danger, width: 2.4 });
       (low ? this._manaLow : this._mana).draw(ctx, CX, CY, f, low ? 0.7 + 0.3 * Math.sin(t * 10) : 0.8);
     }
@@ -228,13 +228,13 @@ export class SigilApp extends MiniGameApp {
     if (showing) {
       if (settled !== full) {
         const path = () => this.linePath(ctx, settled, full);
-        glow(ctx, path, { color: ARC.violet, width: 3.6, intensity: alpha });
+        glow(ctx, path, { color: ARC.silver, width: 3.6, intensity: alpha });
         glow(ctx, path, { color: ARC.gold, width: 1.4, intensity: 0.8 * alpha, core: false });
       }
       if (full < last && part > 0) {
         const p0 = P(this.path[full]), p1 = P(this.path[full + 1]);
         const tip = () => { ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p0.x + (p1.x - p0.x) * part, p0.y + (p1.y - p0.y) * part); };
-        glow(ctx, tip, { color: ARC.violet, width: 3.6, intensity: alpha, cap: 'butt' });
+        glow(ctx, tip, { color: ARC.silver, width: 3.6, intensity: alpha, cap: 'butt' });
         glow(ctx, tip, { color: ARC.gold, width: 1.4, intensity: 0.8 * alpha, core: false, cap: 'butt' });
       }
       for (let i = 0; i <= Math.min(full, this.path.length - 1); i++) { const p = P(this.path[i]); spark(ctx, p.x, p.y, 16, ARC.gold, 0.8 * alpha); }
@@ -271,7 +271,7 @@ export class SigilApp extends MiniGameApp {
       const tw = 0.6 + 0.4 * Math.sin(t * 2.3 + i * 1.7);
       spark(ctx, p.x, p.y, done ? 16 : hov ? 15 : 9, done ? ARC.gold : ARC.energy, done ? 0.9 : (hov ? 0.9 : 0.35 * tw + 0.2));
       ctx.beginPath(); ctx.arc(p.x, p.y, done ? 4 : 3, 0, TAU);
-      ctx.fillStyle = done ? '#fff6d8' : '#dff8ff'; ctx.fill();
+      ctx.fillStyle = done ? '#fff6d8' : '#f3ead6'; ctx.fill();
       if (isStartMark) {
         const r = 11 + 3 * Math.sin(t * 4);
         glow(ctx, () => { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); }, { color: ARC.gold, width: 1.2, intensity: 0.8, core: false });
@@ -307,9 +307,38 @@ export class SigilApp extends MiniGameApp {
   }
 
   endScreen(success) {
+    const scene = (c, x, y, R) => this.endScene(c, x, y, R, success);
     return success
-      ? { title: 'Sigil Traced', sub: 'Stroke for stroke — it flares and seals', icon: (c, x, y, tone) => ARCANE_ICONS.sigil(c, x, y, tone, false) }
-      : { title: 'The Sigil Fades', sub: 'The line cracks and the sigil gutters out', icon: (c, x, y, tone) => ARCANE_ICONS.sigil(c, x, y, tone, true) };
+      ? { title: 'Sigil Traced', sub: 'Stroke for stroke — it flares and seals', scene }
+      : { title: 'The Sigil Fades', sub: 'The line breaks and the sigil gutters out', scene };
+  }
+
+  /** The end picture: this sigil, the strokes laid down in gold; on a failure the rest of it a faint trace. */
+  endScene(ctx, x, y, R, success) {
+    const px = fit(ctx, x, y, R, SCALE * 1.02, CX, CY);
+    const last = this.path.length - 1, done = success ? last : Math.max(0, this.game.progress - 1);
+    NODES.forEach((_, i) => {
+      const p = P(i);
+      ctx.fillStyle = 'rgba(235,225,200,0.32)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, 1.6 * px, 0, TAU); ctx.fill();
+    });
+    if (done < last) {                                  // what was left to draw
+      this.linePath(ctx, done, last);
+      ctx.save();
+      ctx.setLineDash([3 * px, 4 * px]); ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(235,225,200,0.3)'; ctx.lineWidth = 1.2 * px; ctx.stroke();
+      ctx.restore();
+    }
+    if (done > 0) { this.linePath(ctx, 0, done); lightStroke(ctx, px, success ? ARC.gold : '#d9a35a', success ? 2.2 : 1.6); }
+    for (let i = 0; i <= done; i++) {
+      const p = P(this.path[i]);
+      bloom(ctx, p.x, p.y, 7 * px, success ? 'rgba(242,214,142,A)' : 'rgba(217,163,90,A)', success ? 0.9 : 0.6);
+    }
+    if (!success) {                                     // where it broke: the next star, ringed in silver
+      const p = P(this.path[Math.min(last, done + 1)]);
+      ctx.strokeStyle = 'rgba(214,218,226,0.85)'; ctx.lineWidth = 1.4 * px;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4.5 * px, 0, TAU); ctx.stroke();
+    }
   }
 
   buildStatic() {
@@ -317,7 +346,7 @@ export class SigilApp extends MiniGameApp {
     const ctx = c.getContext('2d');
     blit(ctx, backdrop(W, H, this._dpr, { cx: CX, cy: CY, r: SCALE + 38 }));
     // faint web of every legal stroke, so the stars read as one star chart
-    ctx.strokeStyle = 'rgba(140,170,230,0.05)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(220,200,160,0.05)'; ctx.lineWidth = 1;
     for (let a = 0; a < NODES.length; a++) for (let b = a + 1; b < NODES.length; b++) {
       const p = P(a), q = P(b);
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
