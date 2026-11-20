@@ -334,9 +334,9 @@ also set the word or phrase and the script.
 
 ### Credits
 
-The carved capitals on the boards and end screens are **Cinzel** (© 2020 The
-Cinzel Project Authors), shipped with the module under the SIL Open Font
-License 1.1 — see [`styles/fonts/Cinzel-OFL.txt`](styles/fonts/Cinzel-OFL.txt).
+The capitals on the boards and end screens are **Cormorant SC** (© 2015 the
+Cormorant Project Authors), shipped with the module under the SIL Open Font
+License 1.1 — see [`styles/fonts/CormorantSC-OFL.txt`](styles/fonts/CormorantSC-OFL.txt).
 
 ### Foundry versions
 

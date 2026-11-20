@@ -5,10 +5,10 @@
    orange borders inside these dark panels. Literal colours keep the intended
    look identical on every core version and theme. */
 
-/* Cinzel (SIL Open Font License, see fonts/Cinzel-OFL.txt): titles, labels and the words on the boards */
+/* Cormorant SC Bold (SIL Open Font License, see fonts/CormorantSC-OFL.txt): titles, labels and the words on the boards */
 @font-face {
-  font-family: "LPM Cinzel";
-  src: url("fonts/Cinzel.ttf") format("truetype");
+  font-family: "LPM Display";
+  src: url("fonts/CormorantSC-Bold.ttf") format("truetype");
   font-weight: 400 900;
   font-style: normal;
   font-display: swap;
@@ -46,7 +46,7 @@
 .application.lockpick-minigame .window-content { backdrop-filter:none; -webkit-backdrop-filter:none; }
 
 /* Lockpick root */
-.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,'Cinzel',serif); }
+.lpm-root { display:flex; flex-direction:column; font-family:var(--font-primary,serif); }
 .lpm-canvas { display:block; width:100%; cursor:crosshair; }
 .lpm-footer {
   display:flex; flex-direction:column; gap:7px;
@@ -63,7 +63,7 @@
 }
 /* Result typography — core fonts only (Modesto Condensed, Signika, Amiri) */
 .lockpick-minigame, .lpm-card, .lpm-flavor {
-  --lpm-font-display: "LPM Cinzel", "Cinzel", "Modesto Condensed", Georgia, serif;
+  --lpm-font-display: "LPM Display", "Cormorant SC", Georgia, serif;
   --lpm-font-body: "Signika", ui-sans-serif, system-ui, sans-serif;
   --lpm-font-serif: "Amiri", Georgia, "Times New Roman", serif;
 }
@@ -120,7 +120,7 @@
 }
 /* Button size for every puzzle (the look is the brass one above) */
 .lpm-puzzle button.lpm-btn, .lpm-puzzle button.lpm-cipher-check {
-  width:auto; flex:0 0 auto; height:auto; margin:0; padding:7px 16px; border-radius:6px; cursor:pointer;
+  width:auto; flex:0 0 auto; height:auto; margin:0; padding:7px 16px; border-radius:2px; cursor:pointer;
   font:700 13px/1.2 var(--lpm-font-body); letter-spacing:.06em;
 }
 .lpm-puzzle button.lpm-btn i, .lpm-puzzle button.lpm-cipher-check i { margin-right:5px; }
@@ -141,7 +141,7 @@
 .lpm-result--fail .lpm-result__scene > * { filter:grayscale(1) brightness(.85); }
 .lpm-scene-sudoku {
   display:grid; grid-template-columns:repeat(9,16px); grid-auto-rows:16px;
-  border:2px solid var(--lpm-gold-lo); border-radius:3px; background:#0f0f12;
+  border:2px solid var(--lpm-gold-lo); border-radius:0; background:#0f0f12;
 }
 .lpm-scene-sudoku span {
   display:grid; place-items:center; font:700 10px/1 var(--lpm-font-body); color:var(--lpm-gold-hi);
@@ -152,9 +152,9 @@
 .lpm-scene-sudoku span.b3 { border-bottom:1px solid var(--lpm-gold-lo); }
 .lpm-scene-sliding {
   display:grid; grid-template-columns:repeat(var(--sz),1fr); gap:2px; width:150px; height:150px; padding:2px;
-  border-radius:4px; background:#6f5a34; box-shadow:0 0 0 1px rgba(0,0,0,.6);
+  border-radius:0; background:#6f5a34; box-shadow:0 0 0 1px rgba(0,0,0,.6);
 }
-.lpm-scene-tile { display:block; border-radius:2px; background-image:linear-gradient(rgba(0,0,0,.1),rgba(0,0,0,.1)), url("stone.jpg"); background-repeat:no-repeat; }
+.lpm-scene-tile { display:block; border-radius:0; background-image:linear-gradient(rgba(0,0,0,.1),rgba(0,0,0,.1)), url("stone.jpg"); background-repeat:no-repeat; }
 .lpm-scene-cipher { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 16px; max-width:440px; }
 .lpm-scene-cipher .w { display:flex; gap:3px; }
 .lpm-scene-cipher .c { display:flex; flex-direction:column; align-items:center; width:21px; }
@@ -166,11 +166,11 @@
 .lpm-result--fail .lpm-scene-cipher .c i { color:#9da2ab; text-shadow:none; }
 .lpm-result--fail .lpm-scene-cipher .c b { color:var(--lpm-silver-hi); }
 .lpm-scene-simon { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; max-width:420px; }
-.lpm-scene-simon canvas { width:38px; height:36px; border-radius:6px; background:#0d0d10; border:1px solid #2d2b31; }
+.lpm-scene-simon canvas { width:38px; height:36px; border-radius:2px; background:#0d0d10; border:1px solid #2d2b31; }
 .lpm-scene-simon canvas.is-missed { border-color:var(--lpm-silver-hi); box-shadow:0 0 8px rgba(220,224,232,.4); }
 .lpm-result__title {
   font:700 32px/1.1 var(--lpm-font-display); letter-spacing:.05em; color:var(--lpm-result);
-  text-shadow:0 2px 3px rgba(0,0,0,.85), 0 0 18px color-mix(in srgb, var(--lpm-result) 35%, transparent);
+  text-shadow:0 2px 2px rgba(0,0,0,.85);
 }
 .lpm-result__kicker {
   font:700 11px var(--lpm-font-display); letter-spacing:.3em; text-transform:uppercase;
@@ -206,7 +206,7 @@
 .lpm-sudoku-grid {
   display:grid; grid-template-columns:repeat(9,1fr);
   width:378px; height:378px;
-  border:3px solid #9a7a3e; border-radius:4px;
+  border:3px solid #9a7a3e; border-radius:2px;
   background:#0f0f12;
   box-shadow:0 0 0 1px rgba(0,0,0,.7), 0 6px 18px rgba(0,0,0,.5);
 }
@@ -251,7 +251,7 @@
   width:32px; height:32px; flex:0 0 auto; margin:0; padding:0;
   font:700 16px/1 var(--lpm-font-body);
   color:var(--lpm-ink); background:linear-gradient(180deg, #352b18, #1d180e);
-  border:1px solid #6f5528; border-radius:6px; cursor:pointer;
+  border:1px solid #6f5528; border-radius:2px; cursor:pointer;
   transition:filter .12s, border-color .12s;
 }
 .lpm-puzzle .lpm-sudoku-pad button:hover { filter:brightness(1.2); border-color:var(--lpm-gold); }
@@ -267,7 +267,7 @@
 .lpm-tile {
   position:relative; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
-  border-radius:4px; cursor:pointer; transition:transform .1s, filter .1s;
+  border-radius:2px; cursor:pointer; transition:transform .1s, filter .1s;
   background-color:#4a3f35;
   background-image:
     repeating-linear-gradient(73deg, transparent 0 18px, rgba(0,0,0,.07) 18px 19px),
@@ -313,7 +313,7 @@
 /* Cipher: an inscription with a slot under each glyph, and the codex below it */
 .lpm-cipher { display:flex; flex-direction:column; gap:10px; }
 .lpm-cipher-panel {
-  padding:10px 12px 12px; border-radius:8px;
+  padding:10px 12px 12px; border-radius:2px;
   background:linear-gradient(180deg, #18171c, #0f0f12);
   border:1px solid var(--lpm-line); box-shadow:inset 0 1px 0 rgba(255,240,210,.04), 0 2px 8px rgba(0,0,0,.35);
 }
@@ -332,7 +332,7 @@
 .lpm-ins-word { display:flex; gap:6px; }
 .lpm-ins-tile {
   display:flex; flex-direction:column; align-items:center; gap:6px;
-  width:46px; padding:6px 0 0; border-radius:7px; transition:background .12s;
+  width:46px; padding:6px 0 0; border-radius:2px; transition:background .12s;
 }
 .lpm-ins-tile.is-lit { background:rgba(217,184,102,.12); }
 /* a glyph the codex does not give: to be worked out from the word */
@@ -345,7 +345,7 @@
   display:block; width:42px; height:42px; box-sizing:border-box; margin:0; padding:0;
   text-align:center; font:700 22px/40px var(--lpm-font-body); text-transform:uppercase;
   color:#f6efdc; caret-color:transparent;
-  background:var(--lpm-well); border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:6px;
+  background:var(--lpm-well); border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:2px;
   outline:none; box-shadow:none;
 }
 .lpm-puzzle input.lpm-ins-slot:focus { border-color:var(--lpm-gold); border-bottom-color:var(--lpm-gold-hi); background:#17130b; box-shadow:0 0 0 3px rgba(224,188,102,.2); }
@@ -357,7 +357,7 @@
 .lpm-codex { display:grid; grid-template-columns:repeat(9, 1fr); gap:5px; }
 .lpm-codex-entry {
   display:flex; flex-direction:column; align-items:center; gap:4px; padding:7px 0 6px;
-  border-radius:6px; background:var(--lpm-well); border:1px solid #29272d; cursor:pointer; user-select:none;
+  border-radius:2px; background:var(--lpm-well); border:1px solid #29272d; cursor:pointer; user-select:none;
   transition:border-color .12s, background .12s;
 }
 .lpm-codex-entry:hover, .lpm-codex-entry.is-lit { border-color:#d9b866; background:#1b1810; }
@@ -391,7 +391,7 @@
 .lpm-puzzle button.lpm-wheel-btn:hover:not([disabled]) { filter:brightness(1.25); }
 .lpm-puzzle button.lpm-wheel-btn[disabled] { opacity:.45; cursor:default; }
 .lpm-wheel-val {
-  min-width:40px; padding:4px 8px; border-radius:6px; text-align:center;
+  min-width:40px; padding:4px 8px; border-radius:2px; text-align:center;
   font:700 20px/1.1 var(--lpm-font-display); color:#f6e6b6;
   background:var(--lpm-well); border:1px solid #4a3f22; box-shadow:inset 0 1px 4px rgba(0,0,0,.8);
 }
@@ -413,7 +413,7 @@
 .lpm-puzzle input.lpm-riddle-input {
   flex:1 1 auto; height:40px; margin:0; padding:0 12px; box-sizing:border-box;
   font:600 17px var(--lpm-font-body); color:#f6efdc; background:var(--lpm-well);
-  border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:6px; outline:none;
+  border:1px solid #3a362e; border-bottom:2px solid #6f5a34; border-radius:2px; outline:none;
 }
 .lpm-puzzle input.lpm-riddle-input:focus { border-color:var(--lpm-gold); box-shadow:0 0 0 3px rgba(224,188,102,.2); }
 .lpm-riddle-feedback { margin-top:8px; }
@@ -423,7 +423,7 @@
 .lpm-cipher-live { display:flex; flex-direction:column; gap:4px; max-height:132px; overflow-y:auto; }
 .lpm-cipher-row {
   display:flex; align-items:baseline; gap:12px; padding:5px 10px;
-  background:var(--lpm-well); border:1px solid var(--lpm-line); border-radius:6px; font:600 12px var(--lpm-font-body);
+  background:var(--lpm-well); border:1px solid var(--lpm-line); border-radius:2px; font:600 12px var(--lpm-font-body);
 }
 .lpm-cipher-row.lpm-dim { color:var(--lpm-ink-faint); justify-content:center; }
 .lpm-cipher-row.is-solved { border-color:#8a6a32; background:#1d170b; }
@@ -452,7 +452,7 @@
   justify-content: center;
   gap: 6px;
   padding: 10px 6px 8px;
-  border-radius: 8px;
+  border-radius:2px;
   cursor: pointer;
   user-select: none;
   position: relative;
@@ -495,7 +495,7 @@
 /* Config section injected into WallConfig */
 .lpm-config-section {
   border:1px solid #555;
-  border-radius:4px; padding:8px 10px 10px;
+  border-radius:2px; padding:8px 10px 10px;
   margin:8px 0 4px;
   background:#111;
 }
@@ -523,7 +523,7 @@
   background: linear-gradient(180deg, #3b301b 0%, #1e180e 100%);
   color: var(--lpm-gold-hi);
   border: 1.5px solid #8a6a32;
-  border-radius: 8px;
+  border-radius:2px;
   cursor: pointer;
   font-size: 15px;
   font-weight: 800;
@@ -561,7 +561,7 @@
   text-align: center;
   padding: 6px 10px;
   margin: -4px 0 6px;
-  border-radius: 4px;
+  border-radius:2px;
   background: rgba(26, 21, 11, 0.92);
   border: 1px solid rgba(224, 188, 102, 0.35);
   color: var(--lpm-gold-hi);
@@ -577,7 +577,7 @@
   margin: 0 0 8px; text-align: left;
 }
 .lpm-join {
-  flex: 0 0 auto; padding: 3px 10px; border-radius: 4px; cursor: pointer;
+  flex: 0 0 auto; padding: 3px 10px; border-radius:2px; cursor: pointer;
   background: rgba(150, 112, 46, .35); border: 1px solid rgba(224, 188, 102, .6);
   color: #fff4d8; letter-spacing: .06em; text-decoration: none;
 }
@@ -588,7 +588,7 @@
 .lpm-roster-empty { font-size: 11px; color: var(--lpm-ink-faint); font-style: italic; }
 .lpm-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 2px 9px 2px 7px; border-radius: 11px;
+  padding: 2px 9px 2px 7px; border-radius:2px;
   font-size: 11px; font-weight: 700; line-height: 17px; letter-spacing: .03em;
   color: var(--lpm-ink); background: #1b1a1f; border: 1px solid #3a3730;
   user-select: none; white-space: nowrap;
@@ -686,7 +686,7 @@
 .lpm-simon-results {
   background: #181818;
   border: 1px solid #333;
-  border-radius: 4px;
+  border-radius:2px;
   padding: 6px 10px;
   margin-top: 6px;
   font-size: 12px;
@@ -728,7 +728,7 @@
   background: #17161b;
   color: var(--lpm-ink-dim);
   border: 1px solid #4a4538;
-  border-radius: 4px;
+  border-radius:2px;
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
@@ -751,11 +751,11 @@
 /* Footer meter: a slim crystal bar with a number */
 .lpm-meter { gap:8px; }
 .lpm-bar {
-  position:relative; width:120px; height:9px; border-radius:5px; overflow:hidden;
+  position:relative; width:120px; height:9px; border-radius:1px; overflow:hidden;
   background:#151418; box-shadow:inset 0 1px 3px rgba(0,0,0,.9), 0 0 0 1px rgba(224,188,102,.14);
 }
 .lpm-bar i {
-  position:absolute; left:0; top:0; bottom:0; border-radius:5px;
+  position:absolute; left:0; top:0; bottom:0; border-radius:1px;
   background:linear-gradient(180deg, #fff0c4, #e8c46c 45%, #9a7230);
   box-shadow:0 0 8px rgba(232,196,108,.45); transition:width .2s ease;
 }
@@ -769,7 +769,7 @@
 }
 .lpm-arcana-controls .lpm-card__button { flex:0 0 auto; }
 .lpm-arcana .lpm-arcana-btn {
-  width:auto; flex:0 0 auto; margin:0; padding:5px 14px; border-radius:5px; cursor:pointer;
+  width:auto; flex:0 0 auto; margin:0; padding:5px 14px; border-radius:2px; cursor:pointer;
   font:700 12px var(--lpm-font-body); letter-spacing:.06em;
 }
 .lpm-arcana .lpm-arcana-btn[disabled] { opacity:.4; cursor:default; filter:none; }

@@ -229,15 +229,15 @@ export class ArcMeter {
   }
 }
 
-/** The board's lettering: Cinzel, shipped in styles/fonts (falls back to a serif until it is in). */
-export const FONT = '"LPM Cinzel", "Cinzel", Georgia, serif';
+/** The board's lettering: Cormorant SC, shipped in styles/fonts (falls back to a serif until it is in). */
+export const FONT = '"LPM Display", "Cormorant SC", Georgia, serif';
 export const INK = { label: 'rgba(236,226,198,0.92)', dim: 'rgba(214,204,176,0.74)' };
 
-/** Resolves once Cinzel is loaded (or could not be): layers with words on them are drawn again then. */
+/** Resolves once the lettering is loaded (or could not be): layers with words on them are drawn again then. */
 export const fontsReady = (globalThis.document?.fonts?.load?.(`700 16px ${FONT}`) ?? Promise.resolve()).catch(() => {});
 
 /**
- * One line of a board's words, in Cinzel capitals over a dark offset copy, so it
+ * One line of a board's words, in small capitals over a dark offset copy, so it
  * reads on any stone. (No shadowBlur: some of these are drawn every frame.)
  */
 export function note(ctx, text, x, y, { size = 12, weight = 700, color = INK.label, align = 'left', spacing = 0.6 } = {}) {

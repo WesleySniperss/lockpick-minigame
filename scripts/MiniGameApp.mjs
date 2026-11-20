@@ -176,7 +176,7 @@ export class MiniGameApp extends GameWindow {
     }
     root.querySelector('.lpm-leave-btn').addEventListener('click', () => this.close());
 
-    // Cinzel may still be on its way: once it is in, the layers with words on them are drawn again.
+    // The lettering may still be on its way: once it is in, the layers with words on them are drawn again.
     fontsReady.then(() => { if (!this._dead) { this._static = null; this._boardKey = null; } });
 
     this._last = performance.now();

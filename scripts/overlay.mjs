@@ -4,7 +4,7 @@
  * itself (the sigil they traced, the ward's rings as they left them, the pins
  * they set). A success lights it in gold with soft rays; a failure leaves it as
  * it ended, gone cold and silver. Under it, on
- * a framed plate: SUCCESS / FAILURE, the title in Cinzel, an ornament and a
+ * a square double frame: SUCCESS / FAILURE, the title in Cormorant SC, an ornament and a
  * line in Amiri italic. Shared so the lock and the Arcana games end the same way.
  */
 
@@ -16,8 +16,8 @@ const TAU = Math.PI * 2;
 export const SCENE_R = 72;
 
 export const TONES = {
-  win : { wash: 'rgba(12,10,6,',  glow: '242,214,142', hi: '#fff1c4', mid: '#e2b65a', lo: '#8a6424', accent: '#f6dc96', word: 'Success' },
-  fail: { wash: 'rgba(9,9,10,',   glow: '176,182,192', hi: '#f4f5f7', mid: '#aeb3bb', lo: '#4f535b', accent: '#c9ccd2', word: 'Failure' },
+  win : { wash: 'rgba(12,10,6,',  glow: '242,214,142', hi: '#fff1c4', mid: '#e2b65a', lo: '#8a6424', title: '#e8c46c', accent: '#f6dc96', word: 'Success' },
+  fail: { wash: 'rgba(9,9,10,',   glow: '176,182,192', hi: '#f4f5f7', mid: '#aeb3bb', lo: '#4f535b', title: '#c9cdd4', accent: '#c9ccd2', word: 'Failure' },
 };
 
 /** Split a line in two at the space nearest its middle when it is wider than `max`. */
@@ -83,11 +83,11 @@ export function drawResultOverlay(ctx, { W, H, dpr = 1, success, title, sub, sce
   const pw = Math.min(W - 40, 400), px = cx - pw / 2;
   ctx.save();
   ctx.fillStyle = 'rgba(6,6,8,0.62)';
-  ctx.beginPath(); ctx.roundRect(px, top, pw, ph, 8); ctx.fill();
+  ctx.fillRect(px, top, pw, ph);
   ctx.strokeStyle = 'rgba(214,178,100,0.42)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(px + 0.5, top + 0.5, pw - 1, ph - 1, 8); ctx.stroke();
+  ctx.strokeRect(px + 0.5, top + 0.5, pw - 1, ph - 1);
   ctx.strokeStyle = 'rgba(214,178,100,0.16)';
-  ctx.beginPath(); ctx.roundRect(px + 4.5, top + 4.5, pw - 9, ph - 9, 5); ctx.stroke();
+  ctx.strokeRect(px + 4.5, top + 4.5, pw - 9, ph - 9);
   ctx.fillStyle = tone.mid;
   for (const [x, y] of [[px + 4.5, top + 4.5], [px + pw - 4.5, top + 4.5], [px + 4.5, top + ph - 4.5], [px + pw - 4.5, top + ph - 4.5]]) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4); ctx.fillRect(-2.5, -2.5, 5, 5); ctx.restore();
@@ -107,7 +107,7 @@ export function drawResultOverlay(ctx, { W, H, dpr = 1, success, title, sub, sce
   ctx.fillText(tone.word.toUpperCase(), cx + 2, top + 25);
   ctx.restore();
 
-  // Title: as large as fits, gilt (or ember) over a dark offset, with a soft glow
+  // Title: as large as fits, in one flat colour (gold, or silver) over a dark offset
   ctx.save();
   let size = 34;
   ctx.font = `700 ${size}px ${FONT}`;
@@ -116,10 +116,7 @@ export function drawResultOverlay(ctx, { W, H, dpr = 1, success, title, sub, sce
   const ty = top + 30 + size;
   ctx.fillStyle = 'rgba(0,0,0,0.8)';
   ctx.fillText(title, cx, ty + 2);
-  const tg = ctx.createLinearGradient(0, ty - size, 0, ty);
-  tg.addColorStop(0, tone.hi); tg.addColorStop(0.55, tone.mid); tg.addColorStop(1, tone.lo);
-  ctx.shadowColor = glow(0.45); ctx.shadowBlur = 12 * dpr;
-  ctx.fillStyle = tg;
+  ctx.fillStyle = tone.title;
   ctx.fillText(title, cx, ty);
   ctx.restore();
 

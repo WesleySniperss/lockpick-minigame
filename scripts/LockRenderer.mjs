@@ -1635,15 +1635,15 @@ export class LockRenderer {
     // housing above the shear line, plug below it
     const house = ctx.createLinearGradient(0, y - 44, 0, shear);
     house.addColorStop(0, '#7a5e2a'); house.addColorStop(1, '#3e2f14');
-    rr(ctx, L, y - 44, Rt - L, shear - (y - 44), 5); ctx.fillStyle = house; ctx.fill();
+    rr(ctx, L, y - 44, Rt - L, shear - (y - 44), 1); ctx.fillStyle = house; ctx.fill();
     ctx.strokeStyle = 'rgba(255,226,150,0.35)'; ctx.lineWidth = 1; ctx.stroke();
     const plug = ctx.createLinearGradient(0, shear, 0, y + 34);
     plug.addColorStop(0, '#5a4520'); plug.addColorStop(1, '#2a1f0d');
-    rr(ctx, L, shear, Rt - L, 28, 5); ctx.fillStyle = plug; ctx.fill();
+    rr(ctx, L, shear, Rt - L, 28, 1); ctx.fillStyle = plug; ctx.fill();
     ctx.strokeStyle = 'rgba(255,226,150,0.22)'; ctx.stroke();
     // the keyway
     ctx.fillStyle = '#0d0a06';
-    rr(ctx, L - 2, y + 17, Rt - L - 8, 9, 3); ctx.fill();
+    rr(ctx, L - 2, y + 17, Rt - L - 8, 9, 1); ctx.fill();
     // chambers and pins
     for (let i = 0; i < n; i++) {
       const cx = L + 6 + pitch * (i + 0.5), up = !!set[i] || success;
